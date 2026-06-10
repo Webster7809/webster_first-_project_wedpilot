@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -47,12 +46,18 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     debugLogDiagnostics: false,
     routes: [
-      GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
-      GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
-      GoRoute(path: '/forgot-password', builder: (_, __) => const ForgotPasswordScreen()),
-      GoRoute(path: '/verify-email', builder: (_, __) => const EmailVerifyScreen()),
+      GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+      GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingScreen()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (_, _) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/verify-email',
+        builder: (_, _) => const EmailVerifyScreen(),
+      ),
 
       // Couple shell
       ShellRoute(
@@ -60,51 +65,53 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/couple/dashboard',
-            builder: (_, __) => const CoupleDashboardScreen(),
+            builder: (_, _) => const CoupleDashboardScreen(),
           ),
           GoRoute(
             path: '/couple/vendors',
-            builder: (_, __) => const VendorDiscoveryScreen(),
+            builder: (_, _) => const VendorDiscoveryScreen(),
           ),
           GoRoute(
             path: '/couple/vendors/:id',
-            builder: (_, state) => VendorProfileScreen(vendorId: state.pathParameters['id']!),
+            builder: (_, state) =>
+                VendorProfileScreen(vendorId: state.pathParameters['id']!),
           ),
           GoRoute(
             path: '/couple/wishlist',
-            builder: (_, __) => const WishlistScreen(),
+            builder: (_, _) => const WishlistScreen(),
           ),
           GoRoute(
             path: '/couple/messages',
-            builder: (_, __) => const CoupleMessagesScreen(),
+            builder: (_, _) => const CoupleMessagesScreen(),
           ),
           GoRoute(
             path: '/couple/messages/:convoId',
-            builder: (_, state) => ChatScreen(convoId: state.pathParameters['convoId']!),
+            builder: (_, state) =>
+                ChatScreen(convoId: state.pathParameters['convoId']!),
           ),
           GoRoute(
             path: '/couple/budget',
-            builder: (_, __) => const BudgetOverviewScreen(),
+            builder: (_, _) => const BudgetOverviewScreen(),
           ),
           GoRoute(
             path: '/couple/budget/setup',
-            builder: (_, __) => const BudgetSetupWizardScreen(),
+            builder: (_, _) => const BudgetSetupWizardScreen(),
           ),
           GoRoute(
             path: '/couple/budget/expense/new',
-            builder: (_, __) => const ExpenseEntryScreen(),
+            builder: (_, _) => const ExpenseEntryScreen(),
           ),
           GoRoute(
             path: '/couple/checklist',
-            builder: (_, __) => const PlanningChecklistScreen(),
+            builder: (_, _) => const PlanningChecklistScreen(),
           ),
           GoRoute(
             path: '/couple/reviews/new',
-            builder: (_, __) => const ReviewSubmissionScreen(),
+            builder: (_, _) => const ReviewSubmissionScreen(),
           ),
           GoRoute(
             path: '/couple/invitations',
-            builder: (_, __) => const InvitationGalleryScreen(),
+            builder: (_, _) => const InvitationGalleryScreen(),
           ),
           GoRoute(
             path: '/couple/invitations/editor',
@@ -114,9 +121,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/couple/invitations/:id/rsvp',
-            builder: (_, state) => RsvpDashboardScreen(
-              invitationId: state.pathParameters['id']!,
-            ),
+            builder: (_, state) =>
+                RsvpDashboardScreen(invitationId: state.pathParameters['id']!),
           ),
         ],
       ),
@@ -127,31 +133,31 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/vendor/dashboard',
-            builder: (_, __) => const VendorDashboardScreen(),
+            builder: (_, _) => const VendorDashboardScreen(),
           ),
           GoRoute(
             path: '/vendor/profile',
-            builder: (_, __) => const VendorProfileManagementScreen(),
+            builder: (_, _) => const VendorProfileManagementScreen(),
           ),
           GoRoute(
             path: '/vendor/availability',
-            builder: (_, __) => const AvailabilityCalendarScreen(),
+            builder: (_, _) => const AvailabilityCalendarScreen(),
           ),
           GoRoute(
             path: '/vendor/leads',
-            builder: (_, __) => const LeadInboxScreen(),
+            builder: (_, _) => const LeadInboxScreen(),
           ),
           GoRoute(
             path: '/vendor/analytics',
-            builder: (_, __) => const VendorAnalyticsScreen(),
+            builder: (_, _) => const VendorAnalyticsScreen(),
           ),
           GoRoute(
             path: '/vendor/messages',
-            builder: (_, __) => const VendorMessagesScreen(),
+            builder: (_, _) => const VendorMessagesScreen(),
           ),
           GoRoute(
             path: '/vendor/subscription',
-            builder: (_, __) => const SubscriptionScreen(),
+            builder: (_, _) => const SubscriptionScreen(),
           ),
         ],
       ),
@@ -162,31 +168,34 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/admin/dashboard',
-            builder: (_, __) => const AdminDashboardScreen(),
+            builder: (_, _) => const AdminDashboardScreen(),
           ),
           GoRoute(
             path: '/admin/users',
-            builder: (_, __) => const UserManagementScreen(),
+            builder: (_, _) => const UserManagementScreen(),
           ),
           GoRoute(
             path: '/admin/vendors/verification',
-            builder: (_, __) => const VendorVerificationScreen(),
+            builder: (_, _) => const VendorVerificationScreen(),
           ),
           GoRoute(
             path: '/admin/moderation',
-            builder: (_, __) => const ContentModerationScreen(),
+            builder: (_, _) => const ContentModerationScreen(),
           ),
           GoRoute(
             path: '/admin/analytics',
-            builder: (_, __) => const PlatformAnalyticsScreen(),
+            builder: (_, _) => const PlatformAnalyticsScreen(),
           ),
         ],
       ),
 
       // Shared routes
-      GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
-      GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
-      GoRoute(path: '/help', builder: (_, __) => const HelpScreen()),
+      GoRoute(
+        path: '/notifications',
+        builder: (_, _) => const NotificationsScreen(),
+      ),
+      GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+      GoRoute(path: '/help', builder: (_, _) => const HelpScreen()),
 
       // Public invitation page
       GoRoute(

@@ -66,7 +66,7 @@ class _WishlistItem extends ConsumerWidget {
 
     return vendorAsync.when(
       loading: () => const SizedBox(height: 80, child: Center(child: LinearProgressIndicator())),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
       data: (vendor) => Card(
         margin: const EdgeInsets.only(bottom: 12),
         child: ListTile(
@@ -74,7 +74,7 @@ class _WishlistItem extends ConsumerWidget {
           leading: Container(
             width: 56, height: 56,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.3),
+              color: AppColors.primary.withValues(alpha: 77),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Center(child: Text('📷', style: TextStyle(fontSize: 24))),

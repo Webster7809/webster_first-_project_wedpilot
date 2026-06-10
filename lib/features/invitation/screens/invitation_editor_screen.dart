@@ -23,7 +23,6 @@ class _InvitationEditorScreenState extends ConsumerState<InvitationEditorScreen>
   final _rsvpCtrl = TextEditingController(text: 'May 1, 2027');
   final _msgCtrl = TextEditingController(text: 'Together with their families, we joyfully invite you to share in the celebration of our marriage.');
   Color _primaryColor = AppColors.secondary;
-  String _selectedFont = 'Playfair Display';
 
   @override
   void dispose() {
@@ -105,7 +104,7 @@ class _InvitationEditorScreenState extends ConsumerState<InvitationEditorScreen>
                             width: 2,
                           ),
                           boxShadow: _primaryColor == c
-                              ? [BoxShadow(color: c.withOpacity(0.5), blurRadius: 6)]
+                              ? [BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 6)]
                               : [],
                         ),
                       ),
@@ -202,8 +201,8 @@ class _InvitationPreview extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3), width: 2),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 12)],
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 2),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 12)],
       ),
       child: Column(
         children: [
@@ -213,7 +212,7 @@ class _InvitationPreview extends StatelessWidget {
           const SizedBox(height: 4),
           Text(names, style: AppTextStyles.displayMedium.copyWith(color: color)),
           const SizedBox(height: 8),
-          Container(width: 60, height: 1, color: color.withOpacity(0.4)),
+          Container(width: 60, height: 1, color: color.withValues(alpha: 0.4)),
           const SizedBox(height: 8),
           Text(message, style: AppTextStyles.bodySmall.copyWith(height: 1.6, fontStyle: FontStyle.italic), textAlign: TextAlign.center),
           const SizedBox(height: 16),

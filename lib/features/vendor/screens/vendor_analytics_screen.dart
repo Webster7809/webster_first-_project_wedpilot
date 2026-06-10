@@ -55,7 +55,7 @@ class VendorAnalyticsScreen extends StatelessWidget {
                           barWidth: 3,
                           belowBarData: BarAreaData(
                             show: true,
-                            color: AppColors.secondary.withOpacity(0.1),
+                            color: AppColors.secondary.withValues(alpha: 26),
                           ),
                           dotData: FlDotData(show: false),
                         ),
@@ -165,7 +165,7 @@ class _FunnelBar extends StatelessWidget {
         Expanded(
           child: Stack(
             children: [
-              Container(height: 24, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4))),
+              Container(height: 24, decoration: BoxDecoration(color: color.withValues(alpha: 26), borderRadius: BorderRadius.circular(4))),
               FractionallySizedBox(
                 widthFactor: value / max,
                 child: Container(height: 24, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4))),

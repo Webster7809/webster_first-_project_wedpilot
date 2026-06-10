@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/budget_provider.dart';
-import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_card.dart';
 
@@ -14,7 +13,6 @@ class BudgetOverviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final budget = ref.watch(budgetProvider);
-    final couple = ref.watch(coupleProfileProvider);
 
     if (budget == null) {
       return Scaffold(
@@ -67,7 +65,7 @@ class BudgetOverviewScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppColors.secondary, AppColors.secondary.withOpacity(0.7)],
+                colors: [AppColors.secondary, AppColors.secondary.withValues(alpha: 0.7)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -111,7 +109,7 @@ class BudgetOverviewScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: budget.spendingPercentage / 100,
-                    backgroundColor: Colors.white.withOpacity(0.3),
+                    backgroundColor: Colors.white.withValues(alpha: 0.3),
                     valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                     minHeight: 8,
                   ),
@@ -173,9 +171,9 @@ class BudgetOverviewScreen extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.info.withOpacity(0.08),
+                  color: AppColors.info.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.info.withOpacity(0.2)),
+                  border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,7 +205,7 @@ class _SummaryItem extends StatelessWidget {
     return Column(
       children: [
         Text(value, style: AppTextStyles.headlineSmall.copyWith(color: color)),
-        Text(label, style: AppTextStyles.caption.copyWith(color: color.withOpacity(0.8))),
+        Text(label, style: AppTextStyles.caption.copyWith(color: color.withValues(alpha: 0.8))),
       ],
     );
   }

@@ -110,10 +110,10 @@ class VendorDashboardScreen extends ConsumerWidget {
                   mainAxisSpacing: 12,
                   childAspectRatio: 1.4,
                   children: [
-                    _NavCard(emoji: '📥', title: 'Lead Inbox', subtitle: '5 new leads', color: AppColors.warning.withOpacity(0.1), onTap: () => context.push('/vendor/leads')),
-                    _NavCard(emoji: '💬', title: 'Messages', subtitle: '2 unread', color: AppColors.info.withOpacity(0.1), onTap: () => context.push('/vendor/messages')),
-                    _NavCard(emoji: '📅', title: 'Availability', subtitle: 'Update calendar', color: AppColors.tertiary.withOpacity(0.2), onTap: () => context.push('/vendor/availability')),
-                    _NavCard(emoji: '📊', title: 'Analytics', subtitle: 'View insights', color: AppColors.primary.withOpacity(0.3), onTap: () => context.push('/vendor/analytics')),
+                    _NavCard(emoji: '📥', title: 'Lead Inbox', subtitle: '5 new leads', color: AppColors.warning.withValues(alpha: 26), onTap: () => context.push('/vendor/leads')),
+                    _NavCard(emoji: '💬', title: 'Messages', subtitle: '2 unread', color: AppColors.info.withValues(alpha: 26), onTap: () => context.push('/vendor/messages')),
+                    _NavCard(emoji: '📅', title: 'Availability', subtitle: 'Update calendar', color: AppColors.tertiary.withValues(alpha: 51), onTap: () => context.push('/vendor/availability')),
+                    _NavCard(emoji: '📊', title: 'Analytics', subtitle: 'View insights', color: AppColors.primary.withValues(alpha: 77), onTap: () => context.push('/vendor/analytics')),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -199,7 +199,7 @@ class _CompletionChip extends StatelessWidget {
       label: Text(label, style: AppTextStyles.caption.copyWith(
         color: done ? AppColors.success : AppColors.textSecondary,
       )),
-      backgroundColor: done ? AppColors.success.withOpacity(0.1) : AppColors.divider.withOpacity(0.5),
+      backgroundColor: done ? AppColors.success.withValues(alpha: 26) : AppColors.divider.withValues(alpha: 128),
       padding: EdgeInsets.zero,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );

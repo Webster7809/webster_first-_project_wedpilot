@@ -4,7 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/invitation.dart';
 import '../../../providers/invitation_provider.dart';
-import '../../../widgets/wed_card.dart';
+
 
 class RsvpDashboardScreen extends ConsumerWidget {
   final String invitationId;
@@ -78,9 +78,9 @@ class _RsvpStat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 20),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 51)),
       ),
       child: Column(
         children: [
@@ -126,7 +126,7 @@ class _RsvpCard extends StatelessWidget {
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: _color.withOpacity(0.12),
+            color: _color.withValues(alpha: 31),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(

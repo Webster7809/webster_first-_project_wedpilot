@@ -65,7 +65,7 @@ class VendorDiscoveryScreen extends ConsumerWidget {
                     selected: isSelected,
                     onSelected: (_) =>
                         ref.read(selectedCategoryProvider.notifier).state = cat,
-                    selectedColor: AppColors.secondary.withOpacity(0.15),
+                    selectedColor: AppColors.secondary.withValues(alpha: 38),
                     checkmarkColor: AppColors.secondary,
                   ),
                 );

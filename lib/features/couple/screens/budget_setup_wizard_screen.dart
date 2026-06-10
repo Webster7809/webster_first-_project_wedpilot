@@ -6,7 +6,6 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../providers/budget_provider.dart';
 import '../../../widgets/wed_button.dart';
-import '../../../widgets/wed_text_field.dart';
 
 class BudgetSetupWizardScreen extends ConsumerStatefulWidget {
   const BudgetSetupWizardScreen({super.key});
@@ -73,8 +72,11 @@ class _BudgetSetupWizardScreenState extends ConsumerState<BudgetSetupWizardScree
                     priorities: _priorities,
                     categories: AppConstants.vendorCategories,
                     onPriorityToggle: (c) => setState(() {
-                      if (_priorities.contains(c)) _priorities.remove(c);
-                      else if (_priorities.length < 3) _priorities.add(c);
+                      if (_priorities.contains(c)) {
+                        _priorities.remove(c);
+                      } else if (_priorities.length < 3) {
+                        _priorities.add(c);
+                      }
                     })),
                 _Step3(budget: ref.watch(budgetProvider)),
               ],
@@ -137,7 +139,7 @@ class _Step1 extends StatelessWidget {
               style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
           const SizedBox(height: 32),
           DropdownButtonFormField<String>(
-            value: currency,
+            initialValue: currency,
             decoration: InputDecoration(
               labelText: 'Currency',
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -228,7 +230,7 @@ class _Step2 extends StatelessWidget {
                 label: Text(cat),
                 selected: selected,
                 onSelected: (_) => onPriorityToggle(cat),
-                selectedColor: AppColors.secondary.withOpacity(0.15),
+                selectedColor: AppColors.secondary.withValues(alpha: 0.15),
                 checkmarkColor: AppColors.secondary,
               );
             }).toList(),
@@ -254,9 +256,9 @@ class _Step3 extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.info.withOpacity(0.08),
+            color: AppColors.info.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.info.withOpacity(0.2)),
+            border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
           ),
           child: Row(
             children: [

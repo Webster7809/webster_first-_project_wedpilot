@@ -59,7 +59,7 @@ class _SplashScreenState extends State<SplashScreen>
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 51),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -81,7 +81,7 @@ class _SplashScreenState extends State<SplashScreen>
                 Text(
                   'Plan your perfect wedding',
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 217),
                   ),
                 ),
                 const SizedBox(height: 48),
@@ -90,7 +90,7 @@ class _SplashScreenState extends State<SplashScreen>
                   height: 32,
                   child: CircularProgressIndicator(
                     valueColor: AlwaysStoppedAnimation<Color>(
-                        Colors.white.withOpacity(0.7)),
+                        Colors.white.withValues(alpha: 179)),
                     strokeWidth: 2.5,
                   ),
                 ),

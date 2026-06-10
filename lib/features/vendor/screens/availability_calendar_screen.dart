@@ -56,7 +56,7 @@ class _AvailabilityCalendarScreenState extends State<AvailabilityCalendarScreen>
                     return Container(
                       margin: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.15),
+                      color: AppColors.error.withValues(alpha: 38),
                         shape: BoxShape.circle,
                         border: Border.all(color: AppColors.error, width: 1.5),
                       ),
@@ -88,7 +88,7 @@ class _AvailabilityCalendarScreenState extends State<AvailabilityCalendarScreen>
               children: [
                 Row(
                   children: [
-                    Container(width: 16, height: 16, decoration: BoxDecoration(color: AppColors.error.withOpacity(0.15), shape: BoxShape.circle, border: Border.all(color: AppColors.error))),
+                    Container(width: 16, height: 16, decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 38), shape: BoxShape.circle, border: Border.all(color: AppColors.error))),
                     const SizedBox(width: 8),
                     Text('Blocked / Unavailable', style: AppTextStyles.bodySmall),
                     const SizedBox(width: 20),

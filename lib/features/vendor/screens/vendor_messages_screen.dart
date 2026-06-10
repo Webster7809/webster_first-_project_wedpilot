@@ -21,7 +21,7 @@ class VendorMessagesScreen extends ConsumerWidget {
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (convs) => ListView.separated(
           itemCount: convs.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
+          separatorBuilder: (_, _) => const Divider(height: 1),
           itemBuilder: (_, i) {
             final conv = convs[i];
             return ListTile(

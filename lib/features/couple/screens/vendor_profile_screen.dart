@@ -36,7 +36,7 @@ class VendorProfileScreen extends ConsumerWidget {
                     fit: StackFit.expand,
                     children: [
                       Container(
-                        color: AppColors.primary.withOpacity(0.4),
+                        color: AppColors.primary.withValues(alpha: 102),
                         child: const Center(child: Text('📷', style: TextStyle(fontSize: 80))),
                       ),
                       if (vendor.isVerified)
@@ -172,9 +172,9 @@ class VendorProfileScreen extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.goldPremium.withOpacity(0.08),
+                        color: AppColors.goldPremium.withValues(alpha: 20),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.goldPremium.withOpacity(0.3)),
+                        border: Border.all(color: AppColors.goldPremium.withValues(alpha: 77)),
                       ),
                       child: Row(
                         children: [

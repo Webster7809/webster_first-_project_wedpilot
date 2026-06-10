@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/invitation_provider.dart';
-import '../../../widgets/wed_button.dart';
 
 class InvitationGalleryScreen extends ConsumerWidget {
   const InvitationGalleryScreen({super.key});
@@ -91,13 +90,13 @@ class _TemplateCard extends StatelessWidget {
       'romantic' => const Color(0xFFF8BBD9),
       'modern' => const Color(0xFFF0F0F0),
       'royal' => const Color(0xFF1A1A4E),
-      'rustic' => const Color(0xFF8B6914).withOpacity(0.3),
+      'rustic' => const Color(0xFF8B6914).withValues(alpha: 77),
       'boho' => const Color(0xFFE8D5B7),
-      'beach' => const Color(0xFF006994).withOpacity(0.3),
+      'beach' => const Color(0xFF006994).withValues(alpha: 77),
       'celestial' => const Color(0xFF0D0D2B),
-      'african' => const Color(0xFFFFC300).withOpacity(0.3),
-      'islamic' => const Color(0xFF006400).withOpacity(0.2),
-      'indian' => const Color(0xFFFF7722).withOpacity(0.2),
+      'african' => const Color(0xFFFFC300).withValues(alpha: 77),
+      'islamic' => const Color(0xFF006400).withValues(alpha: 51),
+      'indian' => const Color(0xFFFF7722).withValues(alpha: 51),
       _ => const Color(0xFFF8BBD9),
     };
   }

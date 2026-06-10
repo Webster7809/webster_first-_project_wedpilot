@@ -70,7 +70,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         label: Text(f),
                         selected: _filter == f,
                         onSelected: (_) => setState(() => _filter = f),
-                        selectedColor: AppColors.secondary.withOpacity(0.15),
+                      selectedColor: AppColors.secondary.withValues(alpha: 38),
                       ),
                     )).toList(),
                   ),
@@ -81,7 +81,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           Expanded(
             child: ListView.separated(
               itemCount: filtered.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (_, i) {
                 final user = filtered[i];
                 return ListTile(
@@ -129,7 +129,7 @@ class _RoleBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 31),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(

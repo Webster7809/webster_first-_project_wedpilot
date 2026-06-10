@@ -94,7 +94,7 @@ class _SentView extends StatelessWidget {
         children: [
           Container(
             width: 80, height: 80,
-            decoration: BoxDecoration(color: AppColors.success.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 26), shape: BoxShape.circle),
             child: const Icon(Icons.mark_email_read_outlined, size: 40, color: AppColors.success),
           ),
           const SizedBox(height: 24),

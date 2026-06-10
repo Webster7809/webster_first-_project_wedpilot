@@ -49,7 +49,7 @@ class _VendorProfileManagementScreenState
                   Container(
                     width: 90, height: 90,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.3),
+                      color: AppColors.primary.withValues(alpha: 77),
                       shape: BoxShape.circle,
                     ),
                     child: const Center(child: Text('📷', style: TextStyle(fontSize: 36))),
@@ -111,7 +111,7 @@ class _VendorProfileManagementScreenState
               children: [
                 ...List.generate(4, (i) => Container(
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: AppColors.primary.withValues(alpha: 77),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Center(child: Text('🌸', style: TextStyle(fontSize: 28))),
@@ -141,7 +141,7 @@ class _VendorProfileManagementScreenState
               onPressed: () async {
                 setState(() => _saving = true);
                 await Future.delayed(const Duration(milliseconds: 600));
-                if (mounted) {
+                if (mounted && context.mounted) {
                   setState(() => _saving = false);
                   showWedSnackBar(context, 'Profile updated successfully!', type: SnackType.success);
                 }

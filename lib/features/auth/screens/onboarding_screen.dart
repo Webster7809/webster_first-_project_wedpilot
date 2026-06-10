@@ -32,7 +32,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       emoji: '💌',
       title: 'Beautiful Invitations',
       subtitle: 'Design stunning digital invitations and track RSVPs in real time from your dashboard.',
-      color: AppColors.tertiary.withOpacity(0.4),
+      color: AppColors.tertiary.withValues(alpha: 102),
     ),
   ];
 

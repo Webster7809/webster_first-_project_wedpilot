@@ -108,7 +108,7 @@ class _ReviewModerationList extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                        color: AppColors.error.withValues(alpha: 26),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text('Flagged: ${review['flagReason']}',

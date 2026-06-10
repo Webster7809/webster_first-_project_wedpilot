@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../providers/vendor_provider.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_text_field.dart';
 import '../../../widgets/wed_snack_bar.dart';
@@ -59,7 +58,7 @@ class _ReviewSubmissionScreenState extends ConsumerState<ReviewSubmissionScreen>
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.info.withOpacity(0.08),
+                color: AppColors.info.withValues(alpha: 20),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
@@ -78,7 +77,7 @@ class _ReviewSubmissionScreenState extends ConsumerState<ReviewSubmissionScreen>
             Text('Select Vendor', style: AppTextStyles.labelLarge),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _selectedVendorId,
+              initialValue: _selectedVendorId,
               hint: const Text('Choose a vendor you worked with'),
               decoration: InputDecoration(
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

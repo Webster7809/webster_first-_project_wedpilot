@@ -70,7 +70,7 @@ class VendorCard extends StatelessWidget {
                 Container(
                   height: 140,
                   width: double.infinity,
-                  color: AppColors.primary.withOpacity(0.3),
+                  color: AppColors.primary.withValues(alpha: 77),
                   child: const Center(
                     child: Icon(Icons.photo_camera, size: 40, color: AppColors.accent),
                   ),
@@ -83,7 +83,7 @@ class VendorCard extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 230),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(

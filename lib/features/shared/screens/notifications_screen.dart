@@ -27,17 +27,17 @@ class NotificationsScreen extends StatelessWidget {
       ),
       body: ListView.separated(
         itemCount: _notifications.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
+        separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (_, i) {
           final notif = _notifications[i];
           return Container(
-            color: notif['read'] as bool ? null : AppColors.secondary.withOpacity(0.04),
+            color: notif['read'] as bool ? null : AppColors.secondary.withValues(alpha: 10),
             child: ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               leading: Container(
                 width: 44, height: 44,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.4),
+                  color: AppColors.primary.withValues(alpha: 102),
                   shape: BoxShape.circle,
                 ),
                 child: Center(child: Text(notif['icon'] as String, style: const TextStyle(fontSize: 20))),

@@ -51,12 +51,12 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       Text(
                         '${couple!.daysUntilWedding} days until your wedding! 🎊',
                         style: AppTextStyles.bodyMedium.copyWith(
-                            color: Colors.white.withOpacity(0.9)),
+                            color: Colors.white.withValues(alpha: 230)),
                       )
                     else
                       Text('Start planning your perfect wedding',
                           style: AppTextStyles.bodyMedium
-                              .copyWith(color: Colors.white.withOpacity(0.9))),
+                              .copyWith(color: Colors.white.withValues(alpha: 230))),
                   ],
                 ),
               ),
@@ -142,7 +142,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       Container(
                         width: 48, height: 48,
                         decoration: BoxDecoration(
-                          color: AppColors.goldPremium.withOpacity(0.1),
+                          color: AppColors.goldPremium.withValues(alpha: 26),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Center(child: Text('🌟', style: TextStyle(fontSize: 24))),

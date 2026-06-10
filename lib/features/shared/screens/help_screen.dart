@@ -68,9 +68,9 @@ class _HelpScreenState extends State<HelpScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.secondary.withOpacity(0.08),
+                      color: AppColors.secondary.withValues(alpha: 20),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
+                      border: Border.all(color: AppColors.secondary.withValues(alpha: 51)),
                     ),
                     child: Row(
                       children: [
@@ -122,8 +122,6 @@ class _FaqTile extends StatefulWidget {
 }
 
 class _FaqTileState extends State<_FaqTile> {
-  bool _expanded = false;
-
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -139,7 +137,7 @@ class _FaqTileState extends State<_FaqTile> {
                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.6)),
           ),
         ],
-        onExpansionChanged: (v) => setState(() => _expanded = v),
+        onExpansionChanged: (_) {},
       ),
     );
   }
