@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../models/budget.dart';
 import '../../../providers/budget_provider.dart';
+import '../../../providers/vendor_provider.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_card.dart';
 
@@ -13,6 +18,9 @@ class BudgetOverviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final budget = ref.watch(budgetProvider);
+    final selectedServices = ref.watch(selectedServiceCategoriesProvider);
+    final recommendations = ref.watch(recommendedVendorsProvider);
+    final wishlist = ref.watch(wishlistProvider);
 
     if (budget == null) {
       return Scaffold(
@@ -52,7 +60,7 @@ class BudgetOverviewScreen extends ConsumerWidget {
           ),
           IconButton(
             icon: const Icon(Icons.file_download_outlined),
-            onPressed: () {},
+            onPressed: () => _exportBudgetPdf(context, budget, recommendations),
             tooltip: 'Export',
           ),
         ],
@@ -143,6 +151,39 @@ class BudgetOverviewScreen extends ConsumerWidget {
                   onTap: () => _showCategoryDetails(context, cat),
                 ),
               )),
+          const SizedBox(height: 20),
+          if (recommendations.isNotEmpty) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('AI Recommended Vendors', style: AppTextStyles.headlineSmall),
+                if (selectedServices.isNotEmpty)
+                  Text('${selectedServices.length} categories', style: AppTextStyles.caption),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 280,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: recommendations.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
+                itemBuilder: (_, index) {
+                  final vendor = recommendations[index];
+                  return SizedBox(
+                    width: 240,
+                    child: VendorCard(
+                      vendor: vendor,
+                      isWishlisted: wishlist.contains(vendor.id),
+                      rank: index + 1,
+                      onTap: () => context.push('/couple/vendors/${vendor.id}'),
+                      onWishlistToggle: () => ref.read(wishlistProvider.notifier).toggle(vendor.id),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -191,6 +232,57 @@ class BudgetOverviewScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _exportBudgetPdf(BuildContext context, Budget budget, List<dynamic> recommendations) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      build: (context) {
+        return [
+          pw.Header(level: 0, text: 'Wedding Budget Report'),
+          pw.Paragraph(text: 'Total budget: ${budget.currency} ${budget.totalAmount.toStringAsFixed(0)}'),
+          pw.Paragraph(text: 'Remaining budget: ${budget.currency} ${budget.remainingBudget.toStringAsFixed(0)}'),
+          pw.SizedBox(height: 12),
+          pw.Header(level: 1, text: 'Budget Breakdown'),
+          pw.TableHelper.fromTextArray(
+            headers: ['Category', 'Allocated', 'Spent'],
+            data: budget.categories
+                .map((cat) => [
+                      cat.categoryName,
+                      '${budget.currency} ${cat.allocatedAmount.toStringAsFixed(0)}',
+                      '${budget.currency} ${cat.spentAmount.toStringAsFixed(0)}',
+                    ])
+                .toList(),
+          ),
+          if (budget.customItems.isNotEmpty) ...[
+            pw.SizedBox(height: 12),
+            pw.Header(level: 1, text: 'Custom Items'),
+            pw.TableHelper.fromTextArray(
+              headers: ['Item', 'Estimated Cost'],
+              data: budget.customItems
+                  .map((item) => [item.name, '${budget.currency} ${item.amount.toStringAsFixed(0)}'])
+                  .toList(),
+            ),
+          ],
+          if (recommendations.isNotEmpty) ...[
+            pw.SizedBox(height: 12),
+            pw.Header(level: 1, text: 'AI Vendor Recommendations'),
+            pw.Column(
+              children: recommendations.map((vendor) {
+                return pw.Bullet(
+                  text: '${vendor.businessName} • ${vendor.category} • from ${budget.currency} ${vendor.priceMin.toStringAsFixed(0)}',
+                );
+              }).toList(),
+            ),
+          ],
+        ];
+      },
+    ));
+
+    final bytes = await pdf.save();
+    await Printing.sharePdf(bytes: bytes, filename: 'wedpilot-budget-report.pdf');
   }
 }
 

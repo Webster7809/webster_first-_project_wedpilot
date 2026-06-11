@@ -102,7 +102,35 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> register(String name, String email, String password, UserRole role) async {
     state = state.copyWith(isLoading: true, error: null);
     await Future.delayed(const Duration(milliseconds: 800));
-    state = state.copyWith(isLoading: false);
+    final user = User(
+      id: 'user-${DateTime.now().millisecondsSinceEpoch}',
+      email: email,
+      name: name,
+      role: role,
+      isVerified: false,
+      createdAt: DateTime.now(),
+    );
+    state = state.copyWith(user: user, isLoading: false);
+  }
+
+  void updateCoupleProfile({
+    required List<String> selectedItems,
+    required double budget,
+    required String weddingStyle,
+    required String weddingClass,
+    required int guestCount,
+    required String location,
+  }) {
+    final profile = CoupleProfile(
+      id: 'profile-${DateTime.now().millisecondsSinceEpoch}',
+      userId: state.user?.id ?? '',
+      location: location.isNotEmpty ? location : null,
+      guestCount: guestCount > 0 ? guestCount : null,
+      styleTags: [weddingStyle, weddingClass, ...selectedItems],
+      totalBudget: budget > 0 ? budget : null,
+      currency: 'ZMW',
+    );
+    state = state.copyWith(coupleProfile: profile);
   }
 
   Future<void> logout() async {

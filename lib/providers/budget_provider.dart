@@ -5,21 +5,64 @@ import '../core/constants/app_constants.dart';
 class BudgetNotifier extends StateNotifier<Budget?> {
   BudgetNotifier() : super(null);
 
-  void loadMockBudget(double total, String currency) {
-    final categories = AppConstants.defaultBudgetAllocation.entries.map((e) {
-      final icons = AppConstants.vendorCategoryIcons;
-      final cats = AppConstants.vendorCategories;
-      final idx = cats.indexOf(e.key);
+  void loadMockBudget(
+    double total,
+    String currency, {
+    List<String>? serviceCategories,
+    List<BudgetCustomItem>? customItems,
+  }) {
+    final selectedCategories = (serviceCategories == null || serviceCategories.isEmpty)
+        ? AppConstants.defaultBudgetAllocation.keys.toList()
+        : serviceCategories;
+    final customEntries = customItems ?? [];
+    final customTotal = customEntries.fold<double>(0.0, (sum, item) => sum + item.amount);
+
+    final categoryWeights = selectedCategories.map((categoryName) {
+      return AppConstants.defaultBudgetAllocation[categoryName] ?? 0.05;
+    }).toList();
+    final totalWeight = categoryWeights.fold(0.0, (sum, weight) => sum + weight);
+    final remainingBudget = (total - customTotal).clamp(0.0, total);
+    final scale = totalWeight > 0 ? remainingBudget / totalWeight : 0;
+
+    final categories = selectedCategories.map((categoryName) {
+      final weight = AppConstants.defaultBudgetAllocation[categoryName] ?? 0.05;
+      final allocatedAmount = weight * scale;
+      final idx = AppConstants.vendorCategories.indexOf(categoryName);
       return BudgetCategory(
-        id: 'cat-${e.key.toLowerCase().replaceAll(' ', '-')}',
+        id: 'cat-${categoryName.toLowerCase().replaceAll(' ', '-')}',
         budgetId: 'budget-001',
-        categoryName: e.key,
-        categoryIcon: idx >= 0 ? icons[idx] : '💰',
-        allocatedAmount: total * e.value,
-        spentAmount: total * e.value * 0.3,
-        aiJustification: AppConstants.budgetAIJustifications[e.key],
+        categoryName: categoryName,
+        categoryIcon: idx >= 0 ? AppConstants.vendorCategoryIcons[idx] : '💰',
+        allocatedAmount: allocatedAmount,
+        spentAmount: allocatedAmount * 0.3,
+        aiJustification: AppConstants.budgetAIJustifications[categoryName],
       );
     }).toList();
+
+    if (customTotal > 0) {
+      categories.add(BudgetCategory(
+        id: 'cat-custom-items',
+        budgetId: 'budget-001',
+        categoryName: 'Custom Items',
+        categoryIcon: '🧾',
+        allocatedAmount: customTotal,
+        spentAmount: 0,
+        aiJustification: 'Special requests and one-off wedding items you added.',
+      ));
+    }
+
+    final allocatedSum = categories.fold(0.0, (sum, category) => sum + category.allocatedAmount);
+    if (allocatedSum < total) {
+      categories.add(BudgetCategory(
+        id: 'cat-contingency',
+        budgetId: 'budget-001',
+        categoryName: 'Contingency',
+        categoryIcon: '🛡️',
+        allocatedAmount: total - allocatedSum,
+        spentAmount: 0,
+        aiJustification: 'Reserved funds for unexpected wedding costs or last-minute upgrades.',
+      ));
+    }
 
     state = Budget(
       id: 'budget-001',
@@ -28,6 +71,7 @@ class BudgetNotifier extends StateNotifier<Budget?> {
       currency: currency,
       isAiGenerated: true,
       categories: categories,
+      customItems: customEntries,
       createdAt: DateTime.now(),
     );
   }

@@ -3,6 +3,18 @@ import '../models/vendor_profile.dart';
 
 final selectedCategoryProvider = StateProvider<String>((ref) => 'Photography');
 
+final selectedServiceCategoriesProvider = StateProvider<List<String>>((ref) => []);
+
+final recommendedVendorsProvider = Provider<List<VendorProfile>>((ref) {
+  final selectedServices = ref.watch(selectedServiceCategoriesProvider);
+  if (selectedServices.isEmpty) {
+    return _mockVendors.take(4).toList();
+  }
+  return _mockVendors
+      .where((vendor) => selectedServices.contains(vendor.category))
+      .toList();
+});
+
 final vendorSearchQueryProvider = StateProvider<String>((ref) => '');
 
 final vendorListProvider = FutureProvider.family<List<VendorProfile>, String>(

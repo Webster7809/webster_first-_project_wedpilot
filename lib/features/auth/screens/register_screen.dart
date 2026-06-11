@@ -45,7 +45,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _passCtrl.text,
           _role,
         );
-    if (mounted) context.go('/verify-email');
+    if (!mounted) return;
+    if (_role == UserRole.couple) {
+      context.go('/couple-planning');
+    } else {
+      context.go('/vendor-onboarding');
+    }
   }
 
   @override

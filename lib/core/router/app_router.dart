@@ -7,6 +7,8 @@ import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
 import '../../features/auth/screens/forgot_password_screen.dart';
 import '../../features/auth/screens/email_verify_screen.dart';
+import '../../features/auth/screens/couple_planning_screen.dart';
+import '../../features/auth/screens/vendor_onboarding_screen.dart';
 import '../../features/couple/screens/couple_dashboard_screen.dart';
 import '../../features/couple/screens/budget_overview_screen.dart';
 import '../../features/couple/screens/budget_setup_wizard_screen.dart';
@@ -57,6 +59,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/verify-email',
         builder: (_, _) => const EmailVerifyScreen(),
+      ),
+      GoRoute(
+        path: '/couple-planning',
+        builder: (_, _) => const CouplePlanningScreen(),
+      ),
+      GoRoute(
+        path: '/vendor-onboarding',
+        builder: (_, _) => const VendorOnboardingScreen(),
       ),
 
       // Couple shell

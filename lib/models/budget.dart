@@ -5,6 +5,7 @@ class Budget {
   final String currency;
   final bool isAiGenerated;
   final List<BudgetCategory> categories;
+  final List<BudgetCustomItem> customItems;
   final DateTime createdAt;
 
   const Budget({
@@ -14,8 +15,12 @@ class Budget {
     required this.currency,
     required this.isAiGenerated,
     required this.categories,
+    this.customItems = const [],
     required this.createdAt,
   });
+
+  double get totalCustomAmount =>
+      customItems.fold(0.0, (sum, item) => sum + item.amount);
 
   double get totalAllocated =>
       categories.fold(0.0, (sum, c) => sum + c.allocatedAmount);
@@ -39,7 +44,28 @@ class Budget {
         categories: (json['categories'] as List<dynamic>? ?? [])
             .map((c) => BudgetCategory.fromJson(c as Map<String, dynamic>))
             .toList(),
+        customItems: (json['custom_items'] as List<dynamic>? ?? [])
+            .map((c) => BudgetCustomItem.fromJson(c as Map<String, dynamic>))
+            .toList(),
         createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}
+
+class BudgetCustomItem {
+  final String id;
+  final String name;
+  final double amount;
+
+  const BudgetCustomItem({
+    required this.id,
+    required this.name,
+    required this.amount,
+  });
+
+  factory BudgetCustomItem.fromJson(Map<String, dynamic> json) => BudgetCustomItem(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        amount: (json['amount'] as num).toDouble(),
       );
 }
 
