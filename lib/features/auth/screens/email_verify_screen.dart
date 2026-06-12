@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../models/user.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_button.dart';
 
-class EmailVerifyScreen extends StatefulWidget {
+class EmailVerifyScreen extends ConsumerStatefulWidget {
   const EmailVerifyScreen({super.key});
 
   @override
-  State<EmailVerifyScreen> createState() => _EmailVerifyScreenState();
+  ConsumerState<EmailVerifyScreen> createState() => _EmailVerifyScreenState();
 }
 
-class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
+class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
   int _countdown = 60;
   bool _canResend = false;
 
@@ -34,10 +37,10 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Verify Email')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
               width: 90, height: 90,
@@ -52,9 +55,23 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
               style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary, height: 1.5),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 40),
+            WedButton(
+              label: "I've Verified — Continue",
+              width: 260,
+              onPressed: () {
+                final role = ref.read(authProvider).user?.role;
+                if (role == UserRole.couple) {
+                  context.go('/couple-planning');
+                } else {
+                  context.go('/vendor-onboarding');
+                }
+              },
+            ),
+            const SizedBox(height: 12),
             WedButton(
               label: _canResend ? 'Resend Email' : 'Resend in ${_countdown}s',
+              width: 220,
               onPressed: _canResend ? () {
                 setState(() { _countdown = 60; _canResend = false; });
                 _startCountdown();

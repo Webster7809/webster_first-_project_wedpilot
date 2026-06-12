@@ -17,7 +17,8 @@ class BudgetOverviewScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final budget = ref.watch(budgetProvider);
+    final budgetState = ref.watch(budgetProvider);
+    final budget = budgetState.budget;
     final selectedServices = ref.watch(selectedServiceCategoriesProvider);
     final recommendations = ref.watch(recommendedVendorsProvider);
     final wishlist = ref.watch(wishlistProvider);

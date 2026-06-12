@@ -58,7 +58,7 @@ class _ReviewSubmissionScreenState extends ConsumerState<ReviewSubmissionScreen>
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.info.withValues(alpha: 20),
+                color: AppColors.info.withAlpha(20),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(

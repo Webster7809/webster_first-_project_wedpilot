@@ -55,6 +55,7 @@ class _WedTextFieldState extends State<WedTextField> {
         labelText: widget.label,
         hintText: widget.hint,
         helperText: widget.helperText,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         prefixIcon: widget.prefixIcon != null ? Icon(widget.prefixIcon) : null,
         suffixIcon: widget.isPassword
             ? IconButton(

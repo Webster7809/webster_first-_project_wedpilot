@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/budget_provider.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -46,6 +47,7 @@ class SettingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: OutlinedButton.icon(
               onPressed: () async {
+                ref.read(budgetProvider.notifier).clearBudget();
                 await ref.read(authProvider.notifier).logout();
                 if (context.mounted) context.go('/login');
               },
@@ -87,7 +89,7 @@ class _Section extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
           child: Text(title, style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary)),
         ),
-        Container(
+        Material(
           color: AppColors.surface,
           child: Column(children: [
             for (int i = 0; i < children.length; i++) ...[

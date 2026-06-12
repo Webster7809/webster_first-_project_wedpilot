@@ -74,7 +74,7 @@ class _WishlistItem extends ConsumerWidget {
           leading: Container(
             width: 56, height: 56,
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 77),
+              color: AppColors.primary.withAlpha(77),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Center(child: Text('📷', style: TextStyle(fontSize: 24))),

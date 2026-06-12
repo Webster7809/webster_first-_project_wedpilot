@@ -68,9 +68,9 @@ class _HelpScreenState extends State<HelpScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.secondary.withValues(alpha: 20),
+                      color: AppColors.secondary.withAlpha(20),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.secondary.withValues(alpha: 51)),
+                      border: Border.all(color: AppColors.secondary.withAlpha(51)),
                     ),
                     child: Row(
                       children: [

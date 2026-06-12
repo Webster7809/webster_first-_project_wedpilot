@@ -67,12 +67,13 @@ class _BudgetSetupWizardScreenState extends ConsumerState<BudgetSetupWizardScree
     setState(() => _isGenerating = true);
     await Future.delayed(const Duration(seconds: 2));
     ref.read(selectedServiceCategoriesProvider.notifier).state = _selectedServices;
-    ref.read(budgetProvider.notifier).loadMockBudget(
+    await ref.read(budgetProvider.notifier).loadMockBudget(
           _budgetAmount,
           _currency,
           serviceCategories: _selectedServices,
           customItems: _customItems,
         );
+    if (!mounted) return;
     setState(() {
       _isGenerating = false;
       _step = 3;
@@ -108,8 +109,6 @@ class _BudgetSetupWizardScreenState extends ConsumerState<BudgetSetupWizardScree
 
   @override
   Widget build(BuildContext context) {
-    final budget = ref.watch(budgetProvider);
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -152,7 +151,18 @@ class _BudgetSetupWizardScreenState extends ConsumerState<BudgetSetupWizardScree
                   budget: _budgetAmount,
                   selectedPlan: _selectedPlan,
                   budgetFriendlyPlan: _budgetFriendlyPlan,
-                  onSelectPlan: (plan) => setState(() => _selectedPlan = plan),
+                  onSelectPlan: (plan) => setState(() {
+                    _selectedPlan = plan;
+                    if (plan == 'Low class') {
+                      _selectedServices
+                        ..clear()
+                        ..addAll(['Venue', 'Catering', 'Photography']);
+                    } else if (plan == 'High class') {
+                      _selectedServices
+                        ..clear()
+                        ..addAll(AppConstants.vendorCategories.take(8));
+                    }
+                  }),
                 ),
                 _ServiceSelectionStep(
                   selectedServices: _selectedServices,
@@ -165,7 +175,7 @@ class _BudgetSetupWizardScreenState extends ConsumerState<BudgetSetupWizardScree
                   remainingBudget: _selectionRemaining,
                   currency: _currency,
                 ),
-                _AllocationReviewStep(budget: budget),
+                _AllocationReviewStep(budgetState: ref.watch(budgetProvider)),
               ],
             ),
           ),
@@ -481,7 +491,7 @@ class _ServiceSelectionStep extends StatelessWidget {
                 label: Text(service),
                 selected: selected,
                 onSelected: (_) => onServiceToggle(service),
-                selectedColor: AppColors.secondary.withValues(alpha: 20),
+                selectedColor: AppColors.secondary.withValues(alpha: 0.20),
                 checkmarkColor: AppColors.secondary,
               );
             }).toList(),
@@ -544,16 +554,33 @@ class _ServiceSelectionStep extends StatelessWidget {
 }
 
 class _AllocationReviewStep extends StatelessWidget {
-  final Budget? budget;
-  const _AllocationReviewStep({this.budget});
+  final BudgetState budgetState;
+  const _AllocationReviewStep({required this.budgetState});
 
   @override
   Widget build(BuildContext context) {
-    if (budget == null) {
+    if (budgetState.hasError) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: AppColors.error, size: 48),
+              const SizedBox(height: 16),
+              Text(budgetState.errorMessage ?? 'Unable to generate budget. Please try again.',
+                  textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (budgetState.budget == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final currentBudget = budget!;
+    final currentBudget = budgetState.budget!;
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [

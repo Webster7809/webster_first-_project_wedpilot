@@ -87,7 +87,7 @@ class _VerificationCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.warning.withValues(alpha: 31),
+                    color: AppColors.warning.withAlpha(31),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text('Pending',

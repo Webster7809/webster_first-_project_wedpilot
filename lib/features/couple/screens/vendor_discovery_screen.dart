@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../widgets/wed_card.dart';
 import '../../../widgets/loading_shimmer.dart';
@@ -16,13 +17,17 @@ class VendorDiscoveryScreen extends ConsumerWidget {
     final category = ref.watch(selectedCategoryProvider);
     final vendorsAsync = ref.watch(vendorListProvider(category));
     final wishlist = ref.watch(wishlistProvider);
+    final couple = ref.watch(coupleProfileProvider);
+    final location = couple?.location;
+    final hasLocation = location != null && location.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Find Vendors'),
         actions: [
-          IconButton(icon: const Icon(Icons.tune_outlined), onPressed: () {}),
+          IconButton(
+              icon: const Icon(Icons.tune_outlined), onPressed: () {}),
         ],
       ),
       body: Column(
@@ -31,7 +36,8 @@ class VendorDiscoveryScreen extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: TextField(
-              onChanged: (v) => ref.read(vendorSearchQueryProvider.notifier).state = v,
+              onChanged: (v) =>
+                  ref.read(vendorSearchQueryProvider.notifier).state = v,
               decoration: InputDecoration(
                 hintText: 'Search vendors...',
                 prefixIcon: const Icon(Icons.search),
@@ -41,10 +47,50 @@ class VendorDiscoveryScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: AppColors.divider),
                 ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
           ),
+          const SizedBox(height: 8),
+
+          // Location match banner
+          if (hasLocation)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: AppColors.info.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_on,
+                        size: 15, color: AppColors.info),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Showing best vendors near $location',
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.info),
+                      ),
+                    ),
+                    const Icon(Icons.auto_awesome,
+                        size: 14, color: AppColors.goldPremium),
+                    const SizedBox(width: 4),
+                    Text('AI matched',
+                        style: AppTextStyles.caption.copyWith(
+                            color: AppColors.goldPremium,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
           const SizedBox(height: 8),
 
           // Category tabs
@@ -64,8 +110,11 @@ class VendorDiscoveryScreen extends ConsumerWidget {
                     label: Text('$icon $cat'),
                     selected: isSelected,
                     onSelected: (_) =>
-                        ref.read(selectedCategoryProvider.notifier).state = cat,
-                    selectedColor: AppColors.secondary.withValues(alpha: 38),
+                        ref
+                            .read(selectedCategoryProvider.notifier)
+                            .state = cat,
+                    selectedColor:
+                        AppColors.secondary.withAlpha(38),
                     checkmarkColor: AppColors.secondary,
                   ),
                 );
@@ -84,17 +133,21 @@ class VendorDiscoveryScreen extends ConsumerWidget {
                 mainAxisSpacing: 12,
                 childAspectRatio: 0.78,
                 children: const [
-                  VendorCardShimmer(), VendorCardShimmer(),
-                  VendorCardShimmer(), VendorCardShimmer(),
+                  VendorCardShimmer(),
+                  VendorCardShimmer(),
+                  VendorCardShimmer(),
+                  VendorCardShimmer(),
                 ],
               ),
               error: (e, _) => Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                    const Icon(Icons.error_outline,
+                        size: 48, color: AppColors.error),
                     const SizedBox(height: 8),
-                    Text('Failed to load vendors', style: AppTextStyles.bodyMedium),
+                    Text('Failed to load vendors',
+                        style: AppTextStyles.bodyMedium),
                   ],
                 ),
               ),
@@ -104,18 +157,22 @@ class VendorDiscoveryScreen extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('🔍', style: TextStyle(fontSize: 48)),
+                        const Text('🔍',
+                            style: TextStyle(fontSize: 48)),
                         const SizedBox(height: 12),
-                        Text('No $category vendors yet', style: AppTextStyles.headlineMedium),
+                        Text('No $category vendors yet',
+                            style: AppTextStyles.headlineMedium),
                         Text('Check back soon!',
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                            style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textSecondary)),
                       ],
                     ),
                   );
                 }
                 return GridView.builder(
                   padding: const EdgeInsets.all(16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
@@ -128,9 +185,11 @@ class VendorDiscoveryScreen extends ConsumerWidget {
                       vendor: vendor,
                       isWishlisted: wishlist.contains(vendor.id),
                       rank: i + 1,
-                      onTap: () => context.push('/couple/vendors/${vendor.id}'),
-                      onWishlistToggle: () =>
-                          ref.read(wishlistProvider.notifier).toggle(vendor.id),
+                      onTap: () =>
+                          context.push('/couple/vendors/${vendor.id}'),
+                      onWishlistToggle: () => ref
+                          .read(wishlistProvider.notifier)
+                          .toggle(vendor.id),
                     );
                   },
                 );

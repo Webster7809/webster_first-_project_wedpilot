@@ -32,7 +32,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       emoji: '💌',
       title: 'Beautiful Invitations',
       subtitle: 'Design stunning digital invitations and track RSVPs in real time from your dashboard.',
-      color: AppColors.tertiary.withValues(alpha: 102),
+      color: AppColors.tertiary.withAlpha(102),
     ),
   ];
 
@@ -131,27 +131,34 @@ class _OnboardingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 140,
-            height: 140,
-            decoration: BoxDecoration(
-              color: slide.color,
-              shape: BoxShape.circle,
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    color: slide.color,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(child: Text(slide.emoji, style: const TextStyle(fontSize: 60))),
+                ),
+                const SizedBox(height: 24),
+                Text(slide.title, style: AppTextStyles.displaySmall, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                Text(slide.subtitle,
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary, height: 1.6),
+                    textAlign: TextAlign.center),
+              ],
             ),
-            child: Center(child: Text(slide.emoji, style: const TextStyle(fontSize: 60))),
           ),
-          const SizedBox(height: 40),
-          Text(slide.title, style: AppTextStyles.displaySmall, textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          Text(slide.subtitle,
-              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary, height: 1.6),
-              textAlign: TextAlign.center),
-        ],
+        ),
       ),
     );
   }

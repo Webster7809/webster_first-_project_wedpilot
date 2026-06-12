@@ -15,14 +15,12 @@ class CoupleDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final couple = ref.watch(coupleProfileProvider);
-    final budget = ref.watch(budgetProvider);
+    final budgetState = ref.watch(budgetProvider);
+    final budget = budgetState.budget;
     final user = ref.watch(currentUserProvider);
 
-    if (budget == null && couple?.hasBudget == true) {
-      ref.read(budgetProvider.notifier).loadMockBudget(
-            couple!.totalBudget!,
-            couple.currency,
-          );
+    if (couple?.hasBudget == true && budgetState.status == BudgetStatus.initial) {
+      ref.read(budgetProvider.notifier).initializeBudgetForProfile(couple);
     }
 
     return Scaffold(
@@ -51,12 +49,12 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       Text(
                         '${couple!.daysUntilWedding} days until your wedding! 🎊',
                         style: AppTextStyles.bodyMedium.copyWith(
-                            color: Colors.white.withValues(alpha: 230)),
+                            color: Colors.white.withValues(alpha: 0.9)),
                       )
                     else
                       Text('Start planning your perfect wedding',
                           style: AppTextStyles.bodyMedium
-                              .copyWith(color: Colors.white.withValues(alpha: 230))),
+                              .copyWith(color: Colors.white.withValues(alpha: 0.9))),
                   ],
                 ),
               ),
@@ -117,14 +115,50 @@ class CoupleDashboardScreen extends ConsumerWidget {
                   crossAxisCount: 3,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  childAspectRatio: 0.9,
+                  childAspectRatio: 0.82,
                   children: [
-                    _QuickAction(emoji: '🔍', label: 'Find Vendors', onTap: () => context.go('/couple/vendors')),
-                    _QuickAction(emoji: '💌', label: 'Invitations', onTap: () => context.push('/couple/invitations')),
-                    _QuickAction(emoji: '✅', label: 'Checklist', onTap: () => context.push('/couple/checklist')),
-                    _QuickAction(emoji: '❤️', label: 'Wishlist', onTap: () => context.push('/couple/wishlist')),
-                    _QuickAction(emoji: '💬', label: 'Messages', onTap: () => context.go('/couple/messages')),
-                    _QuickAction(emoji: '⭐', label: 'Reviews', onTap: () => context.push('/couple/reviews/new')),
+                    _QuickAction(
+                      icon: Icons.storefront_rounded,
+                      label: 'Find Vendors',
+                      sublabel: 'Browse local pros',
+                      gradient: const [Color(0xFFC2185B), Color(0xFFE91E8C)],
+                      onTap: () => context.go('/couple/vendors'),
+                    ),
+                    _QuickAction(
+                      icon: Icons.mail_rounded,
+                      label: 'Invitations',
+                      sublabel: 'Design & send',
+                      gradient: const [Color(0xFF7B1FA2), Color(0xFFAB47BC)],
+                      onTap: () => context.push('/couple/invitations'),
+                    ),
+                    _QuickAction(
+                      icon: Icons.checklist_rounded,
+                      label: 'Checklist',
+                      sublabel: 'Track tasks',
+                      gradient: const [Color(0xFF1976D2), Color(0xFF42A5F5)],
+                      onTap: () => context.push('/couple/checklist'),
+                    ),
+                    _QuickAction(
+                      icon: Icons.favorite_rounded,
+                      label: 'Wishlist',
+                      sublabel: 'Saved ideas',
+                      gradient: const [Color(0xFFD81B60), Color(0xFFFF4081)],
+                      onTap: () => context.push('/couple/wishlist'),
+                    ),
+                    _QuickAction(
+                      icon: Icons.chat_bubble_rounded,
+                      label: 'Messages',
+                      sublabel: 'Chat vendors',
+                      gradient: const [Color(0xFF00897B), Color(0xFF26C6DA)],
+                      onTap: () => context.go('/couple/messages'),
+                    ),
+                    _QuickAction(
+                      icon: Icons.star_rounded,
+                      label: 'Reviews',
+                      sublabel: 'Rate vendors',
+                      gradient: const [Color(0xFFF57C00), Color(0xFFFFCA28)],
+                      onTap: () => context.push('/couple/reviews/new'),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -142,7 +176,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       Container(
                         width: 48, height: 48,
                         decoration: BoxDecoration(
-                          color: AppColors.goldPremium.withValues(alpha: 26),
+                          color: AppColors.goldPremium.withAlpha(26),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Center(child: Text('🌟', style: TextStyle(fontSize: 24))),
@@ -197,29 +231,76 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _QuickAction extends StatelessWidget {
-  final String emoji;
+  final IconData icon;
   final String label;
+  final String sublabel;
+  final List<Color> gradient;
   final VoidCallback onTap;
 
-  const _QuickAction({required this.emoji, required this.label, required this.onTap});
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.sublabel,
+    required this.gradient,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: AppColors.cardShadow, blurRadius: 4)],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 28)),
-            const SizedBox(height: 6),
-            Text(label, style: AppTextStyles.caption, textAlign: TextAlign.center),
-          ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: gradient.first.withValues(alpha: 0.18),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: gradient,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 22),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  label,
+                  style: AppTextStyles.labelLarge.copyWith(fontSize: 12),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  sublabel,
+                  style: AppTextStyles.caption.copyWith(fontSize: 10),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

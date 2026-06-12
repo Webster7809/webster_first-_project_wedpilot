@@ -43,7 +43,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: AppColors.primary, width: 2),
-                  boxShadow: [BoxShadow(color: AppColors.secondary.withValues(alpha: 31), blurRadius: 20)],
+                  boxShadow: [BoxShadow(color: AppColors.secondary.withAlpha(31), blurRadius: 20)],
                 ),
                 child: Column(
                   children: [

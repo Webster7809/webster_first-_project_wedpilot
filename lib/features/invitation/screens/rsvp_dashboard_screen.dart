@@ -78,9 +78,9 @@ class _RsvpStat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 20),
+        color: color.withAlpha(20),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 51)),
+        border: Border.all(color: color.withAlpha(51)),
       ),
       child: Column(
         children: [
@@ -126,7 +126,7 @@ class _RsvpCard extends StatelessWidget {
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: _color.withValues(alpha: 31),
+            color: _color.withAlpha(31),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(

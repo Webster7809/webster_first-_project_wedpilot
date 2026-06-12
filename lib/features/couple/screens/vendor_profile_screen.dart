@@ -15,15 +15,19 @@ class VendorProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final vendorAsync = ref.watch(vendorDetailProvider(vendorId));
     final wishlist = ref.watch(wishlistProvider);
+    final ratings = ref.watch(vendorRatingsProvider);
 
     return vendorAsync.when(
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(
         appBar: AppBar(),
         body: Center(child: Text('Failed to load vendor: $e')),
       ),
       data: (vendor) {
         final isWishlisted = wishlist.contains(vendor.id);
+        final myRating = ratings[vendor.id];
+
         return Scaffold(
           backgroundColor: AppColors.background,
           body: CustomScrollView(
@@ -36,14 +40,18 @@ class VendorProfileScreen extends ConsumerWidget {
                     fit: StackFit.expand,
                     children: [
                       Container(
-                        color: AppColors.primary.withValues(alpha: 102),
-                        child: const Center(child: Text('📷', style: TextStyle(fontSize: 80))),
+                        color: AppColors.primary.withAlpha(102),
+                        child: const Center(
+                            child: Text('📷',
+                                style: TextStyle(fontSize: 80))),
                       ),
                       if (vendor.isVerified)
                         Positioned(
-                          bottom: 16, left: 16,
+                          bottom: 16,
+                          left: 16,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: AppColors.info,
                               borderRadius: BorderRadius.circular(20),
@@ -51,9 +59,14 @@ class VendorProfileScreen extends ConsumerWidget {
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.verified, color: Colors.white, size: 14),
+                                Icon(Icons.verified,
+                                    color: Colors.white, size: 14),
                                 SizedBox(width: 4),
-                                Text('Verified', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                                Text('Verified',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),
@@ -63,19 +76,31 @@ class VendorProfileScreen extends ConsumerWidget {
                 ),
                 actions: [
                   IconButton(
-                    icon: Icon(isWishlisted ? Icons.favorite : Icons.favorite_border,
-                        color: isWishlisted ? AppColors.secondary : Colors.white),
+                    icon: Icon(
+                        isWishlisted
+                            ? Icons.favorite
+                            : Icons.favorite_border,
+                        color: isWishlisted
+                            ? AppColors.secondary
+                            : Colors.white),
                     onPressed: () {
-                      ref.read(wishlistProvider.notifier).toggle(vendor.id);
+                      ref
+                          .read(wishlistProvider.notifier)
+                          .toggle(vendor.id);
                       showWedSnackBar(
                         context,
-                        isWishlisted ? 'Removed from wishlist' : 'Added to wishlist! ❤️',
-                        type: isWishlisted ? SnackType.info : SnackType.success,
+                        isWishlisted
+                            ? 'Removed from wishlist'
+                            : 'Added to wishlist! ❤️',
+                        type: isWishlisted
+                            ? SnackType.info
+                            : SnackType.success,
                       );
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.share_outlined, color: Colors.white),
+                    icon: const Icon(Icons.share_outlined,
+                        color: Colors.white),
                     onPressed: () {},
                   ),
                 ],
@@ -84,6 +109,7 @@ class VendorProfileScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
+                    // ── Vendor header ─────────────────────────
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -91,13 +117,17 @@ class VendorProfileScreen extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(vendor.businessName, style: AppTextStyles.displaySmall),
+                              Text(vendor.businessName,
+                                  style: AppTextStyles.displaySmall),
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  const Icon(Icons.location_on, size: 14, color: AppColors.textSecondary),
+                                  const Icon(Icons.location_on,
+                                      size: 14,
+                                      color: AppColors.textSecondary),
                                   const SizedBox(width: 2),
-                                  Text(vendor.location ?? '', style: AppTextStyles.bodySmall),
+                                  Text(vendor.location ?? '',
+                                      style: AppTextStyles.bodySmall),
                                 ],
                               ),
                             ],
@@ -108,13 +138,19 @@ class VendorProfileScreen extends ConsumerWidget {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.star, size: 16, color: AppColors.goldPremium),
+                                const Icon(Icons.star,
+                                    size: 16,
+                                    color: AppColors.goldPremium),
                                 const SizedBox(width: 4),
-                                Text(vendor.rating?.toStringAsFixed(1) ?? '—',
+                                Text(
+                                    vendor.rating
+                                            ?.toStringAsFixed(1) ??
+                                        '—',
                                     style: AppTextStyles.titleMedium),
                               ],
                             ),
-                            Text('${vendor.reviewCount} reviews', style: AppTextStyles.caption),
+                            Text('${vendor.reviewCount} reviews',
+                                style: AppTextStyles.caption),
                           ],
                         ),
                       ],
@@ -123,16 +159,23 @@ class VendorProfileScreen extends ConsumerWidget {
                     Wrap(
                       spacing: 6,
                       children: vendor.styleTags
-                          .map((t) => Chip(label: Text(t), padding: EdgeInsets.zero, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap))
+                          .map((t) => Chip(
+                              label: Text(t),
+                              padding: EdgeInsets.zero,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap))
                           .toList(),
                     ),
                     const SizedBox(height: 16),
                     if (vendor.description != null)
-                      Text(vendor.description!, style: AppTextStyles.bodyMedium.copyWith(height: 1.6)),
+                      Text(vendor.description!,
+                          style: AppTextStyles.bodyMedium
+                              .copyWith(height: 1.6)),
                     const SizedBox(height: 20),
 
-                    // Services
-                    Text('Services & Pricing', style: AppTextStyles.headlineSmall),
+                    // ── Services & Pricing ────────────────────
+                    Text('Services & Pricing',
+                        style: AppTextStyles.headlineSmall),
                     const SizedBox(height: 12),
                     ...vendor.services.map((s) => Card(
                           margin: const EdgeInsets.only(bottom: 8),
@@ -142,23 +185,33 @@ class VendorProfileScreen extends ConsumerWidget {
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(s.title, style: AppTextStyles.titleMedium),
+                                      Text(s.title,
+                                          style:
+                                              AppTextStyles.titleMedium),
                                       if (s.description != null)
                                         Text(s.description!,
-                                            style: AppTextStyles.caption.copyWith(
-                                                color: AppColors.textSecondary)),
+                                            style: AppTextStyles.caption
+                                                .copyWith(
+                                                    color: AppColors
+                                                        .textSecondary)),
                                     ],
                                   ),
                                 ),
                                 Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.end,
                                   children: [
-                                    Text('\$${s.priceMin.toStringAsFixed(0)}',
-                                        style: AppTextStyles.titleMedium.copyWith(
-                                            color: AppColors.secondary)),
-                                    Text('to \$${s.priceMax.toStringAsFixed(0)}',
+                                    Text(
+                                        '\$${s.priceMin.toStringAsFixed(0)}',
+                                        style: AppTextStyles.titleMedium
+                                            .copyWith(
+                                                color:
+                                                    AppColors.secondary)),
+                                    Text(
+                                        'to \$${s.priceMax.toStringAsFixed(0)}',
                                         style: AppTextStyles.caption),
                                   ],
                                 ),
@@ -168,32 +221,70 @@ class VendorProfileScreen extends ConsumerWidget {
                         )),
 
                     const SizedBox(height: 20),
-                    // AI Score
+
+                    // ── AI Score ──────────────────────────────
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.goldPremium.withValues(alpha: 20),
+                        color: AppColors.goldPremium.withAlpha(20),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.goldPremium.withValues(alpha: 77)),
+                        border: Border.all(
+                            color: AppColors.goldPremium.withAlpha(77)),
                       ),
                       child: Row(
                         children: [
-                          const Text('🌟', style: TextStyle(fontSize: 24)),
+                          const Text('🌟',
+                              style: TextStyle(fontSize: 24)),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
                               children: [
-                                Text('AI Reputation Score: ${vendor.compositeScore.toStringAsFixed(0)}/100',
+                                Text(
+                                    'AI Reputation Score: ${vendor.compositeScore.toStringAsFixed(0)}/100',
                                     style: AppTextStyles.titleMedium),
-                                Text('Based on ratings, response rate & booking conversion',
-                                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                                Text(
+                                    'Based on ratings, response rate & booking conversion',
+                                    style: AppTextStyles.caption.copyWith(
+                                        color:
+                                            AppColors.textSecondary)),
                               ],
                             ),
                           ),
                         ],
                       ),
                     ),
+
+                    const SizedBox(height: 24),
+
+                    // ── Couple rating section ─────────────────
+                    _VendorRatingSection(
+                      vendorId: vendor.id,
+                      vendorName: vendor.businessName,
+                      currentRating: myRating,
+                      onRate: (stars) {
+                        ref
+                            .read(vendorRatingsProvider.notifier)
+                            .rate(vendor.id, stars);
+                        showWedSnackBar(
+                          context,
+                          'You rated ${vendor.businessName} $stars star${stars == 1 ? '' : 's'} ⭐',
+                          type: SnackType.success,
+                        );
+                      },
+                      onUnrate: () {
+                        ref
+                            .read(vendorRatingsProvider.notifier)
+                            .unrate(vendor.id);
+                        showWedSnackBar(
+                          context,
+                          'Your rating has been removed',
+                          type: SnackType.info,
+                        );
+                      },
+                    ),
+
                     const SizedBox(height: 100),
                   ]),
                 ),
@@ -210,7 +301,9 @@ class VendorProfileScreen extends ConsumerWidget {
                       label: 'Send Inquiry',
                       onPressed: () {
                         context.push('/couple/messages');
-                        showWedSnackBar(context, 'Inquiry sent to ${vendor.businessName}!',
+                        showWedSnackBar(
+                            context,
+                            'Inquiry sent to ${vendor.businessName}!',
                             type: SnackType.success);
                       },
                     ),
@@ -221,6 +314,116 @@ class VendorProfileScreen extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ── Interactive star rating widget ──────────────────────────────────────────
+
+class _VendorRatingSection extends StatelessWidget {
+  final String vendorId;
+  final String vendorName;
+  final int? currentRating;
+  final void Function(int stars) onRate;
+  final VoidCallback onUnrate;
+
+  const _VendorRatingSection({
+    required this.vendorId,
+    required this.vendorName,
+    required this.currentRating,
+    required this.onRate,
+    required this.onUnrate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.rate_review_outlined,
+                  size: 18, color: AppColors.secondary),
+              const SizedBox(width: 8),
+              Text('Rate this Vendor',
+                  style: AppTextStyles.headlineSmall),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            currentRating == null
+                ? 'Tap a star to share your experience'
+                : 'Your rating: $currentRating / 5  —  tap the same star to remove',
+            style: AppTextStyles.caption
+                .copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+
+          // Star row
+          Row(
+            children: List.generate(5, (i) {
+              final starValue = i + 1;
+              final filled = currentRating != null &&
+                  starValue <= currentRating!;
+              return GestureDetector(
+                onTap: () {
+                  if (currentRating == starValue) {
+                    // Tapping the same star removes the rating
+                    onUnrate();
+                  } else {
+                    onRate(starValue);
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    transitionBuilder: (child, anim) => ScaleTransition(
+                      scale: anim,
+                      child: child,
+                    ),
+                    child: Icon(
+                      filled ? Icons.star_rounded : Icons.star_outline_rounded,
+                      key: ValueKey('$starValue-$filled'),
+                      size: 40,
+                      color: filled
+                          ? AppColors.goldPremium
+                          : AppColors.textHint,
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+
+          // Remove rating button — only visible when rated
+          if (currentRating != null) ...[
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: onUnrate,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.close, size: 14, color: AppColors.error),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Remove my rating',
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.error),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

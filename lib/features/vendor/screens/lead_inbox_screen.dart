@@ -169,7 +169,7 @@ class _LeadCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _statusColor.withValues(alpha: 31),
+                    color: _statusColor.withAlpha(31),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(_statusLabel,

@@ -70,7 +70,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         label: Text(f),
                         selected: _filter == f,
                         onSelected: (_) => setState(() => _filter = f),
-                      selectedColor: AppColors.secondary.withValues(alpha: 38),
+                      selectedColor: AppColors.secondary.withAlpha(38),
                       ),
                     )).toList(),
                   ),
@@ -129,7 +129,7 @@ class _RoleBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 31),
+        color: color.withAlpha(31),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
