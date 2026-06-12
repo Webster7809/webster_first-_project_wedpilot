@@ -27,14 +27,21 @@ class CoupleDashboardScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
+          // Collapsible hero header
           SliverAppBar(
-            expandedHeight: 160,
+            expandedHeight: 170,
             floating: false,
             pinned: true,
             backgroundColor: AppColors.secondary,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                color: AppColors.secondary,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFAD1457), Color(0xFFC2185B)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
                 padding: const EdgeInsets.fromLTRB(20, 60, 20, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,13 +55,15 @@ class CoupleDashboardScreen extends ConsumerWidget {
                     if (couple?.hasWeddingDate == true)
                       Text(
                         '${couple!.daysUntilWedding} days until your wedding! 🎊',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                            color: Colors.white.withValues(alpha: 0.9)),
+                        style: AppTextStyles.bodyMedium
+                            .copyWith(color: Colors.white.withValues(alpha: 0.9)),
                       )
                     else
-                      Text('Start planning your perfect wedding',
-                          style: AppTextStyles.bodyMedium
-                              .copyWith(color: Colors.white.withValues(alpha: 0.9))),
+                      Text(
+                        'Start planning your perfect wedding',
+                        style: AppTextStyles.bodyMedium
+                            .copyWith(color: Colors.white.withValues(alpha: 0.9)),
+                      ),
                   ],
                 ),
               ),
@@ -66,16 +75,22 @@ class CoupleDashboardScreen extends ConsumerWidget {
               ),
             ],
           ),
+
           SliverPadding(
             padding: const EdgeInsets.all(16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                // Budget overview
+
+                // ── Summary Stats Row ──────────────────────────────
+                _WeddingSummaryRow(couple: couple, budget: budget),
+                const SizedBox(height: 20),
+
+                // ── Budget Overview ────────────────────────────────
                 if (budget != null) ...[
                   _SectionHeader(
                     title: 'Budget Overview',
                     actionLabel: 'See all',
-                    onAction: () => context.push('/couple/budget'),
+                    onAction: () => context.go('/couple/budget'),
                   ),
                   const SizedBox(height: 12),
                   _BudgetDonutCard(budget: budget),
@@ -90,7 +105,8 @@ class CoupleDashboardScreen extends ConsumerWidget {
                         const SizedBox(height: 8),
                         Text(
                           'Let our AI allocate your budget across all wedding categories.',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textSecondary),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
@@ -106,7 +122,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                   const SizedBox(height: 20),
                 ],
 
-                // Quick actions
+                // ── Quick Actions ──────────────────────────────────
                 _SectionHeader(title: 'Quick Actions'),
                 const SizedBox(height: 12),
                 GridView.count(
@@ -129,7 +145,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       label: 'Invitations',
                       sublabel: 'Design & send',
                       gradient: const [Color(0xFF7B1FA2), Color(0xFFAB47BC)],
-                      onTap: () => context.push('/couple/invitations'),
+                      onTap: () => context.go('/couple/invitations'),
                     ),
                     _QuickAction(
                       icon: Icons.checklist_rounded,
@@ -150,7 +166,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       label: 'Messages',
                       sublabel: 'Chat vendors',
                       gradient: const [Color(0xFF00897B), Color(0xFF26C6DA)],
-                      onTap: () => context.go('/couple/messages'),
+                      onTap: () => context.push('/couple/messages'),
                     ),
                     _QuickAction(
                       icon: Icons.star_rounded,
@@ -163,7 +179,17 @@ class CoupleDashboardScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // AI Recommendations
+                // ── Booked Vendors ─────────────────────────────────
+                _SectionHeader(
+                  title: 'Booked Vendors',
+                  actionLabel: 'Find more',
+                  onAction: () => context.go('/couple/vendors'),
+                ),
+                const SizedBox(height: 12),
+                _BookedVendorsSection(),
+                const SizedBox(height: 20),
+
+                // ── AI Recommendations ─────────────────────────────
                 _SectionHeader(
                   title: 'AI Picks For You',
                   actionLabel: 'Browse all',
@@ -171,31 +197,37 @@ class CoupleDashboardScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 WedCard(
+                  onTap: () => context.go('/couple/vendors'),
                   child: Row(
                     children: [
                       Container(
-                        width: 48, height: 48,
+                        width: 48,
+                        height: 48,
                         decoration: BoxDecoration(
                           color: AppColors.goldPremium.withAlpha(26),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Center(child: Text('🌟', style: TextStyle(fontSize: 24))),
+                        child: const Center(
+                          child: Text('🌟', style: TextStyle(fontSize: 24)),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Your matches are ready!', style: AppTextStyles.titleMedium),
+                            Text('Your matches are ready!',
+                                style: AppTextStyles.titleMedium),
                             Text('6 vendors matched to your style & budget',
-                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                                style: AppTextStyles.bodySmall
+                                    .copyWith(color: AppColors.textSecondary)),
                           ],
                         ),
                       ),
-                      const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
+                      const Icon(Icons.arrow_forward_ios,
+                          size: 14, color: AppColors.textSecondary),
                     ],
                   ),
-                  onTap: () => context.go('/couple/vendors'),
                 ),
                 const SizedBox(height: 24),
               ]),
@@ -206,6 +238,270 @@ class CoupleDashboardScreen extends ConsumerWidget {
     );
   }
 }
+
+// ── Wedding Summary Stats Row ──────────────────────────────────────────────────
+
+class _WeddingSummaryRow extends StatelessWidget {
+  final dynamic couple;
+  final dynamic budget;
+
+  const _WeddingSummaryRow({required this.couple, required this.budget});
+
+  @override
+  Widget build(BuildContext context) {
+    final days = couple?.hasWeddingDate == true
+        ? '${couple!.daysUntilWedding}'
+        : '--';
+    final guests = couple?.guestCount != null
+        ? '${couple!.guestCount}'
+        : '--';
+    final budgetPct = (budget != null && budget.totalAmount > 0)
+        ? '${(budget.totalSpent / budget.totalAmount * 100).clamp(0, 100).toStringAsFixed(0)}%'
+        : '--';
+
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCard(
+            icon: Icons.calendar_today_rounded,
+            value: days,
+            label: 'Days Left',
+            color: AppColors.secondary,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.people_rounded,
+            value: guests,
+            label: 'Guests',
+            color: AppColors.info,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.account_balance_wallet_rounded,
+            value: budgetPct,
+            label: 'Budget Used',
+            color: AppColors.warning,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.checklist_rounded,
+            value: '32%',
+            label: 'Tasks Done',
+            color: AppColors.success,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color color;
+
+  const _StatCard({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(color: AppColors.cardShadow, blurRadius: 4, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withAlpha(26),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: AppTextStyles.headlineSmall.copyWith(
+              color: color,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(fontSize: 10),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Booked Vendors Section ─────────────────────────────────────────────────────
+
+class _BookedVendorsSection extends StatelessWidget {
+  const _BookedVendorsSection();
+
+  static const _mockBookings = [
+    _BookingData(
+      emoji: '📸',
+      name: 'Blossom Photography',
+      category: 'Photography',
+      status: 'Confirmed',
+      statusColor: AppColors.success,
+      date: 'Jun 14, 2027',
+    ),
+    _BookingData(
+      emoji: '🌸',
+      name: 'Petal & Bloom Florals',
+      category: 'Floristry',
+      status: 'Confirmed',
+      statusColor: AppColors.success,
+      date: 'Jun 14, 2027',
+    ),
+    _BookingData(
+      emoji: '🎵',
+      name: 'Harmony Live Band',
+      category: 'Music',
+      status: 'Pending',
+      statusColor: AppColors.warning,
+      date: 'Jun 14, 2027',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    if (_mockBookings.isEmpty) {
+      return WedCard(
+        child: Column(
+          children: [
+            const Text('🔍', style: TextStyle(fontSize: 36)),
+            const SizedBox(height: 8),
+            Text('No vendors booked yet', style: AppTextStyles.titleMedium),
+            const SizedBox(height: 4),
+            Text('Search and book verified wedding vendors',
+                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 12),
+            WedButton(
+              label: 'Search Vendors',
+              onPressed: () => context.go('/couple/vendors'),
+              width: 180,
+              height: 40,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: _mockBookings.map((b) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: _BookedVendorTile(booking: b),
+      )).toList(),
+    );
+  }
+}
+
+class _BookingData {
+  final String emoji;
+  final String name;
+  final String category;
+  final String status;
+  final Color statusColor;
+  final String date;
+
+  const _BookingData({
+    required this.emoji,
+    required this.name,
+    required this.category,
+    required this.status,
+    required this.statusColor,
+    required this.date,
+  });
+}
+
+class _BookedVendorTile extends StatelessWidget {
+  final _BookingData booking;
+  const _BookedVendorTile({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(color: AppColors.cardShadow, blurRadius: 4, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withAlpha(60),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Center(child: Text(booking.emoji, style: const TextStyle(fontSize: 22))),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(booking.name, style: AppTextStyles.titleMedium),
+                const SizedBox(height: 2),
+                Text(
+                  '${booking.category} · ${booking.date}',
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: booking.statusColor.withAlpha(26),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              booking.status,
+              style: AppTextStyles.caption.copyWith(
+                color: booking.statusColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Shared Section Header ──────────────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
   final String title;
@@ -223,12 +519,17 @@ class _SectionHeader extends StatelessWidget {
         if (actionLabel != null)
           TextButton(
             onPressed: onAction,
-            child: Text(actionLabel!, style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary)),
+            child: Text(
+              actionLabel!,
+              style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary),
+            ),
           ),
       ],
     );
   }
 }
+
+// ── Quick Action Tile ──────────────────────────────────────────────────────────
 
 class _QuickAction extends StatelessWidget {
   final IconData icon;
@@ -307,6 +608,8 @@ class _QuickAction extends StatelessWidget {
   }
 }
 
+// ── Budget Donut Card ──────────────────────────────────────────────────────────
+
 class _BudgetDonutCard extends StatelessWidget {
   final dynamic budget;
   const _BudgetDonutCard({required this.budget});
@@ -331,7 +634,8 @@ class _BudgetDonutCard extends StatelessWidget {
                     showTitle: false,
                   ),
                   PieChartSectionData(
-                    value: (budget.totalAmount - budget.totalSpent).clamp(0, double.infinity),
+                    value: (budget.totalAmount - budget.totalSpent)
+                        .clamp(0, double.infinity),
                     color: AppColors.primary,
                     radius: 20,
                     showTitle: false,
@@ -346,14 +650,23 @@ class _BudgetDonutCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Total Budget', style: AppTextStyles.labelMedium),
-                Text('\$${budget.totalAmount.toStringAsFixed(0)}',
-                    style: AppTextStyles.headlineLarge.copyWith(color: AppColors.secondary)),
+                Text(
+                  '\$${budget.totalAmount.toStringAsFixed(0)}',
+                  style: AppTextStyles.headlineLarge
+                      .copyWith(color: AppColors.secondary),
+                ),
                 const SizedBox(height: 8),
-                _BudgetLegend(color: AppColors.secondary, label: 'Spent',
-                    value: '\$${budget.totalSpent.toStringAsFixed(0)}'),
+                _BudgetLegend(
+                  color: AppColors.secondary,
+                  label: 'Spent',
+                  value: '\$${budget.totalSpent.toStringAsFixed(0)}',
+                ),
                 const SizedBox(height: 4),
-                _BudgetLegend(color: AppColors.primary, label: 'Remaining',
-                    value: '\$${budget.remainingBudget.toStringAsFixed(0)}'),
+                _BudgetLegend(
+                  color: AppColors.primary,
+                  label: 'Remaining',
+                  value: '\$${budget.remainingBudget.toStringAsFixed(0)}',
+                ),
               ],
             ),
           ),
@@ -367,16 +680,22 @@ class _BudgetLegend extends StatelessWidget {
   final Color color;
   final String label;
   final String value;
-  const _BudgetLegend({required this.color, required this.label, required this.value});
+  const _BudgetLegend(
+      {required this.color, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
         const SizedBox(width: 6),
         Text('$label: ', style: AppTextStyles.caption),
-        Text(value, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+        Text(value,
+            style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
       ],
     );
   }

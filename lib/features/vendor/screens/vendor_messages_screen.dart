@@ -42,7 +42,7 @@ class VendorMessagesScreen extends ConsumerWidget {
                           style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
                     )
                   : null,
-              onTap: () => context.push('/couple/messages/${conv.id}'),
+              onTap: () => context.push('/vendor/messages/${conv.id}'),
             );
           },
         ),
