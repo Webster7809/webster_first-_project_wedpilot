@@ -132,6 +132,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/help', builder: (_, _) => const HelpScreen()),
 
       // ── Couple: full-screen pushes (no bottom nav) ────────────────────────
+      GoRoute(
+        path: '/couple/vendors/:id',
+        builder: (_, state) =>
+            VendorProfileScreen(vendorId: state.pathParameters['id']!),
+      ),
       GoRoute(path: '/couple/budget/setup', builder: (_, _) => const BudgetSetupWizardScreen()),
       GoRoute(path: '/couple/budget/expense/new', builder: (_, _) => const ExpenseEntryScreen()),
       GoRoute(
@@ -202,13 +207,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             GoRoute(
               path: '/couple/vendors',
               builder: (_, _) => const VendorDiscoveryScreen(),
-              routes: [
-                GoRoute(
-                  path: ':id',
-                  builder: (_, state) =>
-                      VendorProfileScreen(vendorId: state.pathParameters['id']!),
-                ),
-              ],
             ),
           ]),
 

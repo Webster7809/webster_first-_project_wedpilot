@@ -13,9 +13,10 @@ final invitationsProvider = StateNotifierProvider<InvitationNotifier, List<Invit
 class InvitationNotifier extends StateNotifier<List<Invitation>> {
   InvitationNotifier() : super([]);
 
-  void create(String templateId, String title) {
+  String create(String templateId, String title) {
+    final id = 'inv-${DateTime.now().millisecondsSinceEpoch}';
     final inv = Invitation(
-      id: 'inv-${DateTime.now().millisecondsSinceEpoch}',
+      id: id,
       coupleId: 'profile-001',
       templateId: templateId,
       title: title,
@@ -25,6 +26,26 @@ class InvitationNotifier extends StateNotifier<List<Invitation>> {
       createdAt: DateTime.now(),
     );
     state = [...state, inv];
+    return id;
+  }
+
+  void updateCustomData(String invitationId, Map<String, dynamic> data) {
+    state = state.map((inv) {
+      if (inv.id != invitationId) return inv;
+      return Invitation(
+        id: inv.id,
+        coupleId: inv.coupleId,
+        templateId: inv.templateId,
+        title: data['coupleName'] as String? ?? inv.title,
+        customData: {...inv.customData, ...data},
+        shareToken: inv.shareToken,
+        shareUrl: inv.shareUrl,
+        thumbnailUrl: inv.thumbnailUrl,
+        status: inv.status,
+        viewCount: inv.viewCount,
+        createdAt: inv.createdAt,
+      );
+    }).toList();
   }
 
   void publish(String invitationId) {

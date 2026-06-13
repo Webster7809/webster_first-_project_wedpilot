@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/inherited/shell_scaffold.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
@@ -25,6 +26,14 @@ class CoupleProfileScreen extends ConsumerWidget {
             pinned: true,
             automaticallyImplyLeading: false,
             backgroundColor: AppColors.secondary,
+            leading: Builder(
+              builder: (ctx) => IconButton(
+                icon: const Icon(Icons.menu, color: Colors.white),
+                tooltip: 'Open menu',
+                onPressed: () =>
+                    ShellScaffold.of(ctx)?.scaffoldKey.currentState?.openDrawer(),
+              ),
+            ),
             flexibleSpace: FlexibleSpaceBar(
               background: _ProfileHero(
                 coupleName: coupleName,

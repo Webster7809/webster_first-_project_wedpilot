@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../../core/inherited/shell_scaffold.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
@@ -33,6 +34,12 @@ class CoupleDashboardScreen extends ConsumerWidget {
             floating: false,
             pinned: true,
             backgroundColor: AppColors.secondary,
+            leading: IconButton(
+              icon: const Icon(Icons.menu, color: Colors.white),
+              tooltip: 'Open menu',
+              onPressed: () =>
+                  ShellScaffold.of(context)?.scaffoldKey.currentState?.openDrawer(),
+            ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: const BoxDecoration(
@@ -72,6 +79,11 @@ class CoupleDashboardScreen extends ConsumerWidget {
               IconButton(
                 icon: const Icon(Icons.notifications_outlined, color: Colors.white),
                 onPressed: () => context.push('/notifications'),
+              ),
+              IconButton(
+                icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                onPressed: () => context.push('/settings'),
+                tooltip: 'Settings',
               ),
             ],
           ),

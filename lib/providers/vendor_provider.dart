@@ -55,6 +55,27 @@ final recommendedVendorsProvider = Provider<List<VendorProfile>>((ref) {
       .toList();
 });
 
+// ── Picked Vendors ──────────────────────────────────────────────────────────
+
+final pickedVendorsProvider =
+    StateNotifierProvider<PickedVendorsNotifier, Set<String>>(
+  (ref) => PickedVendorsNotifier(),
+);
+
+class PickedVendorsNotifier extends StateNotifier<Set<String>> {
+  PickedVendorsNotifier() : super(const {});
+
+  void toggle(String vendorId) {
+    if (state.contains(vendorId)) {
+      state = Set.from(state)..remove(vendorId);
+    } else {
+      state = {...state, vendorId};
+    }
+  }
+
+  bool isPicked(String vendorId) => state.contains(vendorId);
+}
+
 // ── Wishlist ────────────────────────────────────────────────────────────────
 
 final wishlistProvider = StateNotifierProvider<WishlistNotifier, List<String>>(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/inherited/shell_scaffold.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/invitation_provider.dart';
@@ -19,21 +20,27 @@ class InvitationGalleryScreen extends ConsumerWidget {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 140,
+            expandedHeight: 120,
             pinned: true,
             backgroundColor: AppColors.secondary,
+            leading: IconButton(
+              icon: const Icon(Icons.menu, color: Colors.white),
+              tooltip: 'Open menu',
+              onPressed: () =>
+                  ShellScaffold.of(context)?.scaffoldKey.currentState?.openDrawer(),
+            ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFFC2185B), Color(0xFF880E4F)],
+                    colors: [Color(0xFF880E4F), Color(0xFFC2185B)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                 ),
                 child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -41,16 +48,16 @@ class InvitationGalleryScreen extends ConsumerWidget {
                         Text(
                           'Wedding Invitations',
                           style: GoogleFonts.playfairDisplay(
-                            fontSize: 24,
+                            fontSize: 22,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Text(
                           'Choose a design that reflects your love story',
                           style: GoogleFonts.inter(
-                            fontSize: 13,
+                            fontSize: 12,
                             color: Colors.white.withValues(alpha: 0.85),
                           ),
                         ),
@@ -65,22 +72,31 @@ class InvitationGalleryScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                // ── My invitations ────────────────────────────────────
                 if (myInvitations.isNotEmpty) ...[
                   _GallerySection(title: 'My Invitations', icon: Icons.bookmark_rounded),
-                  const SizedBox(height: 12),
-                  ...myInvitations.map((inv) => _MyInvitationTile(
+                  const SizedBox(height: 10),
+                  ...myInvitations.map((inv) => _MyInvitationCard(
                         invitation: inv,
-                        onTap: () => context.push('/couple/invitations/editor?id=${inv.id}'),
+                        onTap: () => context.push(
+                          '/couple/invitations/editor?id=${inv.id}',
+                        ),
                       )),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                 ],
-                _GallerySection(title: 'Choose Your Template', icon: Icons.style_rounded),
-                const SizedBox(height: 6),
+
+                // ── Template gallery ──────────────────────────────────
+                _GallerySection(
+                  title: 'Choose Your Design',
+                  icon: Icons.style_rounded,
+                ),
+                const SizedBox(height: 4),
                 Text(
-                  'Each design comes with curated fonts and colour palettes.',
+                  'Each theme comes with curated fonts and colour palettes.',
                   style: AppTextStyles.bodySmall,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
+
                 templatesAsync.when(
                   loading: () => const Center(
                     child: Padding(
@@ -94,9 +110,9 @@ class InvitationGalleryScreen extends ConsumerWidget {
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
-                      crossAxisSpacing: 14,
-                      mainAxisSpacing: 14,
-                      childAspectRatio: 0.68,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 0.90,
                     ),
                     itemCount: templates.length,
                     itemBuilder: (_, i) {
@@ -104,10 +120,10 @@ class InvitationGalleryScreen extends ConsumerWidget {
                       return _TemplateCard(
                         template: template,
                         onTap: () {
-                          ref
+                          final newId = ref
                               .read(invitationsProvider.notifier)
                               .create(template.id, 'My Wedding Invitation');
-                          context.push('/couple/invitations/editor');
+                          context.push('/couple/invitations/editor?id=$newId');
                         },
                       );
                     },
@@ -123,6 +139,8 @@ class InvitationGalleryScreen extends ConsumerWidget {
   }
 }
 
+// ── Gallery section header ──────────────────────────────────────────────────
+
 class _GallerySection extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -132,80 +150,137 @@ class _GallerySection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: AppColors.secondary),
-        const SizedBox(width: 8),
+        Icon(icon, size: 18, color: AppColors.secondary),
+        const SizedBox(width: 7),
         Text(title, style: AppTextStyles.headlineSmall),
       ],
     );
   }
 }
 
-class _MyInvitationTile extends StatelessWidget {
+// ── My invitation card ──────────────────────────────────────────────────────
+// Compact list-item style: ~68 px tall, shows title + status at a glance.
+
+class _MyInvitationCard extends StatelessWidget {
   final dynamic invitation;
   final VoidCallback onTap;
-  const _MyInvitationTile({required this.invitation, required this.onTap});
+  const _MyInvitationCard({required this.invitation, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final published = (invitation.status.name as String) == 'published';
+    final customData = invitation.customData as Map<String, dynamic>;
+    final title = customData['coupleName'] as String? ?? invitation.title as String;
+    final date = customData['date'] as String? ?? '';
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(
-            color: AppColors.cardShadow,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: AppColors.cardShadow, blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.mail_rounded, color: Colors.white, size: 22),
-        ),
-        title: Text(invitation.title as String, style: AppTextStyles.titleMedium),
-        subtitle: Row(
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: published
-                    ? AppColors.success.withValues(alpha: 0.12)
-                    : AppColors.warning.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              // Mini gradient swatch
+              Container(
+                width: 42,
+                height: 50,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.favorite, color: Colors.white, size: 16),
               ),
-              child: Text(
-                published ? 'Published' : 'Draft',
-                style: AppTextStyles.caption.copyWith(
-                  color: published ? AppColors.success : AppColors.warning,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(width: 12),
+
+              // Title + meta in one column
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        _StatusBadge(published: published),
+                        if (date.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.calendar_today_outlined,
+                              size: 10, color: AppColors.textSecondary),
+                          const SizedBox(width: 3),
+                          Text(date, style: AppTextStyles.caption),
+                        ],
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 18, color: AppColors.textSecondary),
+            ],
+          ),
         ),
-        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textSecondary),
-        onTap: onTap,
       ),
     );
   }
 }
 
-// ─── Theme metadata ────────────────────────────────────────────────────────
+class _StatusBadge extends StatelessWidget {
+  final bool published;
+  const _StatusBadge({required this.published});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: published
+            ? AppColors.info.withValues(alpha: 0.12)
+            : AppColors.warning.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            published ? Icons.share_outlined : Icons.edit_outlined,
+            size: 10,
+            color: published ? AppColors.info : AppColors.warning,
+          ),
+          const SizedBox(width: 3),
+          Text(
+            published ? 'Shared' : 'Draft',
+            style: AppTextStyles.caption.copyWith(
+              color: published ? AppColors.info : AppColors.warning,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Theme metadata ─────────────────────────────────────────────────────────
 
 class _ThemeMeta {
   final List<Color> gradient;
@@ -242,8 +317,8 @@ _ThemeMeta _metaFor(String theme) {
         sampleFont: 'Great Vibes',
         tagline: 'Soft florals & romance',
         decor: [
-          _DecoElement('🌸', 56, Alignment.topRight, opacity: 0.35),
-          _DecoElement('🌷', 38, Alignment.bottomLeft, opacity: 0.3),
+          _DecoElement('🌸', 48, Alignment.topRight, opacity: 0.35),
+          _DecoElement('🌷', 32, Alignment.bottomLeft, opacity: 0.3),
         ],
       ),
     'modern' => _ThemeMeta(
@@ -253,8 +328,8 @@ _ThemeMeta _metaFor(String theme) {
         sampleFont: 'Montserrat',
         tagline: 'Clean lines & elegance',
         decor: [
-          _DecoElement('◼', 44, Alignment.topRight, opacity: 0.12),
-          _DecoElement('◻', 28, Alignment.bottomLeft, opacity: 0.1),
+          _DecoElement('◼', 38, Alignment.topRight, opacity: 0.12),
+          _DecoElement('◻', 24, Alignment.bottomLeft, opacity: 0.1),
         ],
       ),
     'royal' => _ThemeMeta(
@@ -264,8 +339,8 @@ _ThemeMeta _metaFor(String theme) {
         sampleFont: 'Cormorant Garamond',
         tagline: 'Regal & grand',
         decor: [
-          _DecoElement('👑', 52, Alignment.topRight, opacity: 0.45),
-          _DecoElement('✦', 36, Alignment.bottomLeft, opacity: 0.35),
+          _DecoElement('👑', 44, Alignment.topRight, opacity: 0.45),
+          _DecoElement('✦', 30, Alignment.bottomLeft, opacity: 0.35),
         ],
       ),
     'rustic' => _ThemeMeta(
@@ -275,8 +350,8 @@ _ThemeMeta _metaFor(String theme) {
         sampleFont: 'Abril Fatface',
         tagline: 'Earthy & botanical',
         decor: [
-          _DecoElement('🌿', 54, Alignment.topRight, opacity: 0.4),
-          _DecoElement('🍃', 36, Alignment.bottomLeft, opacity: 0.35),
+          _DecoElement('🌿', 46, Alignment.topRight, opacity: 0.4),
+          _DecoElement('🍃', 30, Alignment.bottomLeft, opacity: 0.35),
         ],
       ),
     'boho' => _ThemeMeta(
@@ -286,8 +361,8 @@ _ThemeMeta _metaFor(String theme) {
         sampleFont: 'Sacramento',
         tagline: 'Free-spirited & dreamy',
         decor: [
-          _DecoElement('🪶', 52, Alignment.topRight, opacity: 0.45),
-          _DecoElement('☽', 38, Alignment.bottomLeft, opacity: 0.3),
+          _DecoElement('🪶', 44, Alignment.topRight, opacity: 0.45),
+          _DecoElement('☽', 32, Alignment.bottomLeft, opacity: 0.3),
         ],
       ),
     'beach' => _ThemeMeta(
@@ -297,8 +372,8 @@ _ThemeMeta _metaFor(String theme) {
         sampleFont: 'Pacifico',
         tagline: 'Breezy ocean vibes',
         decor: [
-          _DecoElement('🌊', 52, Alignment.topRight, opacity: 0.4),
-          _DecoElement('🐚', 38, Alignment.bottomLeft, opacity: 0.35),
+          _DecoElement('🌊', 44, Alignment.topRight, opacity: 0.4),
+          _DecoElement('🐚', 30, Alignment.bottomLeft, opacity: 0.35),
         ],
       ),
     'celestial' => _ThemeMeta(
@@ -308,8 +383,8 @@ _ThemeMeta _metaFor(String theme) {
         sampleFont: 'Cinzel',
         tagline: 'Stars & mystical nights',
         decor: [
-          _DecoElement('✨', 50, Alignment.topRight, opacity: 0.55),
-          _DecoElement('🌙', 38, Alignment.bottomLeft, opacity: 0.5),
+          _DecoElement('✨', 42, Alignment.topRight, opacity: 0.55),
+          _DecoElement('🌙', 30, Alignment.bottomLeft, opacity: 0.5),
         ],
       ),
     'african' => _ThemeMeta(
@@ -319,8 +394,8 @@ _ThemeMeta _metaFor(String theme) {
         sampleFont: 'Lobster',
         tagline: 'Vibrant & cultural',
         decor: [
-          _DecoElement('🌍', 52, Alignment.topRight, opacity: 0.45),
-          _DecoElement('🥁', 36, Alignment.bottomLeft, opacity: 0.35),
+          _DecoElement('🌍', 44, Alignment.topRight, opacity: 0.45),
+          _DecoElement('🥁', 30, Alignment.bottomLeft, opacity: 0.35),
         ],
       ),
     'islamic' => _ThemeMeta(
@@ -330,8 +405,8 @@ _ThemeMeta _metaFor(String theme) {
         sampleFont: 'Amiri',
         tagline: 'Graceful & sacred',
         decor: [
-          _DecoElement('☪', 52, Alignment.topRight, opacity: 0.35),
-          _DecoElement('🕌', 38, Alignment.bottomLeft, opacity: 0.3),
+          _DecoElement('☪', 44, Alignment.topRight, opacity: 0.35),
+          _DecoElement('🕌', 30, Alignment.bottomLeft, opacity: 0.3),
         ],
       ),
     'indian' => _ThemeMeta(
@@ -341,8 +416,8 @@ _ThemeMeta _metaFor(String theme) {
         sampleFont: 'Philosopher',
         tagline: 'Vibrant & festive',
         decor: [
-          _DecoElement('🪔', 52, Alignment.topRight, opacity: 0.45),
-          _DecoElement('🌺', 38, Alignment.bottomLeft, opacity: 0.4),
+          _DecoElement('🪔', 44, Alignment.topRight, opacity: 0.45),
+          _DecoElement('🌺', 30, Alignment.bottomLeft, opacity: 0.4),
         ],
       ),
     _ => _ThemeMeta(
@@ -355,7 +430,9 @@ _ThemeMeta _metaFor(String theme) {
   };
 }
 
-// ─── Template Card ──────────────────────────────────────────────────────────
+// ── Template card ───────────────────────────────────────────────────────────
+// Visual-first thumbnail: gradient + decor fills ~65 % of the card, a
+// gradient-scrim bottom panel shows the name and a compact CTA.
 
 class _TemplateCard extends StatelessWidget {
   final dynamic template;
@@ -367,65 +444,114 @@ class _TemplateCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final meta = _metaFor(template.theme as String);
     final isDark = meta.gradient.first.computeLuminance() < 0.15;
+    // For dark-background themes, lighten the scrim slightly so text remains legible.
+    final scrimEnd = isDark
+        ? meta.gradient.last.withValues(alpha: 0.97)
+        : meta.gradient.last.withValues(alpha: 0.92);
 
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: meta.gradient,
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: meta.gradient.last.withValues(alpha: 0.35),
-              blurRadius: 12,
-              offset: const Offset(0, 5),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: meta.gradient,
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Decorative background elements
-            for (final d in meta.decor)
-              Positioned.fill(
-                child: Align(
-                  alignment: d.alignment,
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Text(
-                      d.symbol,
-                      style: TextStyle(fontSize: d.size),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // ── Decorative theme elements (background)
+              for (final d in meta.decor)
+                Positioned.fill(
+                  child: Align(
+                    alignment: d.alignment,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Opacity(
+                        opacity: d.opacity,
+                        child: Text(d.symbol, style: TextStyle(fontSize: d.size)),
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-            // PRO badge
-            if (template.isPremium as bool)
+              // ── Bottom scrim + info panel
               Positioned(
-                top: 10,
-                left: 10,
+                left: 0,
+                right: 0,
+                bottom: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.fromLTRB(10, 18, 10, 10),
                   decoration: BoxDecoration(
-                    color: AppColors.goldPremium,
-                    borderRadius: BorderRadius.circular(20),
+                    gradient: LinearGradient(
+                      colors: [Colors.transparent, scrimEnd],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.star_rounded, color: Colors.white, size: 10),
-                      const SizedBox(width: 3),
-                      const Text(
-                        'PRO',
-                        style: TextStyle(
-                          color: Colors.white,
+                      // Accent rule
+                      Container(
+                        width: 22,
+                        height: 2,
+                        decoration: BoxDecoration(
+                          color: meta.accentColor.withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+
+                      // Template name
+                      Text(
+                        template.name as String,
+                        style: GoogleFonts.playfairDisplay(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: meta.textColor,
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+
+                      // Tagline
+                      Text(
+                        meta.tagline,
+                        style: GoogleFonts.inter(
                           fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
+                          color: meta.textColor.withValues(alpha: 0.65),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Select CTA
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: meta.accentColor,
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Select',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -433,128 +559,39 @@ class _TemplateCard extends StatelessWidget {
                 ),
               ),
 
-            // Card content
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Spacer(),
-
-                    // Divider line
-                    Container(
-                      width: 32,
-                      height: 2,
-                      decoration: BoxDecoration(
-                        color: meta.accentColor.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+              // ── PRO badge (top-left)
+              if (template.isPremium as bool)
+                Positioned(
+                  top: 7,
+                  left: 7,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD4A854),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    const SizedBox(height: 8),
-
-                    // Template name
-                    Text(
-                      template.name as String,
-                      style: GoogleFonts.playfairDisplay(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: meta.textColor,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-
-                    // Tagline
-                    Text(
-                      meta.tagline,
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: meta.textColor.withValues(alpha: 0.7),
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Font preview
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: (isDark ? Colors.white : meta.accentColor).withValues(alpha: isDark ? 0.08 : 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: meta.accentColor.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Aa — ${meta.sampleFont}',
-                            style: GoogleFonts.inter(
-                              fontSize: 9,
-                              color: meta.textColor.withValues(alpha: 0.55),
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Sarah & James',
-                            style: _fontPreviewStyle(meta.sampleFont).copyWith(
-                              fontSize: 13,
-                              color: meta.accentColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    // CTA
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: meta.accentColor,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Use This Design',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.star_rounded, color: Colors.white, size: 8),
+                        SizedBox(width: 2),
+                        Text(
+                          'PRO',
+                          style: TextStyle(
                             color: Colors.white,
-                            letterSpacing: 0.3,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
-  }
-
-  TextStyle _fontPreviewStyle(String fontName) {
-    return switch (fontName) {
-      'Great Vibes' => GoogleFonts.greatVibes(),
-      'Montserrat' => GoogleFonts.montserrat(fontWeight: FontWeight.w600),
-      'Cormorant Garamond' => GoogleFonts.cormorantGaramond(fontWeight: FontWeight.w600),
-      'Abril Fatface' => GoogleFonts.abrilFatface(),
-      'Sacramento' => GoogleFonts.sacramento(),
-      'Pacifico' => GoogleFonts.pacifico(),
-      'Cinzel' => GoogleFonts.cinzel(fontWeight: FontWeight.w600),
-      'Lobster' => GoogleFonts.lobster(),
-      'Amiri' => GoogleFonts.amiri(fontWeight: FontWeight.w700),
-      'Philosopher' => GoogleFonts.philosopher(fontWeight: FontWeight.w700),
-      _ => GoogleFonts.playfairDisplay(),
-    };
   }
 }

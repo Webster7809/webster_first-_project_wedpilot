@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../../../core/inherited/shell_scaffold.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/budget.dart';
@@ -25,7 +26,17 @@ class BudgetOverviewScreen extends ConsumerWidget {
 
     if (budget == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Budget')),
+        appBar: AppBar(
+          title: const Text('Budget'),
+          leading: Builder(
+            builder: (ctx) => IconButton(
+              icon: const Icon(Icons.menu),
+              tooltip: 'Open menu',
+              onPressed: () =>
+                  ShellScaffold.of(ctx)?.scaffoldKey.currentState?.openDrawer(),
+            ),
+          ),
+        ),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -53,6 +64,14 @@ class BudgetOverviewScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Budget Overview'),
+        leading: Builder(
+          builder: (ctx) => IconButton(
+            icon: const Icon(Icons.menu),
+            tooltip: 'Open menu',
+            onPressed: () =>
+                ShellScaffold.of(ctx)?.scaffoldKey.currentState?.openDrawer(),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),

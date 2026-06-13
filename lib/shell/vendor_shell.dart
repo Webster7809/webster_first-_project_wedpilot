@@ -6,15 +6,23 @@ class VendorShell extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
   const VendorShell({super.key, required this.navigationShell});
 
+  static const _tabCount = 4; // Home, Leads, Analytics, Profile
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: _onTabSelected,
+        onDestinationSelected: (index) {
+          if (index == _tabCount) {
+            context.push('/settings');
+          } else {
+            _onTabSelected(index);
+          }
+        },
         backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.primary,
+        indicatorColor: AppColors.primary.withValues(alpha: 0.5),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: const [
           NavigationDestination(
@@ -36,6 +44,11 @@ class VendorShell extends StatelessWidget {
             icon: Icon(Icons.store_outlined),
             selectedIcon: Icon(Icons.store),
             label: 'Profile',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: 'Settings',
           ),
         ],
       ),

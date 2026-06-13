@@ -10,7 +10,14 @@ class WedButton extends StatelessWidget {
   final WedButtonVariant variant;
   final bool isLoading;
   final IconData? icon;
+
+  /// Explicit width. When null the button expands to fill its parent
+  /// (constrained by [maxWidth] if provided).
   final double? width;
+
+  /// Maximum width — useful for forms on large screens. Defaults to 480.
+  final double maxWidth;
+
   final double height;
 
   const WedButton({
@@ -21,12 +28,13 @@ class WedButton extends StatelessWidget {
     this.isLoading = false,
     this.icon,
     this.width,
-    this.height = 52,
+    this.maxWidth = 480,
+    this.height = 48,
   });
 
   @override
   Widget build(BuildContext context) {
-    Widget child = isLoading
+    final child = isLoading
         ? SizedBox(
             height: 20,
             width: 20,
@@ -37,6 +45,7 @@ class WedButton extends StatelessWidget {
           )
         : Row(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (icon != null) ...[
                 Icon(icon, size: 18),
@@ -46,45 +55,60 @@ class WedButton extends StatelessWidget {
             ],
           );
 
-    return SizedBox(
-      width: width ?? double.infinity,
-      height: height,
-      child: switch (variant) {
-        WedButtonVariant.primary => ElevatedButton(
-            onPressed: isLoading ? null : onPressed,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              elevation: 0,
-            ),
-            child: child,
-          ),
-        WedButtonVariant.secondary => OutlinedButton(
-            onPressed: isLoading ? null : onPressed,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.secondary,
-              side: const BorderSide(color: AppColors.secondary, width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            ),
-            child: child,
-          ),
-        WedButtonVariant.ghost => TextButton(
-            onPressed: isLoading ? null : onPressed,
-            style: TextButton.styleFrom(foregroundColor: AppColors.secondary),
-            child: child,
-          ),
-        WedButtonVariant.destructive => ElevatedButton(
-            onPressed: isLoading ? null : onPressed,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              elevation: 0,
-            ),
-            child: child,
-          ),
-      },
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: width != null ? width! : maxWidth,
+          minHeight: height,
+          maxHeight: height,
+        ),
+        child: SizedBox(
+          width: width ?? double.infinity,
+          height: height,
+          child: switch (variant) {
+            WedButtonVariant.primary => ElevatedButton(
+                onPressed: isLoading ? null : onPressed,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.secondary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                ),
+                child: child,
+              ),
+            WedButtonVariant.secondary => OutlinedButton(
+                onPressed: isLoading ? null : onPressed,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.secondary,
+                  side: const BorderSide(color: AppColors.secondary, width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                ),
+                child: child,
+              ),
+            WedButtonVariant.ghost => TextButton(
+                onPressed: isLoading ? null : onPressed,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.secondary,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                ),
+                child: child,
+              ),
+            WedButtonVariant.destructive => ElevatedButton(
+                onPressed: isLoading ? null : onPressed,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                ),
+                child: child,
+              ),
+          },
+        ),
+      ),
     );
   }
 

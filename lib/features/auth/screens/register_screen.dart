@@ -19,7 +19,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+  final _confirmPassCtrl = TextEditingController();
   UserRole _role = UserRole.couple;
   bool _agreedToTerms = false;
 
@@ -27,7 +29,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
+    _phoneCtrl.dispose();
     _passCtrl.dispose();
+    _confirmPassCtrl.dispose();
     super.dispose();
   }
 
@@ -55,9 +59,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Create Account')),
+      appBar: AppBar(
+        title: const Text('Create Account'),
+        backgroundColor: AppColors.background,
+        elevation: 0,
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
         child: Form(
           key: _formKey,
           child: Column(
@@ -65,56 +73,90 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             children: [
               Text('Join Wedpilot', style: AppTextStyles.displaySmall),
               const SizedBox(height: 4),
-              Text('Create your free account to get started',
-                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
-              const SizedBox(height: 28),
-              Text('I am a...', style: AppTextStyles.headlineSmall),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _RoleCard(
-                      emoji: '💑',
-                      label: 'Couple',
-                      subtitle: 'Planning our wedding',
-                      isSelected: _role == UserRole.couple,
-                      onTap: () => setState(() => _role = UserRole.couple),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _RoleCard(
-                      emoji: '🏢',
-                      label: 'Vendor',
-                      subtitle: 'Offering wedding services',
-                      isSelected: _role == UserRole.vendor,
-                      onTap: () => setState(() => _role = UserRole.vendor),
-                    ),
-                  ),
-                ],
+              Text(
+                'Create your free account to get started',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
+
+              // Role Selection — Couple or Vendor only
+              Text('I am a...', style: AppTextStyles.headlineSmall),
+              const SizedBox(height: 4),
+              Text(
+                'Choose your account type',
+                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 14),
+              _RoleCard(
+                emoji: '💑',
+                label: 'Couple',
+                subtitle: 'Planning our perfect wedding together',
+                description:
+                    'Access budget tools, vendor search, planning checklists, and digital invitations.',
+                color: AppColors.secondary,
+                isSelected: _role == UserRole.couple,
+                onTap: () => setState(() => _role = UserRole.couple),
+              ),
+              const SizedBox(height: 10),
+              _RoleCard(
+                emoji: '🏢',
+                label: 'Vendor',
+                subtitle: 'Offering professional wedding services',
+                description:
+                    'Showcase your business, manage bookings, and connect with couples in your area.',
+                color: AppColors.info,
+                isSelected: _role == UserRole.vendor,
+                onTap: () => setState(() => _role = UserRole.vendor),
+              ),
+              const SizedBox(height: 28),
+
+              // Full Name / Business Name
               WedTextField(
-                label: _role == UserRole.couple ? 'Your names' : 'Business name',
+                label: _role == UserRole.couple ? 'Full Name' : 'Business Name',
                 hint: _role == UserRole.couple ? 'Alex & Jordan' : 'Blossom Photography',
                 controller: _nameCtrl,
-                prefixIcon: _role == UserRole.couple ? Icons.people_outline : Icons.business_outlined,
+                prefixIcon: _role == UserRole.vendor
+                    ? Icons.business_outlined
+                    : Icons.person_outline,
                 validator: (v) => v == null || v.isEmpty ? 'This field is required' : null,
               ),
               const SizedBox(height: 16),
+
+              // Email Address
               WedTextField(
-                label: 'Email address',
+                label: 'Email Address',
                 hint: 'you@example.com',
                 controller: _emailCtrl,
                 keyboardType: TextInputType.emailAddress,
                 prefixIcon: Icons.email_outlined,
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Please enter your email';
-                  if (!v.contains('@')) return 'Please enter a valid email';
+                  if (!v.contains('@') || !v.contains('.')) {
+                    return 'Please enter a valid email';
+                  }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
+
+              // Phone Number
+              WedTextField(
+                label: 'Phone Number',
+                hint: '+1 (555) 000-0000',
+                controller: _phoneCtrl,
+                keyboardType: TextInputType.phone,
+                prefixIcon: Icons.phone_outlined,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Please enter your phone number';
+                  if (v.replaceAll(RegExp(r'[\s\-\+\(\)]'), '').length < 7) {
+                    return 'Please enter a valid phone number';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Password
               WedTextField(
                 label: 'Password',
                 hint: '••••••••',
@@ -129,11 +171,29 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 },
               ),
               const SizedBox(height: 16),
+
+              // Confirm Password
+              WedTextField(
+                label: 'Confirm Password',
+                hint: '••••••••',
+                controller: _confirmPassCtrl,
+                isPassword: true,
+                prefixIcon: Icons.lock_outline,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Please confirm your password';
+                  if (v != _passCtrl.text) return 'Passwords do not match';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+
+              // Terms agreement
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Checkbox(
                     value: _agreedToTerms,
+                    activeColor: AppColors.secondary,
                     onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
                   ),
                   Expanded(
@@ -144,14 +204,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           style: AppTextStyles.bodySmall,
                           children: [
                             const TextSpan(text: 'I agree to the '),
-                            TextSpan(
+                            const TextSpan(
                               text: 'Terms of Service',
-                              style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                color: AppColors.secondary,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             const TextSpan(text: ' and '),
-                            TextSpan(
+                            const TextSpan(
                               text: 'Privacy Policy',
-                              style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                color: AppColors.secondary,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
@@ -161,6 +227,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ],
               ),
               const SizedBox(height: 24),
+
               WedButton(
                 label: 'Create Account',
                 onPressed: _register,
@@ -174,7 +241,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     Text('Already have an account? ', style: AppTextStyles.bodySmall),
                     TextButton(
                       onPressed: () => context.go('/login'),
-                      child: Text('Sign in', style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary)),
+                      child: Text(
+                        'Sign in',
+                        style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary),
+                      ),
                     ),
                   ],
                 ),
@@ -191,6 +261,8 @@ class _RoleCard extends StatelessWidget {
   final String emoji;
   final String label;
   final String subtitle;
+  final String description;
+  final Color color;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -198,6 +270,8 @@ class _RoleCard extends StatelessWidget {
     required this.emoji,
     required this.label,
     required this.subtitle,
+    required this.description,
+    required this.color,
     required this.isSelected,
     required this.onTap,
   });
@@ -210,23 +284,75 @@ class _RoleCard extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.secondary.withAlpha(20) : AppColors.surface,
+          color: isSelected ? color.withAlpha(18) : AppColors.surface,
           border: Border.all(
-            color: isSelected ? AppColors.secondary : AppColors.divider,
+            color: isSelected ? color : AppColors.divider,
             width: isSelected ? 2 : 1,
           ),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: isSelected
+              ? [BoxShadow(color: color.withAlpha(40), blurRadius: 10, offset: const Offset(0, 3))]
+              : [const BoxShadow(color: AppColors.cardShadow, blurRadius: 4)],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 28)),
-            const SizedBox(height: 8),
-            Text(label, style: AppTextStyles.headlineSmall.copyWith(
-              color: isSelected ? AppColors.secondary : AppColors.textPrimary,
-            )),
-            const SizedBox(height: 2),
-            Text(subtitle, style: AppTextStyles.caption),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: isSelected ? color.withAlpha(26) : AppColors.background,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 28))),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: isSelected ? color : AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: isSelected ? color.withAlpha(200) : AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? color : Colors.transparent,
+                border: Border.all(
+                  color: isSelected ? color : AppColors.divider,
+                  width: 2,
+                ),
+              ),
+              child: isSelected
+                  ? const Icon(Icons.check, color: Colors.white, size: 14)
+                  : null,
+            ),
           ],
         ),
       ),

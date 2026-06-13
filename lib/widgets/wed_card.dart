@@ -40,6 +40,7 @@ class WedCard extends StatelessWidget {
 class VendorCard extends StatelessWidget {
   final VendorProfile vendor;
   final bool isWishlisted;
+  final bool isPicked;
   final VoidCallback onTap;
   final VoidCallback onWishlistToggle;
   final int? rank;
@@ -51,6 +52,7 @@ class VendorCard extends StatelessWidget {
     required this.onTap,
     required this.onWishlistToggle,
     this.rank,
+    this.isPicked = false,
   });
 
   @override
@@ -129,6 +131,30 @@ class VendorCard extends StatelessWidget {
                       child: Text('PREMIUM',
                           style: AppTextStyles.caption
                               .copyWith(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 9)),
+                    ),
+                  ),
+                if (isPicked)
+                  Positioned(
+                    bottom: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check_circle, size: 11, color: Colors.white),
+                          const SizedBox(width: 3),
+                          Text('Picked',
+                              style: AppTextStyles.caption.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 9)),
+                        ],
+                      ),
                     ),
                   ),
               ],
