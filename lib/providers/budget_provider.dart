@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/budget.dart';
 import '../models/couple_profile.dart';
-import '../core/constants/app_constants.dart';
+import '../core/services/budget_service.dart';
+
+export '../core/services/budget_service.dart' show BudgetSummary;
 
 enum BudgetStatus { initial, loading, ready, error }
 
@@ -26,7 +28,8 @@ class BudgetState {
     return BudgetState(
       status: status ?? this.status,
       budget: budget ?? this.budget,
-      errorMessage: identical(errorMessage, _absent) ? this.errorMessage : errorMessage as String?,
+      errorMessage:
+          identical(errorMessage, _absent) ? this.errorMessage : errorMessage as String?,
     );
   }
 
@@ -38,15 +41,20 @@ class BudgetState {
 class BudgetNotifier extends StateNotifier<BudgetState> {
   BudgetNotifier() : super(const BudgetState());
 
+  // ── Initialization ──────────────────────────────────────────────────────────
+
   Future<void> initializeBudgetForProfile(CoupleProfile? profile) async {
     if (profile == null || !profile.hasBudget) return;
     if (state.hasBudget && state.status == BudgetStatus.ready) return;
-    await loadMockBudget(profile.totalBudget!, profile.currency);
+    await loadBudget(
+      total: profile.totalBudget!,
+      currency: profile.currency,
+    );
   }
 
-  Future<void> loadMockBudget(
-    double total,
-    String currency, {
+  Future<void> loadBudget({
+    required double total,
+    required String currency,
     List<String>? serviceCategories,
     List<BudgetCustomItem>? customItems,
   }) async {
@@ -54,72 +62,21 @@ class BudgetNotifier extends StateNotifier<BudgetState> {
     await Future.delayed(const Duration(milliseconds: 250));
 
     try {
-      final selectedCategories = (serviceCategories == null || serviceCategories.isEmpty)
-          ? AppConstants.defaultBudgetAllocation.keys.toList()
-          : serviceCategories;
-      final customEntries = customItems ?? [];
-      final customTotal = customEntries.fold<double>(0.0, (sum, item) => sum + item.amount);
-
-      final categoryWeights = selectedCategories.map((categoryName) {
-        return AppConstants.defaultBudgetAllocation[categoryName] ?? 0.05;
-      }).toList();
-      final totalWeight = categoryWeights.fold(0.0, (sum, weight) => sum + weight);
-      final remainingBudget = (total - customTotal).clamp(0.0, total);
-      final scale = totalWeight > 0 ? remainingBudget / totalWeight : 0;
-
-      final categories = selectedCategories.map((categoryName) {
-        final weight = AppConstants.defaultBudgetAllocation[categoryName] ?? 0.05;
-        final allocatedAmount = weight * scale;
-        final idx = AppConstants.vendorCategories.indexOf(categoryName);
-        return BudgetCategory(
-          id: 'cat-${categoryName.toLowerCase().replaceAll(' ', '-')}',
-          budgetId: 'budget-001',
-          categoryName: categoryName,
-          categoryIcon: idx >= 0 ? AppConstants.vendorCategoryIcons[idx] : '💰',
-          allocatedAmount: allocatedAmount,
-          spentAmount: allocatedAmount * 0.3,
-          aiJustification: AppConstants.budgetAIJustifications[categoryName],
-        );
-      }).toList();
-
-      if (customTotal > 0) {
-        categories.add(BudgetCategory(
-          id: 'cat-custom-items',
-          budgetId: 'budget-001',
-          categoryName: 'Custom Items',
-          categoryIcon: '🧾',
-          allocatedAmount: customTotal,
-          spentAmount: 0,
-          aiJustification: 'Special requests and one-off wedding items you added.',
-        ));
-      }
-
-      final allocatedSum = categories.fold(0.0, (sum, category) => sum + category.allocatedAmount);
-      if (allocatedSum < total) {
-        categories.add(BudgetCategory(
-          id: 'cat-contingency',
-          budgetId: 'budget-001',
-          categoryName: 'Contingency',
-          categoryIcon: '🛡️',
-          allocatedAmount: total - allocatedSum,
-          spentAmount: 0,
-          aiJustification: 'Reserved funds for unexpected wedding costs or last-minute upgrades.',
-        ));
-      }
-
-      final budget = Budget(
-        id: 'budget-001',
-        coupleId: 'profile-001',
-        totalAmount: total,
+      Budget budget = BudgetService.createFromTemplate(
+        total: total,
         currency: currency,
-        isAiGenerated: true,
-        categories: categories,
-        customItems: customEntries,
-        createdAt: DateTime.now(),
+        serviceCategories: serviceCategories,
+        customItems: customItems,
       );
 
-      state = state.copyWith(status: BudgetStatus.ready, budget: budget, errorMessage: null);
-    } catch (_) {
+      // Seed realistic sample expenses so the dashboard looks populated
+      final seeds = _seedExpenses(budget);
+      for (final e in seeds) {
+        budget = BudgetService.addExpense(budget, e);
+      }
+
+      state = state.copyWith(status: BudgetStatus.ready, budget: budget);
+    } catch (e) {
       state = state.copyWith(
         status: BudgetStatus.error,
         errorMessage: 'Unable to generate budget. Please try again.',
@@ -127,93 +84,131 @@ class BudgetNotifier extends StateNotifier<BudgetState> {
     }
   }
 
-  void updateCategoryAllocation(String categoryName, double newAmount) {
-    final currentBudget = state.budget;
-    if (currentBudget == null) return;
+  // ── Expense CRUD ────────────────────────────────────────────────────────────
 
-    final updated = currentBudget.categories.map((c) {
-      if (c.categoryName == categoryName) {
-        return BudgetCategory(
-          id: c.id,
-          budgetId: c.budgetId,
-          categoryName: c.categoryName,
-          categoryIcon: c.categoryIcon,
-          allocatedAmount: newAmount,
-          spentAmount: c.spentAmount,
-          aiJustification: c.aiJustification,
-        );
-      }
-      return c;
-    }).toList();
+  /// Returns a validation error string, or null on success.
+  String? addExpense(Expense expense) {
+    final budget = state.budget;
+    if (budget == null) return 'No active budget found.';
+
+    final error = BudgetService.validateExpense(
+      categoryName: expense.categoryName,
+      amountText: expense.amount.toString(),
+      description: expense.description,
+      budget: budget,
+    );
+    if (error != null) return error;
 
     state = state.copyWith(
-      status: BudgetStatus.ready,
-      budget: Budget(
-        id: currentBudget.id,
-        coupleId: currentBudget.coupleId,
-        totalAmount: currentBudget.totalAmount,
-        currency: currentBudget.currency,
-        isAiGenerated: currentBudget.isAiGenerated,
-        categories: updated,
-        customItems: currentBudget.customItems,
-        createdAt: currentBudget.createdAt,
-      ),
+      budget: BudgetService.addExpense(budget, expense),
     );
+    return null;
   }
 
-  void addExpense(Expense expense) {
-    final currentBudget = state.budget;
-    if (currentBudget == null) return;
-
-    final updated = currentBudget.categories.map((c) {
-      if (c.categoryName == expense.categoryName) {
-        return BudgetCategory(
-          id: c.id,
-          budgetId: c.budgetId,
-          categoryName: c.categoryName,
-          categoryIcon: c.categoryIcon,
-          allocatedAmount: c.allocatedAmount,
-          spentAmount: c.spentAmount + expense.amount,
-          aiJustification: c.aiJustification,
-        );
-      }
-      return c;
-    }).toList();
+  /// Returns a validation error string, or null on success.
+  String? removeExpense(String expenseId) {
+    final budget = state.budget;
+    if (budget == null) return 'No active budget found.';
+    if (budget.expenses.every((e) => e.id != expenseId)) {
+      return 'Expense not found.';
+    }
 
     state = state.copyWith(
-      status: BudgetStatus.ready,
-      budget: Budget(
-        id: currentBudget.id,
-        coupleId: currentBudget.coupleId,
-        totalAmount: currentBudget.totalAmount,
-        currency: currentBudget.currency,
-        isAiGenerated: currentBudget.isAiGenerated,
-        categories: updated,
-        customItems: currentBudget.customItems,
-        createdAt: currentBudget.createdAt,
-      ),
+      budget: BudgetService.removeExpense(budget, expenseId),
     );
+    return null;
   }
 
-  void clearBudget() {
-    state = const BudgetState();
+  // ── Category allocation ─────────────────────────────────────────────────────
+
+  String? updateCategoryAllocation(String categoryName, double newAmount) {
+    final budget = state.budget;
+    if (budget == null) return 'No active budget found.';
+
+    final error = BudgetService.validateAllocation(
+      categoryName: categoryName,
+      newAmount: newAmount,
+      budget: budget,
+    );
+    if (error != null) return error;
+
+    state = state.copyWith(
+      budget: BudgetService.updateCategoryAllocation(budget, categoryName, newAmount),
+    );
+    return null;
+  }
+
+  // ── Summary ─────────────────────────────────────────────────────────────────
+
+  BudgetSummary? generateSummary() {
+    final budget = state.budget;
+    if (budget == null) return null;
+    return BudgetService.generateSummary(budget);
+  }
+
+  void clearBudget() => state = const BudgetState();
+
+  /// Alias kept for backward compatibility with wizard and home screens.
+  Future<void> loadMockBudget(
+    double total,
+    String currency, {
+    List<String>? serviceCategories,
+    List<BudgetCustomItem>? customItems,
+  }) =>
+      loadBudget(
+        total: total,
+        currency: currency,
+        serviceCategories: serviceCategories,
+        customItems: customItems,
+      );
+
+  // ── Seed data ───────────────────────────────────────────────────────────────
+
+  List<Expense> _seedExpenses(Budget budget) {
+    final cats = budget.categories.map((c) => c.categoryName).toList();
+    final seeds = <Expense>[];
+
+    void add(String category, double amount, String desc) {
+      if (cats.contains(category)) {
+        seeds.add(Expense(
+          id: 'seed-${seeds.length + 1}',
+          budgetId: budget.id,
+          categoryName: category,
+          amount: amount,
+          description: desc,
+          status: 'paid',
+          createdAt: DateTime.now().subtract(Duration(days: seeds.length + 1)),
+        ));
+      }
+    }
+
+    add('Photography', budget.totalAmount * 0.08, 'Photographer deposit — Golden Hour Studio');
+    add('Venue', budget.totalAmount * 0.12, 'Venue booking deposit — Grand Ballroom');
+    add('Catering', budget.totalAmount * 0.06, 'Catering tasting session');
+    add('Florist', budget.totalAmount * 0.03, 'Floral arrangement consultation');
+
+    return seeds;
   }
 }
+
+// ── Providers ────────────────────────────────────────────────────────────────
 
 final budgetProvider = StateNotifierProvider<BudgetNotifier, BudgetState>(
   (ref) => BudgetNotifier(),
 );
 
-final budgetSummaryProvider = Provider<Map<String, double>?>(
-  (ref) {
-    final budget = ref.watch(budgetProvider).budget;
-    if (budget == null) return null;
-    return {
-      'total': budget.totalAmount,
-      'allocated': budget.totalAllocated,
-      'spent': budget.totalSpent,
-      'remaining': budget.remainingBudget,
-      'spendingPercent': budget.spendingPercentage,
-    };
-  },
-);
+final budgetSummaryProvider = Provider<Map<String, double>?>((ref) {
+  final budget = ref.watch(budgetProvider).budget;
+  if (budget == null) return null;
+  return {
+    'total': budget.totalAmount,
+    'allocated': budget.totalAllocated,
+    'spent': budget.totalSpent,
+    'remaining': budget.remainingBudget,
+    'spendingPercent': budget.spendingPercentage,
+  };
+});
+
+final budgetExpensesProvider = Provider<List<Expense>>((ref) {
+  return ref.watch(budgetProvider).budget?.expenses ?? [];
+});

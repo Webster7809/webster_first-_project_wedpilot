@@ -8,6 +8,8 @@ class Budget {
   final List<BudgetCustomItem> customItems;
   final DateTime createdAt;
 
+  final List<Expense> expenses;
+
   const Budget({
     required this.id,
     required this.coupleId,
@@ -16,6 +18,7 @@ class Budget {
     required this.isAiGenerated,
     required this.categories,
     this.customItems = const [],
+    this.expenses = const [],
     required this.createdAt,
   });
 

@@ -46,7 +46,9 @@ class BudgetOverviewScreen extends ConsumerWidget {
               Text('No budget set up yet', style: AppTextStyles.headlineMedium),
               const SizedBox(height: 8),
               Text('Use AI to allocate your budget across all categories',
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
                   textAlign: TextAlign.center),
               const SizedBox(height: 24),
               WedButton(
@@ -61,7 +63,6 @@ class BudgetOverviewScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Budget Overview'),
         leading: Builder(
@@ -79,9 +80,14 @@ class BudgetOverviewScreen extends ConsumerWidget {
             tooltip: 'Add Expense',
           ),
           IconButton(
+            icon: const Icon(Icons.bar_chart_rounded),
+            onPressed: () => context.push('/couple/reports'),
+            tooltip: 'View Reports',
+          ),
+          IconButton(
             icon: const Icon(Icons.file_download_outlined),
             onPressed: () => _exportBudgetPdf(context, budget, recommendations),
-            tooltip: 'Export',
+            tooltip: 'Export PDF',
           ),
         ],
       ),
@@ -178,7 +184,10 @@ class BudgetOverviewScreen extends ConsumerWidget {
               children: [
                 Text('AI Recommended Vendors', style: AppTextStyles.headlineSmall),
                 if (selectedServices.isNotEmpty)
-                  Text('${selectedServices.length} categories', style: AppTextStyles.caption),
+                  Text('${selectedServices.length} categories',
+                      style: AppTextStyles.caption.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      )),
               ],
             ),
             const SizedBox(height: 12),
@@ -214,7 +223,7 @@ class BudgetOverviewScreen extends ConsumerWidget {
       context: context,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
+      builder: (ctx) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,

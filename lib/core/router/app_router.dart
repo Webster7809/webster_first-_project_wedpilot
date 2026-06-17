@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../features/auth/screens/splash_screen.dart';
 import '../../features/auth/screens/onboarding_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
@@ -38,6 +37,7 @@ import '../../features/invitation/screens/invitation_gallery_screen.dart';
 import '../../features/invitation/screens/invitation_editor_screen.dart';
 import '../../features/invitation/screens/rsvp_dashboard_screen.dart';
 import '../../features/invitation/screens/public_invitation_screen.dart';
+import '../../features/couple/screens/reports_screen.dart';
 import '../../features/shared/screens/notifications_screen.dart';
 import '../../features/shared/screens/settings_screen.dart';
 import '../../features/shared/screens/help_screen.dart';
@@ -70,7 +70,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(notifier.dispose);
 
   return GoRouter(
-    initialLocation: '/splash',
+    initialLocation: '/onboarding',
     debugLogDiagnostics: false,
     refreshListenable: notifier,
 
@@ -84,12 +84,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/verify-email', '/couple-planning', '/vendor-onboarding',
       };
 
-      final isSplash = loc == '/splash';
       final isAuthScreen = authScreens.contains(loc);
       final isPublicInvite = loc.startsWith('/i/');
 
       // Unauthenticated: send to login unless on a public path
-      if (!auth.isAuthenticated && !isSplash && !isAuthScreen && !isPublicInvite) {
+      if (!auth.isAuthenticated && !isAuthScreen && !isPublicInvite) {
         return '/login';
       }
 
@@ -99,7 +98,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       // Role guards: prevent cross-role access
-      if (auth.isAuthenticated && !isAuthScreen && !isPublicInvite && !isSplash) {
+      if (auth.isAuthenticated && !isAuthScreen && !isPublicInvite) {
         if (loc.startsWith('/couple') && !auth.isCouple) return _homeForRole(auth);
         if (loc.startsWith('/vendor') && !auth.isVendor) return _homeForRole(auth);
         if (loc.startsWith('/admin') && !auth.isAdmin) return _homeForRole(auth);
@@ -110,7 +109,6 @@ final routerProvider = Provider<GoRouter>((ref) {
 
     routes: [
       // ── Pre-auth ──────────────────────────────────────────────────────────
-      GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
       GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
@@ -130,6 +128,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
       GoRoute(path: '/help', builder: (_, _) => const HelpScreen()),
+      GoRoute(path: '/couple/reports', builder: (_, _) => const ReportsScreen()),
 
       // ── Couple: full-screen pushes (no bottom nav) ────────────────────────
       GoRoute(

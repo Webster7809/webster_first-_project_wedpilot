@@ -14,7 +14,6 @@ class VendorDashboardScreen extends ConsumerWidget {
     final vendor = ref.watch(vendorProfileProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -26,7 +25,7 @@ class VendorDashboardScreen extends ConsumerWidget {
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFFAD1457), Color(0xFFC2185B)],
+                    colors: [Color(0xFFE91E63), Color(0xFFF06292)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -438,8 +437,9 @@ class _BookingRequestsSection extends StatelessWidget {
                 children: [
                   Text('No pending requests', style: AppTextStyles.titleMedium),
                   Text('Booking requests will appear here',
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textSecondary)),
+                      style: AppTextStyles.caption.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      )),
                 ],
               ),
             ),
@@ -481,14 +481,13 @@ class _BookingRequestTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: AppColors.cardShadow, blurRadius: 4, offset: const Offset(0, 2)),
-        ],
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -540,8 +539,9 @@ class _BookingRequestTile extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   request.note,
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.caption.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -593,6 +593,7 @@ class _ActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -600,12 +601,12 @@ class _ActionChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: outlined ? Colors.transparent : color.withAlpha(26),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: outlined ? AppColors.divider : color.withAlpha(80)),
+          border: Border.all(color: outlined ? cs.outlineVariant : color.withAlpha(80)),
         ),
         child: Text(
           label,
           style: AppTextStyles.caption.copyWith(
-            color: outlined ? AppColors.textSecondary : color,
+            color: outlined ? cs.onSurface.withValues(alpha: 0.6) : color,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -652,8 +653,9 @@ class _UpcomingEventsSection extends StatelessWidget {
                 children: [
                   Text('No upcoming events', style: AppTextStyles.titleMedium),
                   Text('Confirmed bookings will appear here',
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textSecondary)),
+                      style: AppTextStyles.caption.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      )),
                 ],
               ),
             ),
@@ -697,15 +699,14 @@ class _EventTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final dimText = cs.onSurface.withValues(alpha: 0.6);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withAlpha(60)),
-        boxShadow: [
-          BoxShadow(color: AppColors.cardShadow, blurRadius: 4, offset: const Offset(0, 2)),
-        ],
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [
@@ -735,27 +736,23 @@ class _EventTile extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(Icons.calendar_today_rounded,
-                        size: 11, color: AppColors.textSecondary),
+                    Icon(Icons.calendar_today_rounded, size: 11, color: dimText),
                     const SizedBox(width: 3),
                     Text(
                       '${event.date} · ${event.time}',
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textSecondary),
+                      style: AppTextStyles.caption.copyWith(color: dimText),
                     ),
                   ],
                 ),
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    Icon(Icons.location_on_rounded,
-                        size: 11, color: AppColors.textSecondary),
+                    Icon(Icons.location_on_rounded, size: 11, color: dimText),
                     const SizedBox(width: 3),
                     Expanded(
                       child: Text(
                         event.location,
-                        style: AppTextStyles.caption
-                            .copyWith(color: AppColors.textSecondary),
+                        style: AppTextStyles.caption.copyWith(color: dimText),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -817,11 +814,11 @@ class _KpiCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(color: AppColors.cardShadow, blurRadius: 4),
-          ],
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
         ),
         child: Column(
           children: [
@@ -830,7 +827,10 @@ class _KpiCard extends StatelessWidget {
             Text(value,
                 style: AppTextStyles.headlineSmall.copyWith(color: color)),
             Text(label,
-                style: AppTextStyles.caption, textAlign: TextAlign.center),
+                style: AppTextStyles.caption.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+                textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -845,16 +845,17 @@ class _CompletionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Chip(
       label: Text(
         label,
         style: AppTextStyles.caption.copyWith(
-          color: done ? AppColors.success : AppColors.textSecondary,
+          color: done ? AppColors.success : cs.onSurface.withValues(alpha: 0.6),
         ),
       ),
       backgroundColor: done
           ? AppColors.success.withAlpha(26)
-          : AppColors.divider.withAlpha(128),
+          : cs.surfaceContainerHighest,
       padding: EdgeInsets.zero,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
@@ -878,6 +879,7 @@ class _NavCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -885,7 +887,7 @@ class _NavCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.divider),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -897,8 +899,9 @@ class _NavCard extends StatelessWidget {
               children: [
                 Text(title, style: AppTextStyles.titleMedium),
                 Text(subtitle,
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.textSecondary)),
+                    style: AppTextStyles.caption.copyWith(
+                      color: cs.onSurface.withValues(alpha: 0.6),
+                    )),
               ],
             ),
           ],

@@ -19,13 +19,20 @@ class ChecklistItem {
     this.linkedVendorName,
   });
 
-  ChecklistItem copyWith({bool? isCompleted}) => ChecklistItem(
+  ChecklistItem copyWith({
+    String? task,
+    String? phase,
+    bool? isCompleted,
+    DateTime? dueDate,
+    bool clearDueDate = false,
+  }) =>
+      ChecklistItem(
         id: id,
         coupleId: coupleId,
-        phase: phase,
-        task: task,
+        phase: phase ?? this.phase,
+        task: task ?? this.task,
         isCompleted: isCompleted ?? this.isCompleted,
-        dueDate: dueDate,
+        dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
         linkedVendorId: linkedVendorId,
         linkedVendorName: linkedVendorName,
       );

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/inherited/shell_scaffold.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../models/invitation.dart';
 import '../../../providers/invitation_provider.dart';
 
 class InvitationGalleryScreen extends ConsumerWidget {
@@ -14,13 +15,15 @@ class InvitationGalleryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final templatesAsync = ref.watch(invitationTemplatesProvider);
     final myInvitations = ref.watch(invitationsProvider);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final cols = screenWidth >= 900 ? 4 : screenWidth >= 600 ? 3 : 2;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF7F4),
       body: CustomScrollView(
         slivers: [
+          // ── App bar ───────────────────────────────────────────────────
           SliverAppBar(
-            expandedHeight: 120,
+            expandedHeight: 96,
             pinned: true,
             backgroundColor: AppColors.secondary,
             leading: IconButton(
@@ -33,14 +36,14 @@ class InvitationGalleryScreen extends ConsumerWidget {
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF880E4F), Color(0xFFC2185B)],
+                    colors: [Color(0xFFEC407A), Color(0xFFF06292)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                 ),
                 child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -48,16 +51,16 @@ class InvitationGalleryScreen extends ConsumerWidget {
                         Text(
                           'Wedding Invitations',
                           style: GoogleFonts.playfairDisplay(
-                            fontSize: 22,
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 2),
                         Text(
                           'Choose a design that reflects your love story',
                           style: GoogleFonts.inter(
-                            fontSize: 12,
+                            fontSize: 11,
                             color: Colors.white.withValues(alpha: 0.85),
                           ),
                         ),
@@ -68,69 +71,81 @@ class InvitationGalleryScreen extends ConsumerWidget {
               ),
             ),
           ),
+
+          // ── My invitations + section header ───────────────────────────
           SliverPadding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                // ── My invitations ────────────────────────────────────
                 if (myInvitations.isNotEmpty) ...[
-                  _GallerySection(title: 'My Invitations', icon: Icons.bookmark_rounded),
-                  const SizedBox(height: 10),
+                  _GallerySection(
+                      title: 'My Invitations', icon: Icons.bookmark_rounded),
+                  const SizedBox(height: 8),
                   ...myInvitations.map((inv) => _MyInvitationCard(
                         invitation: inv,
-                        onTap: () => context.push(
-                          '/couple/invitations/editor?id=${inv.id}',
-                        ),
+                        onTap: () => context
+                            .push('/couple/invitations/editor?id=${inv.id}'),
                       )),
                   const SizedBox(height: 20),
                 ],
-
-                // ── Template gallery ──────────────────────────────────
                 _GallerySection(
                   title: 'Choose Your Design',
                   icon: Icons.style_rounded,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
-                  'Each theme comes with curated fonts and colour palettes.',
-                  style: AppTextStyles.bodySmall,
-                ),
-                const SizedBox(height: 14),
-
-                templatesAsync.when(
-                  loading: () => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(40),
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
-                  error: (e, _) => Center(child: Text('Error: $e')),
-                  data: (templates) => GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 0.90,
-                    ),
-                    itemCount: templates.length,
-                    itemBuilder: (_, i) {
-                      final template = templates[i];
-                      return _TemplateCard(
-                        template: template,
-                        onTap: () {
-                          final newId = ref
-                              .read(invitationsProvider.notifier)
-                              .create(template.id, 'My Wedding Invitation');
-                          context.push('/couple/invitations/editor?id=$newId');
-                        },
-                      );
-                    },
+                  'Curated themes with matching fonts and colour palettes',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 12),
               ]),
+            ),
+          ),
+
+          // ── Template grid (native SliverGrid — no shrinkWrap anti-pattern)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+            sliver: templatesAsync.when(
+              loading: () => const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ),
+              error: (e, _) => SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text('Error: $e'),
+                  ),
+                ),
+              ),
+              data: (templates) => SliverGrid(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: cols,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  // Fixed card height keeps design consistent across screen widths
+                  mainAxisExtent: 220,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) {
+                    final tpl = templates[i];
+                    return _TemplateCard(
+                      template: tpl,
+                      onTap: () {
+                        final newId = ref
+                            .read(invitationsProvider.notifier)
+                            .create(tpl.id, 'My Wedding Invitation');
+                        context.push('/couple/invitations/editor?id=$newId');
+                      },
+                    );
+                  },
+                  childCount: templates.length,
+                ),
+              ),
             ),
           ),
         ],
@@ -150,8 +165,8 @@ class _GallerySection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: AppColors.secondary),
-        const SizedBox(width: 7),
+        Icon(icon, size: 16, color: AppColors.secondary),
+        const SizedBox(width: 6),
         Text(title, style: AppTextStyles.headlineSmall),
       ],
     );
@@ -159,84 +174,81 @@ class _GallerySection extends StatelessWidget {
 }
 
 // ── My invitation card ──────────────────────────────────────────────────────
-// Compact list-item style: ~68 px tall, shows title + status at a glance.
 
 class _MyInvitationCard extends StatelessWidget {
-  final dynamic invitation;
+  final Invitation invitation;
   final VoidCallback onTap;
   const _MyInvitationCard({required this.invitation, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final published = (invitation.status.name as String) == 'published';
-    final customData = invitation.customData as Map<String, dynamic>;
-    final title = customData['coupleName'] as String? ?? invitation.title as String;
+    final published = invitation.status == InvitationStatus.published;
+    final customData = invitation.customData;
+    final title = customData['coupleName'] as String? ?? invitation.title;
     final date = customData['date'] as String? ?? '';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: AppColors.cardShadow, blurRadius: 6, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            children: [
-              // Mini gradient swatch
-              Container(
-                width: 42,
-                height: 50,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Card(
+        margin: EdgeInsets.zero,
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                // Gradient swatch
+                Container(
+                  width: 38,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFF06292), Color(0xFFBA68C8)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  borderRadius: BorderRadius.circular(8),
+                  child: const Icon(Icons.favorite,
+                      color: Colors.white, size: 15),
                 ),
-                child: const Icon(Icons.favorite, color: Colors.white, size: 16),
-              ),
-              const SizedBox(width: 12),
-
-              // Title + meta in one column
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      title,
-                      style: AppTextStyles.titleMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        _StatusBadge(published: published),
-                        if (date.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          const Icon(Icons.calendar_today_outlined,
-                              size: 10, color: AppColors.textSecondary),
-                          const SizedBox(width: 3),
-                          Text(date, style: AppTextStyles.caption),
+                const SizedBox(width: 12),
+                // Title + meta
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTextStyles.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          _StatusBadge(published: published),
+                          if (date.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            const Icon(Icons.calendar_today_outlined,
+                                size: 10, color: AppColors.textSecondary),
+                            const SizedBox(width: 3),
+                            Text(date, style: AppTextStyles.caption),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(Icons.chevron_right_rounded,
-                  size: 18, color: AppColors.textSecondary),
-            ],
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right_rounded,
+                    size: 16, color: AppColors.textSecondary),
+              ],
+            ),
           ),
         ),
       ),
@@ -251,7 +263,7 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
       decoration: BoxDecoration(
         color: published
             ? AppColors.info.withValues(alpha: 0.12)
@@ -263,7 +275,7 @@ class _StatusBadge extends StatelessWidget {
         children: [
           Icon(
             published ? Icons.share_outlined : Icons.edit_outlined,
-            size: 10,
+            size: 9,
             color: published ? AppColors.info : AppColors.warning,
           ),
           const SizedBox(width: 3),
@@ -280,13 +292,12 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-// ── Theme metadata ─────────────────────────────────────────────────────────
+// ── Theme metadata ──────────────────────────────────────────────────────────
 
 class _ThemeMeta {
   final List<Color> gradient;
   final Color textColor;
   final Color accentColor;
-  final String sampleFont;
   final String tagline;
   final List<_DecoElement> decor;
 
@@ -294,7 +305,6 @@ class _ThemeMeta {
     required this.gradient,
     required this.textColor,
     required this.accentColor,
-    required this.sampleFont,
     required this.tagline,
     this.decor = const [],
   });
@@ -305,7 +315,8 @@ class _DecoElement {
   final double size;
   final Alignment alignment;
   final double opacity;
-  const _DecoElement(this.symbol, this.size, this.alignment, {this.opacity = 0.25});
+  const _DecoElement(this.symbol, this.size, this.alignment,
+      {this.opacity = 0.25});
 }
 
 _ThemeMeta _metaFor(String theme) {
@@ -313,283 +324,292 @@ _ThemeMeta _metaFor(String theme) {
     'romantic' => _ThemeMeta(
         gradient: const [Color(0xFFFFF0F5), Color(0xFFFFC1D9)],
         textColor: const Color(0xFF880E4F),
-        accentColor: const Color(0xFFC2185B),
-        sampleFont: 'Great Vibes',
+        accentColor: const Color(0xFFF06292),
         tagline: 'Soft florals & romance',
         decor: [
-          _DecoElement('🌸', 48, Alignment.topRight, opacity: 0.35),
-          _DecoElement('🌷', 32, Alignment.bottomLeft, opacity: 0.3),
+          _DecoElement('🌸', 44, Alignment.topRight, opacity: 0.32),
+          _DecoElement('🌷', 28, Alignment.bottomLeft, opacity: 0.28),
         ],
       ),
     'modern' => _ThemeMeta(
         gradient: const [Color(0xFFF5F5F5), Color(0xFFE0E0E0)],
         textColor: const Color(0xFF212121),
         accentColor: const Color(0xFF424242),
-        sampleFont: 'Montserrat',
         tagline: 'Clean lines & elegance',
         decor: [
-          _DecoElement('◼', 38, Alignment.topRight, opacity: 0.12),
-          _DecoElement('◻', 24, Alignment.bottomLeft, opacity: 0.1),
+          _DecoElement('◼', 34, Alignment.topRight, opacity: 0.10),
+          _DecoElement('◻', 20, Alignment.bottomLeft, opacity: 0.08),
         ],
       ),
     'royal' => _ThemeMeta(
         gradient: const [Color(0xFF1A1A4E), Color(0xFF3F1DCB)],
         textColor: const Color(0xFFFFD700),
         accentColor: const Color(0xFFD4A854),
-        sampleFont: 'Cormorant Garamond',
         tagline: 'Regal & grand',
         decor: [
-          _DecoElement('👑', 44, Alignment.topRight, opacity: 0.45),
-          _DecoElement('✦', 30, Alignment.bottomLeft, opacity: 0.35),
+          _DecoElement('👑', 40, Alignment.topRight, opacity: 0.42),
+          _DecoElement('✦', 26, Alignment.bottomLeft, opacity: 0.32),
         ],
       ),
     'rustic' => _ThemeMeta(
         gradient: const [Color(0xFFF5ECD7), Color(0xFFDEB887)],
         textColor: const Color(0xFF4E342E),
         accentColor: const Color(0xFF795548),
-        sampleFont: 'Abril Fatface',
         tagline: 'Earthy & botanical',
         decor: [
-          _DecoElement('🌿', 46, Alignment.topRight, opacity: 0.4),
-          _DecoElement('🍃', 30, Alignment.bottomLeft, opacity: 0.35),
+          _DecoElement('🌿', 42, Alignment.topRight, opacity: 0.38),
+          _DecoElement('🍃', 26, Alignment.bottomLeft, opacity: 0.32),
         ],
       ),
     'boho' => _ThemeMeta(
         gradient: const [Color(0xFFFFF8EE), Color(0xFFE8D5B7)],
         textColor: const Color(0xFF5D4037),
         accentColor: const Color(0xFFBF8A68),
-        sampleFont: 'Sacramento',
         tagline: 'Free-spirited & dreamy',
         decor: [
-          _DecoElement('🪶', 44, Alignment.topRight, opacity: 0.45),
-          _DecoElement('☽', 32, Alignment.bottomLeft, opacity: 0.3),
+          _DecoElement('🪶', 40, Alignment.topRight, opacity: 0.42),
+          _DecoElement('☽', 28, Alignment.bottomLeft, opacity: 0.28),
         ],
       ),
     'beach' => _ThemeMeta(
         gradient: const [Color(0xFFE0F7FF), Color(0xFF80DEEA)],
         textColor: const Color(0xFF01579B),
         accentColor: const Color(0xFF0288D1),
-        sampleFont: 'Pacifico',
         tagline: 'Breezy ocean vibes',
         decor: [
-          _DecoElement('🌊', 44, Alignment.topRight, opacity: 0.4),
-          _DecoElement('🐚', 30, Alignment.bottomLeft, opacity: 0.35),
+          _DecoElement('🌊', 40, Alignment.topRight, opacity: 0.38),
+          _DecoElement('🐚', 26, Alignment.bottomLeft, opacity: 0.32),
         ],
       ),
     'celestial' => _ThemeMeta(
         gradient: const [Color(0xFF0D0D2B), Color(0xFF1A0533)],
         textColor: const Color(0xFFE8C9FF),
         accentColor: const Color(0xFFAA88FF),
-        sampleFont: 'Cinzel',
         tagline: 'Stars & mystical nights',
         decor: [
-          _DecoElement('✨', 42, Alignment.topRight, opacity: 0.55),
-          _DecoElement('🌙', 30, Alignment.bottomLeft, opacity: 0.5),
+          _DecoElement('✨', 38, Alignment.topRight, opacity: 0.52),
+          _DecoElement('🌙', 26, Alignment.bottomLeft, opacity: 0.46),
         ],
       ),
     'african' => _ThemeMeta(
         gradient: const [Color(0xFFFFF3CD), Color(0xFFFFCC02)],
         textColor: const Color(0xFF4A2000),
         accentColor: const Color(0xFFE65100),
-        sampleFont: 'Lobster',
         tagline: 'Vibrant & cultural',
         decor: [
-          _DecoElement('🌍', 44, Alignment.topRight, opacity: 0.45),
-          _DecoElement('🥁', 30, Alignment.bottomLeft, opacity: 0.35),
+          _DecoElement('🌍', 40, Alignment.topRight, opacity: 0.42),
+          _DecoElement('🥁', 26, Alignment.bottomLeft, opacity: 0.32),
         ],
       ),
     'islamic' => _ThemeMeta(
         gradient: const [Color(0xFFE8F5E9), Color(0xFFA5D6A7)],
         textColor: const Color(0xFF1B5E20),
         accentColor: const Color(0xFF2E7D32),
-        sampleFont: 'Amiri',
         tagline: 'Graceful & sacred',
         decor: [
-          _DecoElement('☪', 44, Alignment.topRight, opacity: 0.35),
-          _DecoElement('🕌', 30, Alignment.bottomLeft, opacity: 0.3),
+          _DecoElement('☪', 40, Alignment.topRight, opacity: 0.32),
+          _DecoElement('🕌', 26, Alignment.bottomLeft, opacity: 0.28),
         ],
       ),
     'indian' => _ThemeMeta(
         gradient: const [Color(0xFFFFF8E1), Color(0xFFFFCC80)],
         textColor: const Color(0xFF7B1F00),
         accentColor: const Color(0xFFE64A19),
-        sampleFont: 'Philosopher',
         tagline: 'Vibrant & festive',
         decor: [
-          _DecoElement('🪔', 44, Alignment.topRight, opacity: 0.45),
-          _DecoElement('🌺', 30, Alignment.bottomLeft, opacity: 0.4),
+          _DecoElement('🪔', 40, Alignment.topRight, opacity: 0.42),
+          _DecoElement('🌺', 26, Alignment.bottomLeft, opacity: 0.38),
         ],
       ),
     _ => _ThemeMeta(
         gradient: const [Color(0xFFFFF0F5), Color(0xFFFFC1D9)],
         textColor: const Color(0xFF880E4F),
-        accentColor: const Color(0xFFC2185B),
-        sampleFont: 'Great Vibes',
+        accentColor: const Color(0xFFF06292),
         tagline: 'Beautiful & elegant',
       ),
   };
 }
 
 // ── Template card ───────────────────────────────────────────────────────────
-// Visual-first thumbnail: gradient + decor fills ~65 % of the card, a
-// gradient-scrim bottom panel shows the name and a compact CTA.
+// Compact portrait card: gradient preview (top 72%) + white label (bottom 28%).
+// Card height is fixed via mainAxisExtent in the grid delegate, so no overflow.
 
 class _TemplateCard extends StatelessWidget {
-  final dynamic template;
+  final InvitationTemplate template;
   final VoidCallback onTap;
 
   const _TemplateCard({required this.template, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final meta = _metaFor(template.theme as String);
+    final meta = _metaFor(template.theme);
     final isDark = meta.gradient.first.computeLuminance() < 0.15;
-    // For dark-background themes, lighten the scrim slightly so text remains legible.
-    final scrimEnd = isDark
-        ? meta.gradient.last.withValues(alpha: 0.97)
-        : meta.gradient.last.withValues(alpha: 0.92);
+    final isPremium = template.isPremium;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: 0.14),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: meta.gradient,
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // ── Decorative theme elements (background)
-              for (final d in meta.decor)
-                Positioned.fill(
-                  child: Align(
-                    alignment: d.alignment,
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: Opacity(
-                        opacity: d.opacity,
-                        child: Text(d.symbol, style: TextStyle(fontSize: d.size)),
-                      ),
-                    ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Gradient invitation preview ────────────────────────────
+            Expanded(
+              flex: 72,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: meta.gradient,
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                   ),
                 ),
-
-              // ── Bottom scrim + info panel
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(10, 18, 10, 10),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.transparent, scrimEnd],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Accent rule
-                      Container(
-                        width: 22,
-                        height: 2,
-                        decoration: BoxDecoration(
-                          color: meta.accentColor.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(2),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Decorative theme elements
+                    for (final d in meta.decor)
+                      Positioned.fill(
+                        child: Align(
+                          alignment: d.alignment,
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Opacity(
+                              opacity: d.opacity,
+                              child: Text(
+                                d.symbol,
+                                style: TextStyle(fontSize: d.size * 0.44),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 5),
 
-                      // Template name
+                    // Sample invitation content — centred
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'A & B',
+                            style: GoogleFonts.playfairDisplay(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: meta.textColor,
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          Container(
+                            width: 22,
+                            height: 0.8,
+                            color: meta.accentColor.withValues(alpha: 0.6),
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            'WEDDING',
+                            style: GoogleFonts.inter(
+                              fontSize: 6.5,
+                              fontWeight: FontWeight.w600,
+                              color: meta.textColor.withValues(alpha: 0.5),
+                              letterSpacing: 2.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Thin border on light-background themes
+                    if (!isDark)
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: meta.accentColor.withValues(alpha: 0.15),
+                              width: 0.8,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // PRO badge
+                    if (isPremium)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(6, 2.5, 6, 2.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD4A854),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.star_rounded,
+                                  color: Colors.white, size: 8),
+                              SizedBox(width: 2),
+                              Text(
+                                'PRO',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Label ─────────────────────────────────────────────────
+            Expanded(
+              flex: 28,
+              child: Builder(
+                builder: (ctx) => Container(
+                  color: Theme.of(ctx).colorScheme.surface,
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
                       Text(
-                        template.name as String,
-                        style: GoogleFonts.playfairDisplay(
-                          fontSize: 12,
+                        template.name,
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: meta.textColor,
-                          height: 1.2,
+                          color: Theme.of(ctx).colorScheme.onSurface,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
-
-                      // Tagline
                       Text(
                         meta.tagline,
                         style: GoogleFonts.inter(
                           fontSize: 9,
-                          color: meta.textColor.withValues(alpha: 0.65),
+                          color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Select CTA
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: meta.accentColor,
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Select',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              letterSpacing: 0.4,
-                            ),
-                          ),
-                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-
-              // ── PRO badge (top-left)
-              if (template.isPremium as bool)
-                Positioned(
-                  top: 7,
-                  left: 7,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD4A854),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.star_rounded, color: Colors.white, size: 8),
-                        SizedBox(width: 2),
-                        Text(
-                          'PRO',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../core/theme/app_colors.dart';
 
 class WedTextField extends StatefulWidget {
   final String label;
@@ -42,31 +41,55 @@ class _WedTextFieldState extends State<WedTextField> {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: widget.controller,
-      obscureText: widget.isPassword && _obscure,
-      keyboardType: widget.keyboardType,
-      validator: widget.validator,
-      onChanged: widget.onChanged,
-      maxLines: widget.isPassword ? 1 : widget.maxLines,
-      readOnly: widget.readOnly,
-      onTap: widget.onTap,
-      decoration: InputDecoration(
-        labelText: widget.label,
-        hintText: widget.hint,
-        helperText: widget.helperText,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        prefixIcon: widget.prefixIcon != null ? Icon(widget.prefixIcon) : null,
-        suffixIcon: widget.isPassword
-            ? IconButton(
-                icon: Icon(
-                  _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  color: AppColors.textSecondary,
-                ),
-                onPressed: () => setState(() => _obscure = !_obscure),
-              )
-            : widget.suffix,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          widget.label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: widget.controller,
+          obscureText: widget.isPassword && _obscure,
+          keyboardType: widget.keyboardType,
+          validator: widget.validator,
+          onChanged: widget.onChanged,
+          maxLines: widget.isPassword ? 1 : widget.maxLines,
+          readOnly: widget.readOnly,
+          onTap: widget.onTap,
+          decoration: InputDecoration(
+            hintText: widget.hint,
+            helperText: widget.helperText,
+            isDense: true,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            prefixIcon: widget.prefixIcon != null
+                ? Icon(widget.prefixIcon,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))
+                : null,
+            prefixIconConstraints:
+                const BoxConstraints(minWidth: 40, minHeight: 38),
+            suffixIcon: widget.isPassword
+                ? IconButton(
+                    iconSize: 18,
+                    icon: Icon(
+                      _obscure
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  )
+                : widget.suffix,
+          ),
+        ),
+      ],
     );
   }
 }

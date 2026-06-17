@@ -51,7 +51,14 @@ class WedButton extends StatelessWidget {
                 Icon(icon, size: 18),
                 const SizedBox(width: 8),
               ],
-              Text(label, style: AppTextStyles.buttonText.copyWith(color: _foreground)),
+              Flexible(
+                child: Text(
+                  label,
+                  style: AppTextStyles.buttonText.copyWith(color: _foreground),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
             ],
           );
 

@@ -29,7 +29,7 @@ class AppDrawer extends ConsumerWidget {
             padding: EdgeInsets.zero,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFFAD1457), Color(0xFFC2185B)],
+                colors: [Color(0xFFE91E63), Color(0xFFF06292)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -176,7 +176,9 @@ class AppDrawer extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                     child: Text(
                       'Wedpilot v1.0.0',
-                      style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                      style: AppTextStyles.caption.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+                      ),
                     ),
                   ),
                 ),
@@ -249,7 +251,7 @@ class _DrawerItem extends StatelessWidget {
       title: Text(
         label,
         style: AppTextStyles.titleMedium.copyWith(
-          color: labelColor ?? AppColors.textPrimary,
+          color: labelColor ?? Theme.of(context).colorScheme.onSurface,
           fontWeight: FontWeight.w500,
         ),
       ),

@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/budget_provider.dart';
+import '../../../providers/task_provider.dart';
 import '../../../widgets/wed_card.dart';
 import '../../../widgets/wed_button.dart';
 
@@ -25,7 +26,6 @@ class CoupleDashboardScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
           // Collapsible hero header
@@ -44,7 +44,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFFAD1457), Color(0xFFC2185B)],
+                    colors: [Color(0xFFE91E63), Color(0xFFF06292)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -117,8 +117,9 @@ class CoupleDashboardScreen extends ConsumerWidget {
                         const SizedBox(height: 8),
                         Text(
                           'Let our AI allocate your budget across all wedding categories.',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.textSecondary),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
@@ -149,7 +150,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       icon: Icons.storefront_rounded,
                       label: 'Find Vendors',
                       sublabel: 'Browse local pros',
-                      gradient: const [Color(0xFFC2185B), Color(0xFFE91E8C)],
+                      gradient: const [Color(0xFFF06292), Color(0xFFF48FB1)],
                       onTap: () => context.go('/couple/vendors'),
                     ),
                     _QuickAction(
@@ -231,13 +232,14 @@ class CoupleDashboardScreen extends ConsumerWidget {
                             Text('Your matches are ready!',
                                 style: AppTextStyles.titleMedium),
                             Text('6 vendors matched to your style & budget',
-                                style: AppTextStyles.bodySmall
-                                    .copyWith(color: AppColors.textSecondary)),
+                                style: AppTextStyles.bodySmall.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
                           ],
                         ),
                       ),
-                      const Icon(Icons.arrow_forward_ios,
-                          size: 14, color: AppColors.textSecondary),
+                      Icon(Icons.arrow_forward_ios,
+                          size: 14,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
                     ],
                   ),
                 ),
@@ -253,23 +255,32 @@ class CoupleDashboardScreen extends ConsumerWidget {
 
 // ── Wedding Summary Stats Row ──────────────────────────────────────────────────
 
-class _WeddingSummaryRow extends StatelessWidget {
+class _WeddingSummaryRow extends ConsumerWidget {
   final dynamic couple;
   final dynamic budget;
 
   const _WeddingSummaryRow({required this.couple, required this.budget});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tasks = ref.watch(taskProvider);
+    final taskProgress = tasks.isEmpty
+        ? 0.0
+        : tasks.where((t) => t.isCompleted).length / tasks.length;
+
     final days = couple?.hasWeddingDate == true
         ? '${couple!.daysUntilWedding}'
         : '--';
     final guests = couple?.guestCount != null
         ? '${couple!.guestCount}'
         : '--';
-    final budgetPct = (budget != null && budget.totalAmount > 0)
-        ? '${(budget.totalSpent / budget.totalAmount * 100).clamp(0, 100).toStringAsFixed(0)}%'
+    final budgetRatio = (budget != null && budget.totalAmount > 0)
+        ? (budget.totalSpent / budget.totalAmount).clamp(0.0, 1.0)
+        : null;
+    final budgetPct = budgetRatio != null
+        ? '${(budgetRatio * 100).toStringAsFixed(0)}%'
         : '--';
+    final taskPct = '${(taskProgress * 100).round()}%';
 
     return Row(
       children: [
@@ -279,6 +290,8 @@ class _WeddingSummaryRow extends StatelessWidget {
             value: days,
             label: 'Days Left',
             color: AppColors.secondary,
+            subtitle: couple?.hasWeddingDate == true ? 'to go!' : 'Set date',
+            onTap: () => context.go('/couple/profile'),
           ),
         ),
         const SizedBox(width: 10),
@@ -288,6 +301,8 @@ class _WeddingSummaryRow extends StatelessWidget {
             value: guests,
             label: 'Guests',
             color: AppColors.info,
+            subtitle: 'invited',
+            onTap: () => context.go('/couple/invitations'),
           ),
         ),
         const SizedBox(width: 10),
@@ -297,15 +312,19 @@ class _WeddingSummaryRow extends StatelessWidget {
             value: budgetPct,
             label: 'Budget Used',
             color: AppColors.warning,
+            progress: budgetRatio,
+            onTap: () => context.go('/couple/budget'),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: _StatCard(
             icon: Icons.checklist_rounded,
-            value: '32%',
+            value: taskPct,
             label: 'Tasks Done',
             color: AppColors.success,
+            progress: taskProgress,
+            onTap: () => context.push('/couple/checklist'),
           ),
         ),
       ],
@@ -317,54 +336,122 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final String value;
   final String label;
+  final String? subtitle;
   final Color color;
+  final double? progress;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.icon,
     required this.value,
     required this.label,
     required this.color,
+    this.subtitle,
+    this.progress,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: AppColors.cardShadow, blurRadius: 4, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color.withAlpha(26),
-              borderRadius: BorderRadius.circular(8),
+    final surface = Theme.of(context).colorScheme.surface;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: color.withAlpha(28),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: color.withAlpha(24),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  value,
+                  style: AppTextStyles.headlineSmall.copyWith(
+                    color: color,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: AppTextStyles.caption.copyWith(
+                    fontSize: 10,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (subtitle != null && progress == null) ...[
+                  Text(
+                    subtitle!,
+                    style: AppTextStyles.caption.copyWith(
+                      fontSize: 9,
+                      color: color.withAlpha(180),
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (progress != null) ...[
+                  const SizedBox(height: 7),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: color.withAlpha(30),
+                      color: color,
+                      minHeight: 3,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'View',
+                      style: AppTextStyles.caption.copyWith(
+                        fontSize: 9,
+                        color: color,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_ios_rounded,
+                        size: 8, color: color),
+                  ],
+                ),
+              ],
             ),
-            child: Icon(icon, color: color, size: 16),
           ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: AppTextStyles.headlineSmall.copyWith(
-              color: color,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(
-            label,
-            style: AppTextStyles.caption.copyWith(fontSize: 10),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -459,14 +546,13 @@ class _BookedVendorTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: AppColors.cardShadow, blurRadius: 4, offset: const Offset(0, 2)),
-        ],
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [
@@ -474,7 +560,7 @@ class _BookedVendorTile extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: AppColors.primary.withAlpha(60),
+              color: cs.primary.withAlpha(30),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Center(child: Text(booking.emoji, style: const TextStyle(fontSize: 22))),
@@ -488,7 +574,9 @@ class _BookedVendorTile extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '${booking.category} · ${booking.date}',
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.caption.copyWith(
+                    color: cs.onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
               ],
             ),
@@ -541,7 +629,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ── Quick Action Tile ──────────────────────────────────────────────────────────
+// ── Quick Action Tile ─────────────────────────────────────────────────────────
 
 class _QuickAction extends StatelessWidget {
   final IconData icon;
@@ -560,6 +648,8 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surface = Theme.of(context).colorScheme.surface;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -567,7 +657,7 @@ class _QuickAction extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: surface,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
@@ -606,7 +696,10 @@ class _QuickAction extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   sublabel,
-                  style: AppTextStyles.caption.copyWith(fontSize: 10),
+                  style: AppTextStyles.caption.copyWith(
+                    fontSize: 10,
+                    color: onSurface.withValues(alpha: 0.6),
+                  ),
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -697,6 +790,7 @@ class _BudgetLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final secondary = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
     return Row(
       children: [
         Container(
@@ -705,9 +799,12 @@ class _BudgetLegend extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text('$label: ', style: AppTextStyles.caption),
+        Text('$label: ', style: AppTextStyles.caption.copyWith(color: secondary)),
         Text(value,
-            style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+            style: AppTextStyles.caption.copyWith(
+              fontWeight: FontWeight.w600,
+              color: secondary,
+            )),
       ],
     );
   }

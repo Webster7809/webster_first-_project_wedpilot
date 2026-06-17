@@ -4,12 +4,12 @@ class AppColors {
   AppColors._();
 
   static const primary = Color(0xFFF8BBD9);       // Blush Pink
-  static const secondary = Color(0xFFC2185B);     // Deep Rose
+  static const secondary = Color(0xFFF06292);     // Vibrant Pink
   static const tertiary = Color(0xFF87A96B);       // Sage Green
   static const accent = Color(0xFFE8B4B8);        // Rose Gold
   static const neutralDark = Color(0xFF36454F);   // Charcoal
-  static const background = Color(0xFFFAFAFA);    // Off-White
-  static const surface = Color(0xFFFFFFFF);
+  static const background = Color(0xFFFDF5ED);    // Cream White
+  static const surface = Color(0xFFFFF8F2);       // Warm White
   static const error = Color(0xFFD32F2F);
   static const warning = Color(0xFFF57C00);
   static const success = Color(0xFF388E3C);

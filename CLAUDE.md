@@ -70,3 +70,19 @@ Screens live under `lib/features/<feature>/screens/`. Features: `auth`, `couple`
 ### Widgets
 
 `lib/widgets/` holds reusable components: `WedButton`, `WedCard`, `AppDrawer`, `LoadingShimmer`, `WedSnackbar`. Prefer these over raw Material widgets to stay consistent.
+
+## Project Context
+
+Wedpilot targets Android and Web via Flutter. Always use current package APIs (e.g. `share_plus` v9+ uses `ShareParams`). Colors must use `Color.fromARGB` or `.withAlpha(int)` — never floating-point `.withOpacity()` on production paths.
+
+## Code Organization
+
+Before creating any new widget file, search the codebase for an existing implementation (e.g. `VendorCard`, `InvitationCard`). Reuse or extend what exists; never create a duplicate widget that conflicts with an existing one.
+
+## UI / Flutter Layout
+
+When fixing overflow errors, never use `SingleChildScrollView`, `ClipRect`, or any technique that hides or clips intended content as a side effect. After any layout fix, confirm that all titles, subtitles, and body content remain fully visible. Prefer `Expanded`, `Flexible`, `FittedBox`, `Wrap`, and `ConstrainedBox` to let content reflow naturally.
+
+## Workflow
+
+After every code change run `flutter analyze` and resolve all warnings and errors before considering the task complete. When finishing a session, state explicitly which files were changed and confirm the analyzer is clean.

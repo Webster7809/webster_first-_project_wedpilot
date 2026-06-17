@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -61,137 +62,137 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authState = ref.watch(authProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 32),
-                Center(
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: AppColors.secondary,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Center(
-                          child: Text('💍', style: TextStyle(fontSize: 32)),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text('Welcome back', style: AppTextStyles.displaySmall),
-                      const SizedBox(height: 4),
-                      Text('Sign in to your Wedpilot account',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 40),
-                WedTextField(
-                  label: 'Email address',
-                  hint: 'you@example.com',
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  prefixIcon: Icons.email_outlined,
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Please enter your email';
-                    if (!v.contains('@')) return 'Please enter a valid email';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                WedTextField(
-                  label: 'Password',
-                  hint: '••••••••',
-                  controller: _passCtrl,
-                  isPassword: true,
-                  prefixIcon: Icons.lock_outline,
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Please enter your password';
-                    if (v.length < 6) return 'Password must be at least 6 characters';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => context.push('/forgot-password'),
-                    child: Text('Forgot password?',
-                        style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                WedButton(
-                  label: 'Sign In',
-                  onPressed: _login,
-                  isLoading: authState.isLoading,
-                ),
-                const SizedBox(height: 24),
-                Row(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('or continue with', style: AppTextStyles.caption),
+                    Center(
+                      child: Column(
+                        children: [
+                          CustomPaint(
+                            size: const Size(64, 64),
+                            painter: _HeartEmblemPainter(),
+                          ),
+                          const SizedBox(height: 16),
+                          Text('Welcome back', style: AppTextStyles.displaySmall),
+                          const SizedBox(height: 4),
+                          Text('Sign in to your Wedpilot account',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                              )),
+                        ],
+                      ),
                     ),
-                    const Expanded(child: Divider()),
+                    const SizedBox(height: 32),
+                    WedTextField(
+                      label: 'Email address',
+                      hint: 'you@example.com',
+                      controller: _emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      prefixIcon: Icons.email_outlined,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Please enter your email';
+                        if (!v.contains('@')) return 'Please enter a valid email';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    WedTextField(
+                      label: 'Password',
+                      hint: '••••••••',
+                      controller: _passCtrl,
+                      isPassword: true,
+                      prefixIcon: Icons.lock_outline,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Please enter your password';
+                        if (v.length < 6) return 'Password must be at least 6 characters';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => context.push('/forgot-password'),
+                        child: Text('Forgot password?',
+                            style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    WedButton(
+                      label: 'Sign In',
+                      onPressed: _login,
+                      isLoading: authState.isLoading,
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        const Expanded(child: Divider()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text('or continue with', style: AppTextStyles.caption),
+                        ),
+                        const Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _OAuthButton(
+                            label: 'Google',
+                            icon: SvgPicture.string(_googleSvg, width: 20, height: 20),
+                            onTap: () {},
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _OAuthButton(
+                            label: 'Apple',
+                            icon: SvgPicture.string(
+                              _appleSvg,
+                              width: 20,
+                              height: 20,
+                              colorFilter: const ColorFilter.mode(Colors.black87, BlendMode.srcIn),
+                            ),
+                            onTap: () {},
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text("Don't have an account? ", style: AppTextStyles.bodySmall),
+                          TextButton(
+                            onPressed: () => context.push('/register'),
+                            child: Text('Sign up', style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Text(
+                        'Demo: use any email\n• vendor@test.com → Vendor dashboard\n• admin@test.com → Admin dashboard\n• anything else → Couple dashboard',
+                        style: AppTextStyles.caption.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _OAuthButton(
-                        label: 'Google',
-                        icon: SvgPicture.string(_googleSvg, width: 20, height: 20),
-                        onTap: () {},
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _OAuthButton(
-                        label: 'Apple',
-                        icon: SvgPicture.string(
-                          _appleSvg,
-                          width: 20,
-                          height: 20,
-                          colorFilter: const ColorFilter.mode(Colors.black87, BlendMode.srcIn),
-                        ),
-                        onTap: () {},
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text("Don't have an account? ", style: AppTextStyles.bodySmall),
-                      TextButton(
-                        onPressed: () => context.push('/register'),
-                        child: Text('Sign up', style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary)),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Center(
-                  child: Text(
-                    'Demo: use any email\n• vendor@test.com → Vendor dashboard\n• admin@test.com → Admin dashboard\n• anything else → Couple dashboard',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -212,7 +213,7 @@ class _OAuthButton extends StatelessWidget {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: AppColors.divider),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(vertical: 12),
       ),
@@ -226,4 +227,62 @@ class _OAuthButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HeartEmblemPainter extends CustomPainter {
+  const _HeartEmblemPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final cx = w / 2;
+    final cy = h / 2;
+
+    canvas.drawCircle(
+      Offset(cx, cy),
+      w * 0.46,
+      Paint()
+        ..color = const Color(0x30F8BBD9)
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawCircle(
+      Offset(cx, cy),
+      w * 0.46,
+      Paint()
+        ..color = const Color(0x60F06292)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+
+    final s = w * 0.24;
+    final hc = Offset(cx, cy + s * 0.12);
+    final heartPath = Path()
+      ..moveTo(hc.dx, hc.dy + s * 0.74)
+      ..cubicTo(hc.dx - s * 1.6, hc.dy, hc.dx - s * 1.6, hc.dy - s * 0.88,
+          hc.dx, hc.dy - s * 0.14)
+      ..cubicTo(hc.dx + s * 1.6, hc.dy - s * 0.88, hc.dx + s * 1.6, hc.dy,
+          hc.dx, hc.dy + s * 0.74);
+    canvas.drawPath(
+      heartPath,
+      Paint()
+        ..color = const Color(0xFFF06292)
+        ..style = PaintingStyle.fill,
+    );
+
+    final dotPaint = Paint()
+      ..color = const Color(0xFFF06292).withAlpha(120)
+      ..style = PaintingStyle.fill;
+    for (int i = 0; i < 8; i++) {
+      final angle = i * 2 * math.pi / 8;
+      canvas.drawCircle(
+        Offset(cx + w * 0.46 * math.cos(angle), cy + w * 0.46 * math.sin(angle)),
+        2.0,
+        dotPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_HeartEmblemPainter old) => false;
 }

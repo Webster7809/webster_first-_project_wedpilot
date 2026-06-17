@@ -1,6 +1,9 @@
 enum VerificationStatus { pending, verified, rejected }
 enum VendorTier { free, pro, premium }
 
+/// Broad price classification used by the AI recommendation engine.
+enum VendorPriceTier { high, mid, low }
+
 class VendorProfile {
   final String id;
   final String userId;
@@ -47,6 +50,21 @@ class VendorProfile {
   });
 
   bool get isVerified => verificationStatus == VerificationStatus.verified;
+
+  /// Derived from [tier]: premium → high, pro → mid, free → low.
+  VendorPriceTier get priceTier => switch (tier) {
+    VendorTier.premium => VendorPriceTier.high,
+    VendorTier.pro => VendorPriceTier.mid,
+    VendorTier.free => VendorPriceTier.low,
+  };
+
+  /// Composite 0–1 score combining rating, composite score, and review volume.
+  double get performanceScore {
+    final ratingNorm = (rating ?? 0) / 5.0;
+    final compositeNorm = compositeScore / 100.0;
+    final reviewNorm = (reviewCount / 200.0).clamp(0.0, 1.0);
+    return ratingNorm * 0.5 + compositeNorm * 0.35 + reviewNorm * 0.15;
+  }
 
   double get priceMin {
     if (services.isEmpty) return 0;

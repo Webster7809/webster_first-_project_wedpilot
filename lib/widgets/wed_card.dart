@@ -82,16 +82,20 @@ class VendorCard extends StatelessWidget {
                   right: 8,
                   child: GestureDetector(
                     onTap: onWishlistToggle,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(230),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        isWishlisted ? Icons.favorite : Icons.favorite_border,
-                        color: isWishlisted ? AppColors.secondary : AppColors.textSecondary,
-                        size: 18,
+                    child: Builder(
+                      builder: (ctx) => Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Theme.of(ctx).colorScheme.surface.withValues(alpha: 0.9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isWishlisted ? Icons.favorite : Icons.favorite_border,
+                          color: isWishlisted
+                              ? AppColors.secondary
+                              : Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6),
+                          size: 18,
+                        ),
                       ),
                     ),
                   ),
@@ -180,11 +184,15 @@ class VendorCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.location_on, size: 12, color: AppColors.textSecondary),
+                      Icon(Icons.location_on, size: 12,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
                       const SizedBox(width: 2),
                       Expanded(
                         child: Text(vendor.location ?? '',
-                            style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            style: AppTextStyles.caption.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                     ],
                   ),
@@ -195,10 +203,12 @@ class VendorCard extends StatelessWidget {
                       const SizedBox(width: 2),
                       Text(
                         vendor.rating?.toStringAsFixed(1) ?? '—',
-                        style: AppTextStyles.labelMedium.copyWith(color: AppColors.textPrimary),
+                        style: AppTextStyles.labelMedium,
                       ),
                       Text(' (${vendor.reviewCount})',
-                          style: AppTextStyles.caption),
+                          style: AppTextStyles.caption.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                          )),
                       const Spacer(),
                       if (vendor.services.isNotEmpty)
                         Text(
@@ -271,7 +281,7 @@ class BudgetCategoryCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: percent,
-              backgroundColor: AppColors.divider,
+              backgroundColor: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
               valueColor: AlwaysStoppedAnimation<Color>(barColor),
               minHeight: 6,
             ),

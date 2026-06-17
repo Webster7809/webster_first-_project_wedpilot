@@ -51,7 +51,7 @@ class _CoupleShellState extends State<CoupleShell> {
             NavigationDestination(
               icon: Icon(Icons.account_balance_wallet_outlined),
               selectedIcon: Icon(Icons.account_balance_wallet),
-              label: 'Budget',
+              label: 'Plan',
             ),
             NavigationDestination(
               icon: Icon(Icons.search_outlined),
