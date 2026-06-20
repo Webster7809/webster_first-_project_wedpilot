@@ -1,8 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/inherited/shell_scaffold.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/invitation.dart';
@@ -25,18 +24,13 @@ class InvitationGalleryScreen extends ConsumerWidget {
           SliverAppBar(
             expandedHeight: 96,
             pinned: true,
-            backgroundColor: AppColors.secondary,
-            leading: IconButton(
-              icon: const Icon(Icons.menu, color: Colors.white),
-              tooltip: 'Open menu',
-              onPressed: () =>
-                  ShellScaffold.of(context)?.scaffoldKey.currentState?.openDrawer(),
-            ),
+            backgroundColor: AppColors.forestGreen,
+            automaticallyImplyLeading: false,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFFEC407A), Color(0xFFF06292)],
+                    colors: [AppColors.forestGreen, Color(0xFF2A5C3F)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -61,7 +55,7 @@ class InvitationGalleryScreen extends ConsumerWidget {
                           'Choose a design that reflects your love story',
                           style: GoogleFonts.inter(
                             fontSize: 11,
-                            color: Colors.white.withValues(alpha: 0.85),
+                            color: Colors.white.withAlpha(217),
                           ),
                         ),
                       ],
@@ -96,7 +90,7 @@ class InvitationGalleryScreen extends ConsumerWidget {
                 Text(
                   'Curated themes with matching fonts and colour palettes',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -266,8 +260,8 @@ class _StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
       decoration: BoxDecoration(
         color: published
-            ? AppColors.info.withValues(alpha: 0.12)
-            : AppColors.warning.withValues(alpha: 0.12),
+            ? AppColors.info.withAlpha(31)
+            : AppColors.warning.withAlpha(31),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -449,7 +443,7 @@ class _TemplateCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       elevation: 2,
-      shadowColor: Colors.black.withValues(alpha: 0.14),
+      shadowColor: Colors.black.withAlpha(36),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
       ),
@@ -509,7 +503,7 @@ class _TemplateCard extends StatelessWidget {
                           Container(
                             width: 22,
                             height: 0.8,
-                            color: meta.accentColor.withValues(alpha: 0.6),
+                            color: meta.accentColor.withAlpha(153),
                           ),
                           const SizedBox(height: 7),
                           Text(
@@ -517,7 +511,7 @@ class _TemplateCard extends StatelessWidget {
                             style: GoogleFonts.inter(
                               fontSize: 6.5,
                               fontWeight: FontWeight.w600,
-                              color: meta.textColor.withValues(alpha: 0.5),
+                              color: meta.textColor.withAlpha(128),
                               letterSpacing: 2.2,
                             ),
                           ),
@@ -531,7 +525,7 @@ class _TemplateCard extends StatelessWidget {
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             border: Border.all(
-                              color: meta.accentColor.withValues(alpha: 0.15),
+                              color: meta.accentColor.withAlpha(38),
                               width: 0.8,
                             ),
                           ),
@@ -599,7 +593,7 @@ class _TemplateCard extends StatelessWidget {
                         meta.tagline,
                         style: GoogleFonts.inter(
                           fontSize: 9,
-                          color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: Theme.of(ctx).colorScheme.onSurface.withAlpha(153),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/inherited/shell_scaffold.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -28,17 +27,9 @@ class VendorDiscoveryScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Find Vendors'),
-        leading: Builder(
-          builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu),
-            tooltip: 'Open menu',
-            onPressed: () =>
-                ShellScaffold.of(ctx)?.scaffoldKey.currentState?.openDrawer(),
-          ),
-        ),
+        automaticallyImplyLeading: false,
         actions: [
-          IconButton(
-              icon: const Icon(Icons.tune_outlined), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.tune_outlined), onPressed: () {}),
         ],
       ),
       body: Column(
@@ -74,10 +65,10 @@ class VendorDiscoveryScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppColors.info.withValues(alpha: 0.08),
+                  color: AppColors.info.withAlpha(20),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: AppColors.info.withValues(alpha: 0.25)),
+                      color: AppColors.info.withAlpha(64)),
                 ),
                 child: Row(
                   children: [
@@ -264,7 +255,7 @@ class _VendorPickerDropdownState extends ConsumerState<_VendorPickerDropdown> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: pickedCount > 0
-                          ? AppColors.secondary.withValues(alpha: 0.5)
+                          ? AppColors.secondary.withAlpha(128)
                           : AppColors.divider,
                     ),
                   ),
@@ -314,7 +305,7 @@ class _VendorPickerDropdownState extends ConsumerState<_VendorPickerDropdown> {
                     border: Border.all(color: AppColors.divider),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
+                        color: Colors.black.withAlpha(15),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),

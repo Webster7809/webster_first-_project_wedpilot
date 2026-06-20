@@ -205,13 +205,13 @@ class VendorProfileScreen extends ConsumerWidget {
                                       CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                        '\$${s.priceMin.toStringAsFixed(0)}',
+                                        'ZMW ${s.priceMin.toStringAsFixed(0)}',
                                         style: AppTextStyles.titleMedium
                                             .copyWith(
                                                 color:
                                                     AppColors.secondary)),
                                     Text(
-                                        'to \$${s.priceMax.toStringAsFixed(0)}',
+                                        'to ZMW ${s.priceMax.toStringAsFixed(0)}',
                                         style: AppTextStyles.caption),
                                   ],
                                 ),

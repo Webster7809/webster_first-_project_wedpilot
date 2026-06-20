@@ -39,6 +39,10 @@ class AuthState {
       );
 }
 
+// Admin credentials — known only to the system administrator.
+const _kAdminEmail = 'admin@wedpilot.app';
+const _kAdminPassword = 'W3dP!l0t#Adm1n';
+
 class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier() : super(const AuthState());
 
@@ -46,15 +50,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
     await Future.delayed(const Duration(milliseconds: 800));
 
-    // Determine role by email for demo
+    final normalised = email.toLowerCase().trim();
+
+    if (normalised.contains('admin')) {
+      if (normalised != _kAdminEmail || password != _kAdminPassword) {
+        state = state.copyWith(isLoading: false, error: 'Invalid credentials.');
+        return;
+      }
+    }
+
     UserRole role = UserRole.couple;
-    if (email.contains('vendor')) role = UserRole.vendor;
-    if (email.contains('admin')) role = UserRole.admin;
+    if (normalised.contains('vendor')) role = UserRole.vendor;
+    if (normalised == _kAdminEmail) role = UserRole.admin;
 
     final user = User(
       id: 'user-001',
       email: email,
-      name: role == UserRole.vendor ? 'Blossom Photography' : 'Alex & Jordan',
+      name: role == UserRole.vendor ? 'Mukuba Gardens' : 'Chanda',
       role: role,
       isVerified: true,
       createdAt: DateTime.now(),
@@ -67,27 +79,41 @@ class AuthNotifier extends StateNotifier<AuthState> {
       coupleProfile = CoupleProfile(
         id: 'profile-001',
         userId: 'user-001',
-        weddingDate: DateTime.now().add(const Duration(days: 180)),
-        location: 'New York, NY',
-        guestCount: 120,
-        styleTags: ['Romantic', 'Garden'],
-        totalBudget: 30000,
-        currency: 'USD',
-        partnerName: 'Jordan',
+        weddingDate: DateTime(2026, 9, 12),
+        location: 'Ndola, Copperbelt',
+        guestCount: 150,
+        styleTags: ['White wedding', 'Flexible'],
+        totalBudget: 85000,
+        currency: 'ZMW',
+        partnerName: 'Mwila',
       );
     } else if (role == UserRole.vendor) {
       vendorProfile = VendorProfile(
         id: 'vendor-001',
         userId: 'user-001',
-        businessName: 'Blossom Photography',
-        description: 'Award-winning wedding photography studio',
-        category: 'Photography',
-        location: 'New York, NY',
-        tier: VendorTier.pro,
+        businessName: 'Mukuba Gardens',
+        description:
+            'Spacious garden venue seating up to 300 guests, with backup generator, parking for 80 cars and an in-house decor team. Located 10 minutes from Ndola town centre.',
+        category: 'Venue',
+        location: 'Ndola, Copperbelt',
+        latitude: -12.9587,
+        longitude: 28.6366,
+        tier: VendorTier.premium,
         verificationStatus: VerificationStatus.verified,
-        rating: 4.8,
-        reviewCount: 47,
-        compositeScore: 87.5,
+        rating: 4.9,
+        reviewCount: 42,
+        compositeScore: 95.0,
+        services: [
+          VendorService(
+            id: 's-v01',
+            vendorId: 'vendor-001',
+            title: 'Open Air Garden Package',
+            description: 'Full venue rental up to 300 guests',
+            priceMin: 28000,
+            priceMax: 35000,
+            unit: 'event',
+          ),
+        ],
       );
     }
 
@@ -99,18 +125,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
-  Future<void> register(String name, String email, String password, UserRole role) async {
+  Future<void> register(
+    String partner1Name,
+    String email,
+    String password,
+    UserRole role, {
+    String? partner2Name,
+    String? phone,
+  }) async {
     state = state.copyWith(isLoading: true, error: null);
     await Future.delayed(const Duration(milliseconds: 800));
     final user = User(
       id: 'user-${DateTime.now().millisecondsSinceEpoch}',
       email: email,
-      name: name,
+      name: partner1Name,
       role: role,
       isVerified: false,
       createdAt: DateTime.now(),
     );
-    state = state.copyWith(user: user, isLoading: false);
+    CoupleProfile? coupleProfile;
+    if (role == UserRole.couple && partner2Name != null) {
+      coupleProfile = CoupleProfile(
+        id: 'profile-${DateTime.now().millisecondsSinceEpoch}',
+        userId: user.id,
+        currency: 'ZMW',
+        partnerName: partner2Name,
+      );
+    }
+    state = state.copyWith(user: user, coupleProfile: coupleProfile, isLoading: false);
   }
 
   void updateCoupleProfile({
@@ -122,8 +164,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String location,
   }) {
     final profile = CoupleProfile(
-      id: 'profile-${DateTime.now().millisecondsSinceEpoch}',
+      id: state.coupleProfile?.id ?? 'profile-${DateTime.now().millisecondsSinceEpoch}',
       userId: state.user?.id ?? '',
+      partnerName: state.coupleProfile?.partnerName,
       location: location.isNotEmpty ? location : null,
       guestCount: guestCount > 0 ? guestCount : null,
       styleTags: [weddingStyle, weddingClass, ...selectedItems],

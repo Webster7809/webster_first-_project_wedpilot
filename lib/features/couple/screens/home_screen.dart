@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -369,7 +369,7 @@ class _ActionCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.18),
+                color: AppColors.primary.withAlpha(46),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: AppColors.secondary, size: 24),

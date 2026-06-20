@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../models/messaging.dart';
-import '../../../widgets/wed_avatar.dart';
 
 class LeadInboxScreen extends StatefulWidget {
   const LeadInboxScreen({super.key});
@@ -11,223 +10,331 @@ class LeadInboxScreen extends StatefulWidget {
   State<LeadInboxScreen> createState() => _LeadInboxScreenState();
 }
 
-class _LeadInboxScreenState extends State<LeadInboxScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabCtrl;
+class _LeadInboxScreenState extends State<LeadInboxScreen> {
+  int _filterIndex = 0;
 
-  final _mockLeads = [
-    Inquiry(
-      id: 'l-001',
-      coupleId: 'c-001',
-      vendorId: 'v-001',
-      coupleName: 'Emma & Noah',
-      status: InquiryStatus.newInquiry,
-      budgetRangeMin: 2500,
-      budgetRangeMax: 4000,
-      weddingDate: DateTime(2027, 8, 15),
-      message: 'Hi! We love your portfolio and would love full day coverage.',
-      createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+  static const _filters = ['All (6)', 'Unread (2)', 'Booked'];
+
+  static final _leads = [
+    _Lead(
+      initials: 'CM',
+      name: 'Chanda & Mwila',
+      timeAgo: '10 min ago',
+      message: 'Hi, is the garden available 12 September?...',
+      guests: 180,
+      tier: 'Flexible tier',
+      status: _LeadStatus.unread,
     ),
-    Inquiry(
-      id: 'l-002',
-      coupleId: 'c-002',
-      vendorId: 'v-001',
-      coupleName: 'Sophia & Lucas',
-      status: InquiryStatus.responded,
-      budgetRangeMin: 3000,
-      budgetRangeMax: 5000,
-      weddingDate: DateTime(2027, 6, 21),
-      message: 'Interested in your full day package, please send pricing!',
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
+    _Lead(
+      initials: 'BK',
+      name: 'Bwalya & Kunda',
+      timeAgo: '2 hr ago',
+      message: 'Good day, do you offer a discount for wee...',
+      guests: 220,
+      tier: 'High class',
+      status: _LeadStatus.unread,
     ),
-    Inquiry(
-      id: 'l-003',
-      coupleId: 'c-003',
-      vendorId: 'v-001',
-      coupleName: 'Olivia & James',
-      status: InquiryStatus.booked,
-      budgetRangeMin: 4000,
-      budgetRangeMax: 6000,
-      weddingDate: DateTime(2026, 11, 5),
-      message: 'Ready to book — can we sign the contract?',
-      createdAt: DateTime.now().subtract(const Duration(days: 3)),
+    _Lead(
+      initials: 'NT',
+      name: 'Natasha & Temba',
+      timeAgo: 'Yesterday',
+      message: 'Thank you so much, we\'d like to confirm t...',
+      guests: null,
+      tier: null,
+      status: _LeadStatus.booked,
+    ),
+    _Lead(
+      initials: 'MP',
+      name: 'Mutale & Phiri',
+      timeAgo: '3 days ago',
+      message: 'Is parking available for around 60 vehicle...',
+      guests: 150,
+      tier: 'Flexible tier',
+      status: _LeadStatus.read,
+    ),
+    _Lead(
+      initials: 'RC',
+      name: 'Ruth & Chola',
+      timeAgo: '5 days ago',
+      message: 'We loved the venue photos! Could we sch...',
+      guests: 300,
+      tier: 'High class',
+      status: _LeadStatus.read,
     ),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _tabCtrl = TabController(length: 5, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabCtrl.dispose();
-    super.dispose();
+  List<_Lead> get _filtered {
+    if (_filterIndex == 1) return _leads.where((l) => l.status == _LeadStatus.unread).toList();
+    if (_filterIndex == 2) return _leads.where((l) => l.status == _LeadStatus.booked).toList();
+    return _leads;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Lead Inbox'),
-        bottom: TabBar(
-          controller: _tabCtrl,
-          isScrollable: true,
-          tabs: const [
-            Tab(text: 'New'),
-            Tab(text: 'Contacted'),
-            Tab(text: 'Quoted'),
-            Tab(text: 'Booked'),
-            Tab(text: 'Declined'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabCtrl,
-        children: [
-          _LeadList(leads: _mockLeads.where((l) => l.status == InquiryStatus.newInquiry).toList()),
-          _LeadList(leads: _mockLeads.where((l) => l.status == InquiryStatus.responded).toList()),
-          _LeadList(leads: []),
-          _LeadList(leads: _mockLeads.where((l) => l.status == InquiryStatus.booked).toList()),
-          _LeadList(leads: []),
+      backgroundColor: AppColors.cream,
+      body: CustomScrollView(
+        slivers: [
+          // ── Header ──────────────────────────────────────────────────────────
+          SliverAppBar(
+            pinned: true,
+            floating: false,
+            backgroundColor: AppColors.forestGreen,
+            expandedHeight: 120,
+            elevation: 0,
+            automaticallyImplyLeading: false,
+            flexibleSpace: FlexibleSpaceBar(
+              background: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        '38 TOTAL INQUIRIES',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.amber,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Couples reaching out',
+                        style: AppTextStyles.headlineMedium.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Filter pills ─────────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Container(
+              color: AppColors.cream,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: List.generate(_filters.length, (i) {
+                  final active = i == _filterIndex;
+                  return Padding(
+                    padding: EdgeInsets.only(right: i < _filters.length - 1 ? 8 : 0),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _filterIndex = i),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: active
+                              ? AppColors.forestGreen
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: active
+                                ? AppColors.forestGreen
+                                : AppColors.divider,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          _filters[i],
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: active
+                                ? Colors.white
+                                : AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ),
+
+          // ── Lead list ────────────────────────────────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 48),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, i) {
+                  final leads = _filtered;
+                  if (leads.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 60),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.inbox_outlined,
+                              size: 48, color: AppColors.textHint),
+                          const SizedBox(height: 12),
+                          Text('No inquiries here',
+                              style: AppTextStyles.headlineSmall
+                                  .copyWith(color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    );
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _LeadCard(
+                      lead: leads[i],
+                      onTap: () => context.push('/vendor/messages'),
+                    ),
+                  );
+                },
+                childCount: _filtered.isEmpty ? 1 : _filtered.length,
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _LeadList extends StatelessWidget {
-  final List<Inquiry> leads;
-  const _LeadList({required this.leads});
+// ── Data ───────────────────────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    if (leads.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('📭', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 12),
-            Text('No leads here', style: AppTextStyles.headlineMedium),
-          ],
-        ),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: leads.length,
-      itemBuilder: (_, i) => _LeadCard(lead: leads[i]),
-    );
-  }
+enum _LeadStatus { unread, read, booked }
+
+class _Lead {
+  final String initials;
+  final String name;
+  final String timeAgo;
+  final String message;
+  final int? guests;
+  final String? tier;
+  final _LeadStatus status;
+
+  const _Lead({
+    required this.initials,
+    required this.name,
+    required this.timeAgo,
+    required this.message,
+    required this.guests,
+    required this.tier,
+    required this.status,
+  });
 }
 
+// ── Lead card ──────────────────────────────────────────────────────────────────
+
 class _LeadCard extends StatelessWidget {
-  final Inquiry lead;
-  const _LeadCard({required this.lead});
+  final _Lead lead;
+  final VoidCallback onTap;
 
-  Color get _statusColor => switch (lead.status) {
-        InquiryStatus.newInquiry => AppColors.info,
-        InquiryStatus.booked => AppColors.success,
-        InquiryStatus.declined => AppColors.error,
-        _ => AppColors.warning,
-      };
-
-  String get _statusLabel => switch (lead.status) {
-        InquiryStatus.newInquiry => 'New',
-        InquiryStatus.viewed => 'Viewed',
-        InquiryStatus.responded => 'Responded',
-        InquiryStatus.quoted => 'Quoted',
-        InquiryStatus.booked => 'Booked',
-        InquiryStatus.declined => 'Declined',
-      };
+  const _LeadCard({required this.lead, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
+    final isUnread = lead.status == _LeadStatus.unread;
+    final isBooked = lead.status == _LeadStatus.booked;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: isUnread
+              ? Border.all(color: AppColors.amber, width: 1.5)
+              : null,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.forestGreen.withAlpha(12),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                WedAvatar(name: lead.coupleName ?? 'Couple', radius: 20),
+                // Avatar
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.cream,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      lead.initials,
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: AppColors.amber,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(lead.coupleName ?? 'Couple', style: AppTextStyles.titleMedium),
-                      Text(_timeAgo(lead.createdAt), style: AppTextStyles.caption),
+                      Text(lead.name,
+                          style: AppTextStyles.titleMedium.copyWith(
+                              color: AppColors.forestGreen)),
+                      Text(
+                        lead.message,
+                        style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _statusColor.withAlpha(31),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(_statusLabel,
-                      style: AppTextStyles.caption.copyWith(
-                          color: _statusColor, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(lead.timeAgo,
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.textSecondary)),
+                    if (isUnread) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        width: 9,
+                        height: 9,
+                        decoration: const BoxDecoration(
+                          color: AppColors.amber,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            if (lead.weddingDate != null)
-              Row(
-                children: [
-                  const Icon(Icons.event, size: 14, color: AppColors.textSecondary),
-                  const SizedBox(width: 4),
-                  Text('Wedding: ${lead.weddingDate!.toLocal().toString().split(' ')[0]}',
-                      style: AppTextStyles.bodySmall),
-                  const SizedBox(width: 12),
-                  const Icon(Icons.attach_money, size: 14, color: AppColors.textSecondary),
-                  Text(
-                    '\$${lead.budgetRangeMin?.toStringAsFixed(0)} – \$${lead.budgetRangeMax?.toStringAsFixed(0)}',
-                    style: AppTextStyles.bodySmall,
-                  ),
-                ],
-              ),
-            const SizedBox(height: 8),
-            Text(lead.message, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                maxLines: 2, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 12),
-            Row(
+
+            // Tag chips
+            Wrap(
+              spacing: 6,
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.reply, size: 16),
-                    label: const Text('Reply'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.secondary,
-                      side: const BorderSide(color: AppColors.secondary),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                if (isBooked)
+                  _Chip(label: 'Booked', color: AppColors.success)
+                else ...[
+                  if (lead.guests != null)
+                    _Chip(
+                      label: '${lead.guests} guests',
+                      color: AppColors.forestGreen,
                     ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.request_quote_outlined, size: 16),
-                    label: const Text('Quote'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.secondary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
+                  if (lead.tier != null)
+                    _Chip(label: lead.tier!, color: AppColors.textSecondary),
+                ],
               ],
             ),
           ],
@@ -235,11 +342,29 @@ class _LeadCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inDays > 0) return '${diff.inDays}d ago';
-    if (diff.inHours > 0) return '${diff.inHours}h ago';
-    return '${diff.inMinutes}m ago';
+class _Chip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Chip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withAlpha(20),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withAlpha(60)),
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.caption.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 }

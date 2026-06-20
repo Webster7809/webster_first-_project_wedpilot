@@ -99,9 +99,9 @@ class VendorAnalyticsScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _RevenueItem(label: 'This Month', value: '\$8,500'),
-                    _RevenueItem(label: 'Last Month', value: '\$7,200'),
-                    _RevenueItem(label: 'YTD', value: '\$42,000'),
+                    _RevenueItem(label: 'This Month', value: 'ZMW 85,000'),
+                    _RevenueItem(label: 'Last Month', value: 'ZMW 72,000'),
+                    _RevenueItem(label: 'YTD', value: 'ZMW 420,000'),
                   ],
                 ),
               ],

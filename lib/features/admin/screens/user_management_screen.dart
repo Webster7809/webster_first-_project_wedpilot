@@ -1,26 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../providers/admin_provider.dart';
 import '../../../widgets/wed_avatar.dart';
+import '../../../widgets/wed_snack_bar.dart';
 
-class UserManagementScreen extends StatefulWidget {
+class UserManagementScreen extends ConsumerStatefulWidget {
   const UserManagementScreen({super.key});
 
   @override
-  State<UserManagementScreen> createState() => _UserManagementScreenState();
+  ConsumerState<UserManagementScreen> createState() =>
+      _UserManagementScreenState();
 }
 
-class _UserManagementScreenState extends State<UserManagementScreen> {
+class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   String _filter = 'All';
   final _searchCtrl = TextEditingController();
-
-  final _users = [
-    {'name': 'Alex & Jordan', 'email': 'alex@example.com', 'role': 'couple', 'status': 'active', 'joined': '2 days ago'},
-    {'name': 'Blossom Photography', 'email': 'blossom@example.com', 'role': 'vendor', 'status': 'active', 'joined': '1 week ago'},
-    {'name': 'Emma & Noah', 'email': 'emma@example.com', 'role': 'couple', 'status': 'active', 'joined': '3 days ago'},
-    {'name': 'Garden Venue', 'email': 'garden@example.com', 'role': 'vendor', 'status': 'suspended', 'joined': '1 month ago'},
-    {'name': 'Sarah Mitchell', 'email': 'sarah@example.com', 'role': 'admin', 'status': 'active', 'joined': '6 months ago'},
-  ];
 
   @override
   void dispose() {
@@ -28,85 +24,350 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     super.dispose();
   }
 
+  void _confirmToggleSuspend(BuildContext context, AdminUser user) {
+    final action = user.isSuspended ? 'unsuspend' : 'suspend';
+    final actionLabel = user.isSuspended ? 'Unsuspend' : 'Suspend';
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('$actionLabel account?'),
+        content: Text(
+          user.isSuspended
+              ? '${user.name} will be restored to active status.'
+              : '${user.name} will no longer be able to log in.',
+        ),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ref.read(adminProvider.notifier).toggleSuspendUser(user.id);
+              showWedSnackBar(
+                context,
+                '${user.name} ${action}ed.',
+                type: user.isSuspended ? SnackType.success : SnackType.warning,
+              );
+            },
+            child: Text(
+              actionLabel,
+              style: TextStyle(
+                color: user.isSuspended
+                    ? AppColors.success
+                    : AppColors.warning,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, AdminUser user) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete account?'),
+        content: Text(
+            'This will permanently remove ${user.name}. This cannot be undone.'),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ref.read(adminProvider.notifier).deleteUser(user.id);
+              showWedSnackBar(
+                context,
+                '${user.name} deleted.',
+                type: SnackType.error,
+              );
+            },
+            child: const Text('Delete',
+                style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUserDetails(BuildContext context, AdminUser user) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(user.name),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ProfileRow(label: 'Email', value: user.email),
+            const SizedBox(height: 8),
+            _ProfileRow(
+              label: 'Role',
+              value: user.role[0].toUpperCase() + user.role.substring(1),
+            ),
+            const SizedBox(height: 8),
+            _ProfileRow(
+              label: 'Status',
+              value: user.isSuspended ? 'Suspended' : 'Active',
+            ),
+            const SizedBox(height: 8),
+            _ProfileRow(label: 'Joined', value: user.joined),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final filtered = _users.where((u) {
-      final matchesFilter = _filter == 'All' || u['role'] == _filter.toLowerCase();
+    final users = ref.watch(adminProvider).users;
+
+    final filtered = users.where((u) {
+      final matchesFilter =
+          _filter == 'All' || u.role == _filter.toLowerCase();
       final query = _searchCtrl.text.toLowerCase();
       final matchesSearch = query.isEmpty ||
-          (u['name']?.toLowerCase().contains(query) ?? false) ||
-          (u['email']?.toLowerCase().contains(query) ?? false);
+          u.name.toLowerCase().contains(query) ||
+          u.email.toLowerCase().contains(query);
       return matchesFilter && matchesSearch;
     }).toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('User Management')),
+      backgroundColor: AppColors.adminPage,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0.5,
+        shadowColor: AppColors.divider,
+        title: Text(
+          'User Management',
+          style: AppTextStyles.headlineSmall
+              .copyWith(color: AppColors.textPrimary),
+        ),
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: Text(
+                '${users.length} users',
+                style: AppTextStyles.caption
+                    .copyWith(color: AppColors.textSecondary),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
+          // ── Search + Filter ─────────────────────────────────────
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: _searchCtrl,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: 'Search users...',
-                    prefixIcon: const Icon(Icons.search),
+                    hintText: 'Search by name or email…',
+                    hintStyle: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.textHint),
+                    prefixIcon: const Icon(Icons.search,
+                        size: 20, color: AppColors.textSecondary),
                     filled: true,
-                    fillColor: AppColors.surface,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.divider)),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    fillColor: AppColors.adminPage,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
                 const SizedBox(height: 10),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: ['All', 'Couple', 'Vendor', 'Admin'].map((f) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        label: Text(f),
-                        selected: _filter == f,
-                        onSelected: (_) => setState(() => _filter = f),
-                      selectedColor: AppColors.secondary.withAlpha(38),
-                      ),
-                    )).toList(),
+                    children:
+                        ['All', 'Couple', 'Vendor', 'Admin'].map((f) {
+                      final selected = _filter == f;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _filter = f),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? AppColors.adminIndigo
+                                  : AppColors.adminPage,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              f,
+                              style: AppTextStyles.caption.copyWith(
+                                color: selected
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ),
               ],
             ),
           ),
+          const Divider(height: 1, color: AppColors.adminNeutralBg),
+
+          // ── User List ───────────────────────────────────────────
           Expanded(
-            child: ListView.separated(
-              itemCount: filtered.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (_, i) {
-                final user = filtered[i];
-                return ListTile(
-                  leading: WedAvatar(name: user['name'] ?? 'U', radius: 20),
-                  title: Text(user['name'] ?? '', style: AppTextStyles.titleMedium),
-                  subtitle: Text(user['email'] ?? '', style: AppTextStyles.caption),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _RoleBadge(role: user['role'] ?? ''),
-                      const SizedBox(width: 8),
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert, size: 20),
-                        onSelected: (action) {},
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'view', child: Text('View Profile')),
-                          PopupMenuItem(value: 'suspend', child: Text('Suspend Account')),
-                          PopupMenuItem(value: 'delete', child: Text('Delete Account', style: TextStyle(color: AppColors.error))),
-                        ],
-                      ),
-                    ],
+            child: filtered.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.person_search_rounded,
+                            size: 56, color: AppColors.textHint),
+                        const SizedBox(height: 12),
+                        Text('No users found',
+                            style: AppTextStyles.headlineMedium),
+                        const SizedBox(height: 6),
+                        Text('Try adjusting your search or filter.',
+                            style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const Divider(
+                        height: 1, color: AppColors.adminNeutralBg),
+                    itemBuilder: (ctx, i) {
+                      final user = filtered[i];
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 6),
+                        leading: ColorFiltered(
+                          colorFilter: user.isSuspended
+                              ? const ColorFilter.mode(
+                                  Colors.grey, BlendMode.saturation)
+                              : const ColorFilter.mode(
+                                  Colors.transparent,
+                                  BlendMode.multiply),
+                          child: WedAvatar(
+                              name: user.name, radius: 22),
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                user.name,
+                                style: AppTextStyles.titleMedium.copyWith(
+                                  color: user.isSuspended
+                                      ? AppColors.textSecondary
+                                      : AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                            if (user.isSuspended)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.adminRedBg,
+                                  borderRadius:
+                                      BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Suspended',
+                                  style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.error,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                          ],
+                        ),
+                        subtitle: Text(
+                          '${user.email}  ·  Joined ${user.joined}',
+                          style: AppTextStyles.caption
+                              .copyWith(color: AppColors.textSecondary),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _RoleBadge(role: user.role),
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert,
+                                  size: 18,
+                                  color: AppColors.textSecondary),
+                              onSelected: (action) {
+                                switch (action) {
+                                  case 'view':
+                                    _showUserDetails(context, user);
+                                    break;
+                                  case 'suspend':
+                                    _confirmToggleSuspend(
+                                        context, user);
+                                    break;
+                                  case 'delete':
+                                    _confirmDelete(context, user);
+                                    break;
+                                }
+                              },
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(
+                                  value: 'view',
+                                  child: Text('View Profile'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'suspend',
+                                  child: Text(user.isSuspended
+                                      ? 'Unsuspend Account'
+                                      : 'Suspend Account'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text(
+                                    'Delete Account',
+                                    style: TextStyle(
+                                        color: AppColors.error),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
@@ -114,28 +375,67 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 }
 
+// ── Role Badge ────────────────────────────────────────────────────────────────
+
 class _RoleBadge extends StatelessWidget {
   final String role;
   const _RoleBadge({required this.role});
 
-  Color get color => switch (role) {
-        'admin' => AppColors.secondary,
-        'vendor' => AppColors.info,
-        _ => AppColors.tertiary,
+  Color get _color => switch (role) {
+        'admin' => AppColors.adminIndigo,
+        'vendor' => AppColors.adminBlue,
+        _ => AppColors.adminGreen,
       };
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      margin: const EdgeInsets.only(right: 4),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withAlpha(31),
+        color: _color.withAlpha(25),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         role[0].toUpperCase() + role.substring(1),
-        style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w600),
+        style: AppTextStyles.caption
+            .copyWith(color: _color, fontWeight: FontWeight.w600),
       ),
+    );
+  }
+}
+
+// ── Profile Row ───────────────────────────────────────────────────────────────
+
+class _ProfileRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _ProfileRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 56,
+          child: Text(
+            label,
+            style: AppTextStyles.caption
+                .copyWith(color: AppColors.textSecondary),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

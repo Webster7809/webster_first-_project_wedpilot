@@ -67,7 +67,6 @@ app.*.map.json
 **/ios/Pods/
 
 # Web
-lib/generated_plugin_registrant.dart
 
 # Coverage
 coverage/

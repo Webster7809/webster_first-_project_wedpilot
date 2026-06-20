@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/inherited/shell_scaffold.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
@@ -25,15 +24,7 @@ class CoupleProfileScreen extends ConsumerWidget {
             expandedHeight: 210,
             pinned: true,
             automaticallyImplyLeading: false,
-            backgroundColor: AppColors.secondary,
-            leading: Builder(
-              builder: (ctx) => IconButton(
-                icon: const Icon(Icons.menu, color: Colors.white),
-                tooltip: 'Open menu',
-                onPressed: () =>
-                    ShellScaffold.of(ctx)?.scaffoldKey.currentState?.openDrawer(),
-              ),
-            ),
+            backgroundColor: AppColors.forestGreen,
             flexibleSpace: FlexibleSpaceBar(
               background: _ProfileHero(
                 coupleName: coupleName,
@@ -139,7 +130,7 @@ class _ProfileHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFD81B8A), AppColors.secondary, Color(0xFF880E4F)],
+          colors: [AppColors.forestGreen, Color(0xFF2A5C3F), Color(0xFF1B3A2D)],
           stops: [0.0, 0.55, 1.0],
         ),
       ),

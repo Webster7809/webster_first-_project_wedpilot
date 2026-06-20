@@ -17,30 +17,30 @@ class VendorOnboardingScreen extends ConsumerStatefulWidget {
 
 class _VendorOnboardingScreenState
     extends ConsumerState<VendorOnboardingScreen> {
+  int _step = 0;
+
+  // Step 0
   final _businessNameCtrl = TextEditingController();
+  String? _selectedCategory;
+
+  // Step 1
   final _descCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+
+  // Step 2
   final _locationCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
-
-  String? _selectedCategory;
   final List<_ServiceItem> _services = [];
+
+  // Step 3
   int _portfolioCount = 0;
   bool _saving = false;
 
-  static const _categories = [
-    'Photography',
-    'Catering',
-    'Decoration',
-    'Venue',
-    'Entertainment',
-    'Attire',
-    'Transport',
-    'Music / DJ',
-    'Flowers',
-    'Cake & Bakery',
-    'Makeup & Hair',
-    'Other',
+  static const _stepTitles = [
+    'Business basics',
+    'About & contact',
+    'Services & location',
+    'Portfolio photos',
   ];
 
   @override
@@ -53,29 +53,51 @@ class _VendorOnboardingScreenState
     super.dispose();
   }
 
+  bool get _canProceed {
+    if (_step == 0) return _businessNameCtrl.text.trim().isNotEmpty && _selectedCategory != null;
+    if (_step == 1) return _phoneCtrl.text.trim().isNotEmpty;
+    if (_step == 2) return _locationCtrl.text.trim().isNotEmpty;
+    return true;
+  }
+
+  void _next() {
+    if (_step < 3) {
+      setState(() => _step++);
+    } else {
+      _finish();
+    }
+  }
+
+  void _back() {
+    if (_step > 0) setState(() => _step--);
+  }
+
   void _showAddServiceDialog() {
     final nameCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Add Service / Listing',
-            style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+        title: Text('Add Service / Listing',
+            style: AppTextStyles.titleMedium
+                .copyWith(color: AppColors.forestGreen)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtrl,
-              style: const TextStyle(color: AppColors.textPrimary),
               decoration: InputDecoration(
                 labelText: 'Service Name',
-                labelStyle: const TextStyle(color: AppColors.textSecondary),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                labelStyle:
+                    const TextStyle(color: AppColors.textSecondary),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10)),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.secondary),
+                  borderSide:
+                      const BorderSide(color: AppColors.forestGreen),
                 ),
               ),
             ),
@@ -83,14 +105,16 @@ class _VendorOnboardingScreenState
             TextField(
               controller: priceCtrl,
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: AppColors.textPrimary),
               decoration: InputDecoration(
-                labelText: 'Starting Price (K)',
-                labelStyle: const TextStyle(color: AppColors.textSecondary),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                labelText: 'Starting Price (ZMW)',
+                labelStyle:
+                    const TextStyle(color: AppColors.textSecondary),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10)),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.secondary),
+                  borderSide:
+                      const BorderSide(color: AppColors.forestGreen),
                 ),
               ),
             ),
@@ -113,7 +137,7 @@ class _VendorOnboardingScreenState
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
+              backgroundColor: AppColors.forestGreen,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
@@ -125,7 +149,7 @@ class _VendorOnboardingScreenState
     );
   }
 
-  Future<void> _finishSetup() async {
+  Future<void> _finish() async {
     setState(() => _saving = true);
     await Future.delayed(const Duration(milliseconds: 800));
     if (mounted) {
@@ -142,294 +166,553 @@ class _VendorOnboardingScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 170,
-            pinned: true,
-            automaticallyImplyLeading: false,
-            backgroundColor: AppColors.secondary,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.secondary, Color(0xFFAD1457)],
-                  ),
-                ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: const [
-                        Text(
-                          '🏢 Set Up Your Business',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            height: 1.3,
-                          ),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Create your listings and showcase your work to attract couples.',
-                          style: TextStyle(
-                            color: Color(0xFFFFCDD2),
-                            fontSize: 13,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+      backgroundColor: AppColors.cream,
+      body: Column(
+        children: [
+          // ── Dark green header ──────────────────────────────────────────
+          _OnboardingHeader(
+            step: _step,
+            totalSteps: _stepTitles.length,
+            title: _stepTitles[_step],
+            onBack: _step > 0 ? _back : null,
           ),
-          SliverPadding(
-            padding: const EdgeInsets.all(24),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // ── Logo ───────────────────────────────────────
-                Center(
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Center(
-                            child: Text('📷',
-                                style: TextStyle(fontSize: 40))),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: AppColors.secondary,
-                            shape: BoxShape.circle,
-                            border:
-                                Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: const Icon(Icons.camera_alt,
-                              size: 16, color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Center(
-                  child: Text(
-                    'Upload Business Logo',
-                    style: TextStyle(
-                        color: AppColors.textSecondary, fontSize: 13),
-                  ),
-                ),
-                const SizedBox(height: 28),
 
-                // ── Business Details ───────────────────────────
-                Text('Business Details',
-                    style: AppTextStyles.headlineSmall),
-                const SizedBox(height: 16),
-                WedTextField(
-                  label: 'Business Name',
-                  hint: 'e.g. Blossom Photography',
-                  controller: _businessNameCtrl,
-                  prefixIcon: Icons.business_outlined,
-                ),
-                const SizedBox(height: 16),
-                WedTextField(
-                  label: 'Description',
-                  hint:
-                      'Tell couples about your services and what makes you special...',
-                  controller: _descCtrl,
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 16),
-                WedTextField(
-                  label: 'Phone Number',
-                  hint: '+260 9X XXX XXXX',
-                  controller: _phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  prefixIcon: Icons.phone_outlined,
-                ),
-                const SizedBox(height: 16),
-                WedTextField(
-                  label: 'Location / City',
-                  hint: 'e.g. Lusaka',
-                  controller: _locationCtrl,
-                  prefixIcon: Icons.location_on_outlined,
-                ),
-                const SizedBox(height: 28),
-
-                // ── Category ───────────────────────────────────
-                Text('Service Category',
-                    style: AppTextStyles.headlineSmall),
-                const SizedBox(height: 6),
-                const Text(
-                  'Select the primary category that describes your business',
-                  style: TextStyle(
-                      color: AppColors.textSecondary, fontSize: 13),
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _categories.map((cat) {
-                    final isSelected = _selectedCategory == cat;
-                    return GestureDetector(
-                      onTap: () =>
-                          setState(() => _selectedCategory = cat),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 9),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.secondary
-                              : AppColors.surface,
-                          border: Border.all(
-                            color: isSelected
-                                ? AppColors.secondary
-                                : AppColors.divider,
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          cat,
-                          style: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.textPrimary,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 28),
-
-                // ── Services / Listings ────────────────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Services & Listings',
-                        style: AppTextStyles.headlineSmall),
-                    TextButton.icon(
-                      onPressed: _showAddServiceDialog,
-                      icon: const Icon(Icons.add_circle_outline,
-                          size: 18, color: AppColors.secondary),
-                      label: const Text('Add',
-                          style: TextStyle(
-                              color: AppColors.secondary,
-                              fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'List the specific services or packages you offer',
-                  style: TextStyle(
-                      color: AppColors.textSecondary, fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                if (_services.isEmpty)
-                  _EmptyListings()
-                else
-                  ..._services.asMap().entries.map(
-                        (e) => _ServiceTile(
-                          service: e.value,
-                          onRemove: () =>
-                              setState(() => _services.removeAt(e.key)),
-                        ),
-                      ),
-                const SizedBox(height: 28),
-
-                // ── Portfolio Photos ───────────────────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Portfolio Photos',
-                        style: AppTextStyles.headlineSmall),
-                    Text(
-                      '$_portfolioCount photo${_portfolioCount == 1 ? '' : 's'}',
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 13),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Upload your best work to attract more couples',
-                  style: TextStyle(
-                      color: AppColors.textSecondary, fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  children: [
-                    ...List.generate(
-                      _portfolioCount,
-                      (i) => _PortfolioThumb(
-                        onRemove: () =>
-                            setState(() => _portfolioCount--),
-                      ),
-                    ),
-                    _AddPhotoTile(
-                        onTap: () =>
-                            setState(() => _portfolioCount++)),
-                  ],
-                ),
-                const SizedBox(height: 36),
-
-                // ── Finish ─────────────────────────────────────
-                WedButton(
-                  label: 'Finish Setup',
-                  onPressed: _finishSetup,
-                  isLoading: _saving,
-                  icon: Icons.check_circle_outline,
-                ),
-                const SizedBox(height: 12),
-                Center(
-                  child: TextButton(
-                    onPressed: () => context.go('/vendor/dashboard'),
-                    child: const Text(
-                      'Skip for now',
-                      style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 32),
-              ]),
+          // ── Step body ──────────────────────────────────────────────────
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: KeyedSubtree(
+                key: ValueKey(_step),
+                child: _buildStep(),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildStep() {
+    switch (_step) {
+      case 0:
+        return _Step0(
+          businessNameCtrl: _businessNameCtrl,
+          selectedCategory: _selectedCategory,
+          onCategorySelect: (c) => setState(() => _selectedCategory = c),
+          canProceed: _canProceed,
+          onNext: _next,
+          onSkip: () => context.go('/vendor/dashboard'),
+        );
+      case 1:
+        return _Step1(
+          descCtrl: _descCtrl,
+          phoneCtrl: _phoneCtrl,
+          canProceed: _canProceed,
+          onNext: _next,
+        );
+      case 2:
+        return _Step2(
+          locationCtrl: _locationCtrl,
+          priceCtrl: _priceCtrl,
+          services: _services,
+          onAddService: _showAddServiceDialog,
+          onRemoveService: (i) => setState(() => _services.removeAt(i)),
+          canProceed: _canProceed,
+          onNext: _next,
+        );
+      case 3:
+        return _Step3(
+          portfolioCount: _portfolioCount,
+          onAdd: () => setState(() => _portfolioCount++),
+          onRemove: () => setState(() => _portfolioCount--),
+          saving: _saving,
+          onFinish: _finish,
+          onSkip: () => context.go('/vendor/dashboard'),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
 }
+
+// ── Shared header ──────────────────────────────────────────────────────────────
+
+class _OnboardingHeader extends StatelessWidget {
+  final int step;
+  final int totalSteps;
+  final String title;
+  final VoidCallback? onBack;
+
+  const _OnboardingHeader({
+    required this.step,
+    required this.totalSteps,
+    required this.title,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.forestGreen,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Back / close row
+              Row(
+                children: [
+                  if (onBack != null)
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new,
+                          size: 18, color: Colors.white),
+                      onPressed: onBack,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    )
+                  else
+                    const SizedBox(width: 24),
+                  const Spacer(),
+                  Text(
+                    'Step ${step + 1} of $totalSteps',
+                    style: AppTextStyles.caption.copyWith(
+                        color: Colors.white.withAlpha(178)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'VENDOR ONBOARDING',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.amber,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: AppTextStyles.headlineMedium.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Progress bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: (step + 1) / totalSteps,
+                  backgroundColor: Colors.white.withAlpha(40),
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(AppColors.amber),
+                  minHeight: 5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Step 0: Business basics ────────────────────────────────────────────────────
+
+class _Step0 extends StatelessWidget {
+  final TextEditingController businessNameCtrl;
+  final String? selectedCategory;
+  final ValueChanged<String> onCategorySelect;
+  final bool canProceed;
+  final VoidCallback onNext;
+  final VoidCallback onSkip;
+
+  static const _categories = [
+    'Venue', 'Catering', 'Photography', 'Decoration',
+    'Entertainment', 'Transport', 'Music / DJ', 'Flowers',
+    'Cake & Bakery', 'Makeup & Hair', 'Attire', 'Other',
+  ];
+
+  const _Step0({
+    required this.businessNameCtrl,
+    required this.selectedCategory,
+    required this.onCategorySelect,
+    required this.canProceed,
+    required this.onNext,
+    required this.onSkip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              // Logo upload
+              Center(
+                child: Stack(
+                  children: [
+                    Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        color: AppColors.forestGreen.withAlpha(20),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: AppColors.forestGreen.withAlpha(60),
+                            width: 2),
+                      ),
+                      child: const Center(
+                          child: Text('🏢',
+                              style: TextStyle(fontSize: 36))),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: AppColors.amber,
+                          shape: BoxShape.circle,
+                          border:
+                              Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(Icons.camera_alt,
+                            size: 14, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Center(
+                child: Text('Upload business logo',
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.textSecondary)),
+              ),
+              const SizedBox(height: 28),
+
+              WedTextField(
+                label: 'Business Name',
+                hint: 'e.g. Mukuba Gardens',
+                controller: businessNameCtrl,
+                prefixIcon: Icons.business_outlined,
+              ),
+              const SizedBox(height: 24),
+
+              Text('Service Category',
+                  style: AppTextStyles.headlineSmall
+                      .copyWith(color: AppColors.forestGreen)),
+              const SizedBox(height: 6),
+              Text(
+                'Select the primary category that describes your business',
+                style: AppTextStyles.caption
+                    .copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _categories.map((cat) {
+                  final isSelected = selectedCategory == cat;
+                  return GestureDetector(
+                    onTap: () => onCategorySelect(cat),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.forestGreen
+                            : Colors.white,
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.forestGreen
+                              : AppColors.divider,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color:
+                                      AppColors.forestGreen.withAlpha(30),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                )
+                              ]
+                            : [],
+                      ),
+                      child: Text(
+                        cat,
+                        style: TextStyle(
+                          color: isSelected
+                              ? Colors.white
+                              : AppColors.textPrimary,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 36),
+
+              WedButton(
+                label: 'Next',
+                onPressed: canProceed ? onNext : null,
+                icon: Icons.arrow_forward_rounded,
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton(
+                  onPressed: onSkip,
+                  child: Text('Skip for now',
+                      style: AppTextStyles.caption
+                          .copyWith(color: AppColors.textSecondary)),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Step 1: About & contact ────────────────────────────────────────────────────
+
+class _Step1 extends StatelessWidget {
+  final TextEditingController descCtrl;
+  final TextEditingController phoneCtrl;
+  final bool canProceed;
+  final VoidCallback onNext;
+
+  const _Step1({
+    required this.descCtrl,
+    required this.phoneCtrl,
+    required this.canProceed,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              Text('Tell couples about your business',
+                  style: AppTextStyles.headlineSmall
+                      .copyWith(color: AppColors.forestGreen)),
+              const SizedBox(height: 16),
+              WedTextField(
+                label: 'Business Description',
+                hint:
+                    'What makes you special? Tell couples about your experience and style...',
+                controller: descCtrl,
+                maxLines: 4,
+              ),
+              const SizedBox(height: 16),
+              WedTextField(
+                label: 'Phone Number',
+                hint: '+260 9X XXX XXXX',
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                prefixIcon: Icons.phone_outlined,
+              ),
+              const SizedBox(height: 36),
+              WedButton(
+                label: 'Next',
+                onPressed: canProceed ? onNext : null,
+                icon: Icons.arrow_forward_rounded,
+              ),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Step 2: Services & location ────────────────────────────────────────────────
+
+class _Step2 extends StatelessWidget {
+  final TextEditingController locationCtrl;
+  final TextEditingController priceCtrl;
+  final List<_ServiceItem> services;
+  final VoidCallback onAddService;
+  final ValueChanged<int> onRemoveService;
+  final bool canProceed;
+  final VoidCallback onNext;
+
+  const _Step2({
+    required this.locationCtrl,
+    required this.priceCtrl,
+    required this.services,
+    required this.onAddService,
+    required this.onRemoveService,
+    required this.canProceed,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              WedTextField(
+                label: 'Location / City',
+                hint: 'e.g. Ndola, Copperbelt',
+                controller: locationCtrl,
+                prefixIcon: Icons.location_on_outlined,
+              ),
+              const SizedBox(height: 16),
+              WedTextField(
+                label: 'Starting Price (ZMW)',
+                hint: 'e.g. 15000',
+                controller: priceCtrl,
+                keyboardType: TextInputType.number,
+                prefixIcon: Icons.payments_outlined,
+              ),
+              const SizedBox(height: 28),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Services & Listings',
+                      style: AppTextStyles.headlineSmall
+                          .copyWith(color: AppColors.forestGreen)),
+                  TextButton.icon(
+                    onPressed: onAddService,
+                    icon: const Icon(Icons.add_circle_outline,
+                        size: 18, color: AppColors.amber),
+                    label: Text('Add',
+                        style: AppTextStyles.labelMedium
+                            .copyWith(color: AppColors.amber)),
+                  ),
+                ],
+              ),
+              Text(
+                'List the specific services or packages you offer',
+                style: AppTextStyles.caption
+                    .copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
+
+              if (services.isEmpty)
+                _EmptyListings()
+              else
+                ...services.asMap().entries.map(
+                      (e) => _ServiceTile(
+                        service: e.value,
+                        onRemove: () => onRemoveService(e.key),
+                      ),
+                    ),
+              const SizedBox(height: 36),
+
+              WedButton(
+                label: 'Next',
+                onPressed: canProceed ? onNext : null,
+                icon: Icons.arrow_forward_rounded,
+              ),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Step 3: Portfolio ──────────────────────────────────────────────────────────
+
+class _Step3 extends StatelessWidget {
+  final int portfolioCount;
+  final VoidCallback onAdd;
+  final VoidCallback onRemove;
+  final bool saving;
+  final VoidCallback onFinish;
+  final VoidCallback onSkip;
+
+  const _Step3({
+    required this.portfolioCount,
+    required this.onAdd,
+    required this.onRemove,
+    required this.saving,
+    required this.onFinish,
+    required this.onSkip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              Text('Showcase your best work',
+                  style: AppTextStyles.headlineSmall
+                      .copyWith(color: AppColors.forestGreen)),
+              const SizedBox(height: 6),
+              Text(
+                'Upload portfolio photos to attract more couples. You can add more later.',
+                style: AppTextStyles.caption
+                    .copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                children: [
+                  ...List.generate(
+                    portfolioCount,
+                    (i) => _PortfolioThumb(onRemove: onRemove),
+                  ),
+                  _AddPhotoTile(onTap: onAdd),
+                ],
+              ),
+              const SizedBox(height: 36),
+
+              WedButton(
+                label: 'Finish Setup',
+                onPressed: onFinish,
+                isLoading: saving,
+                icon: Icons.check_circle_outline,
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton(
+                  onPressed: onSkip,
+                  child: Text('Skip for now',
+                      style: AppTextStyles.caption
+                          .copyWith(color: AppColors.textSecondary)),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Data ───────────────────────────────────────────────────────────────────────
 
 class _ServiceItem {
   final String name;
@@ -437,26 +720,28 @@ class _ServiceItem {
   const _ServiceItem({required this.name, required this.price});
 }
 
+// ── Sub-widgets ────────────────────────────────────────────────────────────────
+
 class _EmptyListings extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Colors.white,
         border: Border.all(color: AppColors.divider),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Column(
+      child: Column(
         children: [
-          Icon(Icons.inventory_2_outlined,
+          const Icon(Icons.inventory_2_outlined,
               color: AppColors.textHint, size: 36),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           Text(
             'No listings yet.\nTap "Add" to create your first service.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-                color: AppColors.textSecondary, fontSize: 13, height: 1.5),
+            style: AppTextStyles.caption.copyWith(
+                color: AppColors.textSecondary, height: 1.5),
           ),
         ],
       ),
@@ -476,32 +761,41 @@ class _ServiceTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Colors.white,
         border: Border.all(color: AppColors.divider),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.forestGreen.withAlpha(8),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          const Icon(Icons.inventory_2_outlined,
-              color: AppColors.tertiary, size: 20),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.forestGreen.withAlpha(18),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.inventory_2_outlined,
+                color: AppColors.forestGreen, size: 18),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  service.name,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                      fontSize: 14),
-                ),
+                Text(service.name,
+                    style: AppTextStyles.titleMedium
+                        .copyWith(color: AppColors.forestGreen)),
                 if (service.price.isNotEmpty)
-                  Text(
-                    'From K${service.price}',
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 12),
-                  ),
+                  Text('From ZMW ${service.price}',
+                      style: AppTextStyles.caption
+                          .copyWith(color: AppColors.textSecondary)),
               ],
             ),
           ),
@@ -525,13 +819,13 @@ class _PortfolioThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.forestGreen.withAlpha(20),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Stack(
         children: [
           const Center(
-              child: Text('🌸', style: TextStyle(fontSize: 28))),
+              child: Text('📷', style: TextStyle(fontSize: 26))),
           Positioned(
             top: 4,
             right: 4,
@@ -542,8 +836,8 @@ class _PortfolioThumb extends StatelessWidget {
                 height: 22,
                 decoration: const BoxDecoration(
                     color: AppColors.error, shape: BoxShape.circle),
-                child: const Icon(Icons.close,
-                    size: 13, color: Colors.white),
+                child:
+                    const Icon(Icons.close, size: 13, color: Colors.white),
               ),
             ),
           ),
@@ -563,20 +857,22 @@ class _AddPhotoTile extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.divider, width: 1.5),
-          borderRadius: BorderRadius.circular(8),
+          color: Colors.white,
+          border: Border.all(
+              color: AppColors.divider,
+              width: 1.5,
+              style: BorderStyle.solid),
+          borderRadius: BorderRadius.circular(10),
         ),
-        child: const Column(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_photo_alternate_outlined,
-                color: AppColors.textSecondary, size: 28),
-            SizedBox(height: 4),
-            Text(
-              'Add Photo',
-              style:
-                  TextStyle(fontSize: 11, color: AppColors.textSecondary),
-            ),
+            const Icon(Icons.add_photo_alternate_outlined,
+                color: AppColors.textHint, size: 28),
+            const SizedBox(height: 4),
+            Text('Add Photo',
+                style: AppTextStyles.caption
+                    .copyWith(color: AppColors.textSecondary)),
           ],
         ),
       ),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 class WedTextField extends StatefulWidget {
   final String label;
@@ -71,7 +71,7 @@ class _WedTextFieldState extends State<WedTextField> {
             prefixIcon: widget.prefixIcon != null
                 ? Icon(widget.prefixIcon,
                     size: 18,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))
+                    color: Theme.of(context).colorScheme.onSurface.withAlpha(153))
                 : null,
             prefixIconConstraints:
                 const BoxConstraints(minWidth: 40, minHeight: 38),
@@ -82,7 +82,7 @@ class _WedTextFieldState extends State<WedTextField> {
                       _obscure
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                     ),
                     onPressed: () => setState(() => _obscure = !_obscure),
                   )

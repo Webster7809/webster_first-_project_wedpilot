@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme/app_colors.dart';
@@ -46,9 +46,9 @@ class AppDrawer extends ConsumerWidget {
                     width: 60,
                     height: 60,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.25),
+                      color: Colors.white.withAlpha(64),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2),
+                      border: Border.all(color: Colors.white.withAlpha(128), width: 2),
                     ),
                     child: Center(
                       child: Text(
@@ -72,7 +72,7 @@ class AppDrawer extends ConsumerWidget {
                   Text(
                     subtitle,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white.withValues(alpha: 0.8),
+                      color: Colors.white.withAlpha(204),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -177,7 +177,7 @@ class AppDrawer extends ConsumerWidget {
                     child: Text(
                       'Wedpilot v1.0.0',
                       style: AppTextStyles.caption.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+                        color: Theme.of(context).colorScheme.onSurface.withAlpha(97),
                       ),
                     ),
                   ),

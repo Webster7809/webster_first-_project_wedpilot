@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -263,7 +263,7 @@ class _OverviewTab extends StatelessWidget {
                     Text(
                       '${stats.responded}/${stats.totalInvited}',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                        color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                       ),
                     ),
                   ],
@@ -273,7 +273,7 @@ class _OverviewTab extends StatelessWidget {
                   value: stats.totalInvited > 0
                       ? stats.responded / stats.totalInvited
                       : 0,
-                  backgroundColor: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
+                  backgroundColor: Theme.of(context).colorScheme.outlineVariant.withAlpha(102),
                   valueColor:
                       AlwaysStoppedAnimation<Color>(AppColors.secondary),
                   minHeight: 8,
@@ -343,7 +343,7 @@ class _GuestListTab extends StatelessWidget {
             const SizedBox(height: 8),
             Text('Add guests to track their RSVPs.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                 )),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -437,7 +437,7 @@ class _GuestCard extends StatelessWidget {
                   if (guest.relation != null)
                     Text(guest.relation!,
                         style: AppTextStyles.caption.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                         )),
                   const SizedBox(height: 4),
                   Container(
@@ -490,7 +490,7 @@ class _GuestCard extends StatelessWidget {
                         dense: true)),
               ],
               child: Icon(Icons.more_vert,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), size: 20),
+                  color: Theme.of(context).colorScheme.onSurface.withAlpha(153), size: 20),
             ),
           ],
         ),
@@ -544,7 +544,7 @@ class _InfoRow extends StatelessWidget {
         children: [
           Text(label,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
               )),
           Text(value,
               style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),

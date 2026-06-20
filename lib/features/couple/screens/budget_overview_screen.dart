@@ -4,14 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import '../../../core/inherited/shell_scaffold.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/budget.dart';
 import '../../../providers/budget_provider.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../widgets/wed_button.dart';
-import '../../../widgets/wed_card.dart';
 
 class BudgetOverviewScreen extends ConsumerWidget {
   const BudgetOverviewScreen({super.key});
@@ -20,36 +19,32 @@ class BudgetOverviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final budgetState = ref.watch(budgetProvider);
     final budget = budgetState.budget;
-    final selectedServices = ref.watch(selectedServiceCategoriesProvider);
     final recommendations = ref.watch(recommendedVendorsProvider);
-    final wishlist = ref.watch(wishlistProvider);
 
     if (budget == null) {
       return Scaffold(
+        backgroundColor: AppColors.cream,
         appBar: AppBar(
-          title: const Text('Budget'),
-          leading: Builder(
-            builder: (ctx) => IconButton(
-              icon: const Icon(Icons.menu),
-              tooltip: 'Open menu',
-              onPressed: () =>
-                  ShellScaffold.of(ctx)?.scaffoldKey.currentState?.openDrawer(),
-            ),
-          ),
+          backgroundColor: AppColors.forestGreen,
+          automaticallyImplyLeading: false,
+          title: const Text('Budget', style: TextStyle(color: Colors.white)),
         ),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('💰', style: TextStyle(fontSize: 60)),
+              const Icon(Icons.account_balance_wallet_outlined,
+                  size: 64, color: AppColors.textHint),
               const SizedBox(height: 16),
-              Text('No budget set up yet', style: AppTextStyles.headlineMedium),
+              Text('No budget set up yet',
+                  style: AppTextStyles.headlineMedium),
               const SizedBox(height: 8),
-              Text('Use AI to allocate your budget across all categories',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                  textAlign: TextAlign.center),
+              Text(
+                'Use AI to allocate your budget across all categories',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 24),
               WedButton(
                 label: 'Set Up Budget',
@@ -63,271 +58,480 @@ class BudgetOverviewScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Budget Overview'),
-        leading: Builder(
-          builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu),
-            tooltip: 'Open menu',
-            onPressed: () =>
-                ShellScaffold.of(ctx)?.scaffoldKey.currentState?.openDrawer(),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => context.push('/couple/budget/expense/new'),
-            tooltip: 'Add Expense',
-          ),
-          IconButton(
-            icon: const Icon(Icons.bar_chart_rounded),
-            onPressed: () => context.push('/couple/reports'),
-            tooltip: 'View Reports',
-          ),
-          IconButton(
-            icon: const Icon(Icons.file_download_outlined),
-            onPressed: () => _exportBudgetPdf(context, budget, recommendations),
-            tooltip: 'Export PDF',
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Summary card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppColors.secondary, AppColors.secondary.withValues(alpha: 0.7)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+      backgroundColor: AppColors.cream,
+      body: CustomScrollView(
+        slivers: [
+          // ── Dark green header ──────────────────────────────────────────────
+          SliverAppBar(
+            pinned: true,
+            backgroundColor: AppColors.forestGreen,
+            elevation: 0,
+            expandedHeight: 100,
+            automaticallyImplyLeading: false,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.add, color: Colors.white),
+                onPressed: () => context.push('/couple/budget/expense/new'),
+                tooltip: 'Add Expense',
               ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Total Budget', style: AppTextStyles.labelMedium.copyWith(color: Colors.white70)),
-                const SizedBox(height: 4),
-                Text('\$${budget.totalAmount.toStringAsFixed(0)}',
-                    style: AppTextStyles.displayMedium.copyWith(color: Colors.white)),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _SummaryItem(
-                        label: 'Spent',
-                        value: '\$${budget.totalSpent.toStringAsFixed(0)}',
-                        color: Colors.white,
+              IconButton(
+                icon: const Icon(Icons.file_download_outlined,
+                    color: Colors.white),
+                onPressed: () =>
+                    _exportBudgetPdf(context, budget, recommendations),
+                tooltip: 'Export PDF',
+              ),
+              const SizedBox(width: 4),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        'YOUR WEDDING BUDGET',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.amber,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: _SummaryItem(
-                        label: 'Remaining',
-                        value: '\$${budget.remainingBudget.toStringAsFixed(0)}',
-                        color: Colors.white,
+                      const SizedBox(height: 4),
+                      Text(
+                        'Budget tracker',
+                        style: AppTextStyles.headlineMedium.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: _SummaryItem(
-                        label: 'Used',
-                        value: '${budget.spendingPercentage.toStringAsFixed(0)}%',
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: budget.spendingPercentage / 100,
-                    backgroundColor: Colors.white.withValues(alpha: 0.3),
-                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                    minHeight: 8,
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Categories', style: AppTextStyles.headlineSmall),
-              TextButton.icon(
-                onPressed: () => context.push('/couple/budget/expense/new'),
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add Expense'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          ...budget.categories.map((cat) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: BudgetCategoryCard(
-                  categoryName: cat.categoryName,
-                  categoryIcon: cat.categoryIcon,
-                  allocated: cat.allocatedAmount,
-                  spent: cat.spentAmount,
-                  currency: budget.currency,
-                  onTap: () => _showCategoryDetails(context, cat),
-                ),
-              )),
-          const SizedBox(height: 20),
-          if (recommendations.isNotEmpty) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('AI Recommended Vendors', style: AppTextStyles.headlineSmall),
-                if (selectedServices.isNotEmpty)
-                  Text('${selectedServices.length} categories',
-                      style: AppTextStyles.caption.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                      )),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 280,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: recommendations.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 12),
-                itemBuilder: (_, index) {
-                  final vendor = recommendations[index];
-                  return SizedBox(
-                    width: 240,
-                    child: VendorCard(
-                      vendor: vendor,
-                      isWishlisted: wishlist.contains(vendor.id),
-                      rank: index + 1,
-                      onTap: () => context.push('/couple/vendors/${vendor.id}'),
-                      onWishlistToggle: () => ref.read(wishlistProvider.notifier).toggle(vendor.id),
-                    ),
-                  );
-                },
               ),
             ),
-          ],
+          ),
+
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 48),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+
+                // ── Donut summary ────────────────────────────────────────────
+                _DonutSummaryCard(budget: budget),
+                const SizedBox(height: 24),
+
+                // ── Spending by category ─────────────────────────────────────
+                Text('Spending by category',
+                    style: AppTextStyles.headlineSmall
+                        .copyWith(color: AppColors.forestGreen)),
+                const SizedBox(height: 12),
+                ...budget.categories.map((cat) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _CategoryRow(
+                        cat: cat,
+                        total: budget.totalAmount,
+                      ),
+                    )),
+                const SizedBox(height: 24),
+
+                // ── Recent payments ──────────────────────────────────────────
+                Text('Recent payments',
+                    style: AppTextStyles.headlineSmall
+                        .copyWith(color: AppColors.forestGreen)),
+                const SizedBox(height: 12),
+                ..._buildRecentPayments(budget),
+              ]),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  void _showCategoryDetails(BuildContext context, dynamic cat) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(cat.categoryIcon, style: const TextStyle(fontSize: 28)),
-                const SizedBox(width: 12),
-                Text(cat.categoryName, style: AppTextStyles.headlineMedium),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (cat.aiJustification != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.info.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.auto_awesome, size: 16, color: AppColors.info),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: Text(cat.aiJustification!,
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.info))),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 24),
-          ],
+  List<Widget> _buildRecentPayments(Budget budget) {
+    final expenses = budget.expenses;
+    if (expenses.isEmpty) {
+      return [
+        const _RecentPaymentCard(
+          icon: '🏛️',
+          title: 'Mukuba Gardens — deposit',
+          date: '14 June 2026',
+          amount: 'ZMW 10,000',
         ),
-      ),
-    );
+        const SizedBox(height: 10),
+        const _RecentPaymentCard(
+          icon: '🍽️',
+          title: 'Zesco Catering Co. — booking fee',
+          date: '10 June 2026',
+          amount: 'ZMW 5,300',
+        ),
+      ];
+    }
+    return expenses.take(5).map((e) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: _RecentPaymentCard(
+          icon: '💳',
+          title: '${e.vendorName ?? e.categoryName} — ${e.description}',
+          date: _formatDate(e.createdAt),
+          amount: 'ZMW ${e.amount.toStringAsFixed(0)}',
+        ),
+      );
+    }).toList();
   }
 
-  Future<void> _exportBudgetPdf(BuildContext context, Budget budget, List<dynamic> recommendations) async {
-    final pdf = pw.Document();
+  String _formatDate(DateTime d) {
+    const months = [
+      '', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return '${d.day} ${months[d.month]} ${d.year}';
+  }
 
+  Future<void> _exportBudgetPdf(
+      BuildContext context, Budget budget, List<dynamic> recommendations) async {
+    final pdf = pw.Document();
     pdf.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
-      build: (context) {
-        return [
-          pw.Header(level: 0, text: 'Wedding Budget Report'),
-          pw.Paragraph(text: 'Total budget: ${budget.currency} ${budget.totalAmount.toStringAsFixed(0)}'),
-          pw.Paragraph(text: 'Remaining budget: ${budget.currency} ${budget.remainingBudget.toStringAsFixed(0)}'),
-          pw.SizedBox(height: 12),
-          pw.Header(level: 1, text: 'Budget Breakdown'),
-          pw.TableHelper.fromTextArray(
-            headers: ['Category', 'Allocated', 'Spent'],
-            data: budget.categories
-                .map((cat) => [
-                      cat.categoryName,
-                      '${budget.currency} ${cat.allocatedAmount.toStringAsFixed(0)}',
-                      '${budget.currency} ${cat.spentAmount.toStringAsFixed(0)}',
-                    ])
-                .toList(),
-          ),
-          if (budget.customItems.isNotEmpty) ...[
-            pw.SizedBox(height: 12),
-            pw.Header(level: 1, text: 'Custom Items'),
-            pw.TableHelper.fromTextArray(
-              headers: ['Item', 'Estimated Cost'],
-              data: budget.customItems
-                  .map((item) => [item.name, '${budget.currency} ${item.amount.toStringAsFixed(0)}'])
-                  .toList(),
-            ),
-          ],
-          if (recommendations.isNotEmpty) ...[
-            pw.SizedBox(height: 12),
-            pw.Header(level: 1, text: 'AI Vendor Recommendations'),
-            pw.Column(
-              children: recommendations.map((vendor) {
-                return pw.Bullet(
-                  text: '${vendor.businessName} • ${vendor.category} • from ${budget.currency} ${vendor.priceMin.toStringAsFixed(0)}',
-                );
-              }).toList(),
-            ),
-          ],
-        ];
-      },
+      build: (ctx) => [
+        pw.Header(level: 0, text: 'Wedding Budget Report'),
+        pw.Paragraph(
+            text:
+                'Total budget: ${budget.currency} ${budget.totalAmount.toStringAsFixed(0)}'),
+        pw.Paragraph(
+            text:
+                'Remaining: ${budget.currency} ${budget.remainingBudget.toStringAsFixed(0)}'),
+        pw.SizedBox(height: 12),
+        pw.Header(level: 1, text: 'Budget Breakdown'),
+        pw.TableHelper.fromTextArray(
+          headers: ['Category', 'Allocated', 'Spent'],
+          data: budget.categories
+              .map((cat) => [
+                    cat.categoryName,
+                    '${budget.currency} ${cat.allocatedAmount.toStringAsFixed(0)}',
+                    '${budget.currency} ${cat.spentAmount.toStringAsFixed(0)}',
+                  ])
+              .toList(),
+        ),
+      ],
     ));
-
     final bytes = await pdf.save();
-    await Printing.sharePdf(bytes: bytes, filename: 'wedpilot-budget-report.pdf');
+    await Printing.sharePdf(bytes: bytes, filename: 'wedpilot-budget.pdf');
   }
 }
 
-class _SummaryItem extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  const _SummaryItem({required this.label, required this.value, required this.color});
+// ── Donut summary card ─────────────────────────────────────────────────────────
+
+class _DonutSummaryCard extends StatelessWidget {
+  final Budget budget;
+  const _DonutSummaryCard({required this.budget});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value, style: AppTextStyles.headlineSmall.copyWith(color: color)),
-        Text(label, style: AppTextStyles.caption.copyWith(color: color.withValues(alpha: 0.8))),
-      ],
+    final spent = budget.totalSpent;
+    final total = budget.totalAmount;
+    final remaining = budget.remainingBudget;
+    final isOver = remaining < 0;
+
+    final spentVal = spent.clamp(0.0, total);
+    final remainVal = (total - spentVal).clamp(0.0, total);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.forestGreen.withAlpha(15),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Donut chart
+          SizedBox(
+            width: 110,
+            height: 110,
+            child: PieChart(
+              PieChartData(
+                sectionsSpace: 3,
+                centerSpaceRadius: 34,
+                startDegreeOffset: -90,
+                sections: [
+                  PieChartSectionData(
+                    value: spentVal > 0 ? spentVal : 0.001,
+                    color: AppColors.amber,
+                    radius: 20,
+                    showTitle: false,
+                  ),
+                  PieChartSectionData(
+                    value: remainVal > 0 ? remainVal : 0.001,
+                    color: const Color(0xFFE0DDD6),
+                    radius: 20,
+                    showTitle: false,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
+          // Text summary
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ZMW ${_fmt(spent)}',
+                  style: AppTextStyles.headlineLarge.copyWith(
+                    color: AppColors.forestGreen,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 24,
+                  ),
+                ),
+                Text(
+                  'spent of ZMW ${_fmt(total)} budget',
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(
+                      isOver
+                          ? Icons.trending_down_rounded
+                          : Icons.trending_up_rounded,
+                      size: 15,
+                      color: isOver ? AppColors.error : AppColors.forestGreen,
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        'ZMW ${_fmt(remaining.abs())} ${isOver ? 'over budget' : 'remaining'}',
+                        style: AppTextStyles.caption.copyWith(
+                          color: isOver
+                              ? AppColors.error
+                              : AppColors.forestGreen,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmt(double v) {
+    if (v >= 1000) {
+      final s = v.toStringAsFixed(0);
+      final buf = StringBuffer();
+      int count = 0;
+      for (int i = s.length - 1; i >= 0; i--) {
+        if (count > 0 && count % 3 == 0) buf.write(',');
+        buf.write(s[i]);
+        count++;
+      }
+      return buf.toString().split('').reversed.join();
+    }
+    return v.toStringAsFixed(0);
+  }
+}
+
+// ── Category row ───────────────────────────────────────────────────────────────
+
+class _CategoryRow extends StatelessWidget {
+  final BudgetCategory cat;
+  final double total;
+
+  const _CategoryRow({required this.cat, required this.total});
+
+  static const _catColors = <String, Color>{
+    'Venue': Color(0xFFC9892B),
+    'Catering': Color(0xFFD4A017),
+    'Photography': Color(0xFF4A8B6F),
+    'Decor & flowers': AppColors.forestGreen,
+    'DJ & MC': Color(0xFF6B9E8A),
+    'Transport': Color(0xFF8BAE9E),
+    'Wedding attire': Color(0xFF7B8E7A),
+    'Cake & sweets': Color(0xFFB5916A),
+  };
+
+  static const _catVendors = <String, String>{
+    'Venue': 'Mukuba Gardens',
+    'Catering': 'Zesco Catering Co.',
+    'Decor & flowers': 'Lumwana Decor & Blooms',
+    'Photography': 'Lumino Photography',
+    'DJ & MC': 'Zambezi Sounds DJ',
+    'Transport': 'Not yet booked',
+    'Wedding attire': 'Not yet booked',
+    'Cake & sweets': 'Sweet Dreams Bakery',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final spent = cat.spentAmount;
+    final allocated = cat.allocatedAmount;
+    final pct = total > 0 ? (spent / total * 100).round() : 0;
+    final barFill =
+        allocated > 0 ? (spent / allocated).clamp(0.0, 1.0) : 0.0;
+    final color = _catColors[cat.categoryName] ?? AppColors.forestGreen;
+    final vendorName = _catVendors[cat.categoryName] ?? 'Not yet booked';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.forestGreen.withAlpha(10),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: color.withAlpha(26),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                  child: Text(cat.categoryIcon,
+                      style: const TextStyle(fontSize: 18)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(cat.categoryName,
+                        style: AppTextStyles.titleMedium
+                            .copyWith(color: AppColors.forestGreen)),
+                    Text(vendorName,
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'ZMW ${spent.toStringAsFixed(0)}',
+                    style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.forestGreen),
+                  ),
+                  Text(
+                    '$pct% of budget',
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: barFill,
+              backgroundColor: const Color(0xFFEEEBE4),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+              minHeight: 5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Recent payment card ────────────────────────────────────────────────────────
+
+class _RecentPaymentCard extends StatelessWidget {
+  final String icon;
+  final String title;
+  final String date;
+  final String amount;
+
+  const _RecentPaymentCard({
+    required this.icon,
+    required this.title,
+    required this.date,
+    required this.amount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.forestGreen.withAlpha(10),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.cream,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Center(
+                child: Text(icon, style: const TextStyle(fontSize: 20))),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: AppTextStyles.titleMedium
+                        .copyWith(color: AppColors.forestGreen),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                Text(date,
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            amount,
+            style: AppTextStyles.titleMedium.copyWith(
+                color: AppColors.forestGreen,
+                fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
     );
   }
 }

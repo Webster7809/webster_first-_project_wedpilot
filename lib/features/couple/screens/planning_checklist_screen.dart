@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
@@ -73,7 +73,7 @@ class _PlanningChecklistScreenState
                     Text(
                       '$completed of ${tasks.length} tasks',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                        color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                       ),
                     ),
                   ],
@@ -81,7 +81,7 @@ class _PlanningChecklistScreenState
                 const SizedBox(height: 8),
                 LinearProgressIndicator(
                   value: progress,
-                  backgroundColor: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
+                  backgroundColor: Theme.of(context).colorScheme.outlineVariant.withAlpha(102),
                   valueColor:
                       AlwaysStoppedAnimation<Color>(AppColors.secondary),
                   minHeight: 8,
@@ -448,7 +448,7 @@ class _TaskTile extends StatelessWidget {
               decoration:
                   item.isCompleted ? TextDecoration.lineThrough : null,
               color: item.isCompleted
-                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)
+                  ? Theme.of(context).colorScheme.onSurface.withAlpha(128)
                   : Theme.of(context).colorScheme.onSurface,
             ),
           ),
@@ -458,14 +458,14 @@ class _TaskTile extends StatelessWidget {
                   style: AppTextStyles.caption.copyWith(
                     color: _isOverdue
                         ? AppColors.error
-                        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                        : Theme.of(context).colorScheme.onSurface.withAlpha(153),
                     fontWeight: _isOverdue ? FontWeight.w600 : FontWeight.normal,
                   ),
                 )
               : null,
           trailing: IconButton(
             icon: const Icon(Icons.edit_outlined, size: 18),
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
             onPressed: onEdit,
             tooltip: 'Edit task',
           ),
@@ -501,7 +501,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             'Tap "Add Task" to create your first planning task.',
             style: AppTextStyles.bodySmall.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
             ),
             textAlign: TextAlign.center,
           ),
@@ -680,7 +680,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                   children: [
                     Icon(Icons.calendar_today_outlined,
                         size: 18,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                        color: Theme.of(context).colorScheme.onSurface.withAlpha(153)),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -690,7 +690,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: _dueDate != null
                               ? Theme.of(context).colorScheme.onSurface
-                              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                              : Theme.of(context).colorScheme.onSurface.withAlpha(153),
                         ),
                       ),
                     ),
@@ -702,7 +702,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                         }),
                         child: Icon(Icons.close,
                             size: 16,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                            color: Theme.of(context).colorScheme.onSurface.withAlpha(153)),
                       ),
                   ],
                 ),

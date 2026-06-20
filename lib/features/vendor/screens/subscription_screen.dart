@@ -32,7 +32,7 @@ class SubscriptionScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Current Plan: Pro', style: AppTextStyles.headlineSmall),
-                      Text('Renews Dec 1, 2026 · \$49/month',
+                      Text('Renews Dec 1, 2026 · ZMW 490/month',
                           style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
                     ],
                   ),
@@ -47,7 +47,7 @@ class SubscriptionScreen extends StatelessWidget {
 
           _PlanCard(
             name: 'Free',
-            price: '\$0',
+            price: 'ZMW 0',
             period: '/month',
             features: const ['Limited profile visibility', '5 portfolio images', 'Basic lead inbox', 'Standard support'],
             isCurrent: false,
@@ -57,7 +57,7 @@ class SubscriptionScreen extends StatelessWidget {
           const SizedBox(height: 12),
           _PlanCard(
             name: 'Pro',
-            price: '\$49',
+            price: 'ZMW 490',
             period: '/month',
             features: const ['Full profile visibility', '50 images + 5 videos', 'AI match algorithm', 'Analytics dashboard', 'Priority support'],
             isCurrent: true,
@@ -67,7 +67,7 @@ class SubscriptionScreen extends StatelessWidget {
           const SizedBox(height: 12),
           _PlanCard(
             name: 'Premium',
-            price: '\$99',
+            price: 'ZMW 990',
             period: '/month',
             features: const ['Priority placement in search', 'Unlimited portfolio', 'Featured badge', 'Advanced analytics', 'Dedicated account manager'],
             isCurrent: false,

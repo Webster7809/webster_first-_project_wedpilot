@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -41,7 +41,7 @@ const Map<String, Color> _kColor = {
 
 const _kPlanLow = 'Low Budget Plan';
 const _kPlanMedium = 'Medium Budget Plan';
-const _kCurrency = 'K';
+const _kCurrency = 'ZMW';
 
 String _fmt(double v) => NumberFormat('#,##0').format(v.round());
 
@@ -289,16 +289,22 @@ class _BudgetSetupWizardState extends ConsumerState<BudgetSetupWizardScreen> {
     });
 
     return Scaffold(
+      backgroundColor: AppColors.cream,
       appBar: AppBar(
+        backgroundColor: AppColors.forestGreen,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: _step == 0
             ? null
             : IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+                icon: const Icon(Icons.arrow_back_ios_new,
+                    size: 18, color: Colors.white),
                 onPressed: () => setState(() => _step--),
               ),
-        title: Text(_titles[_step], style: AppTextStyles.headlineSmall),
+        title: Text(
+          _titles[_step],
+          style: AppTextStyles.headlineSmall.copyWith(color: Colors.white),
+        ),
       ),
       body: SafeArea(
         child: _buildStep(budgetState, aiRecs),
@@ -499,7 +505,7 @@ class _DetailsStep extends StatelessWidget {
                     style: AppTextStyles.bodyMedium,
                   ),
                   Icon(Icons.calendar_today_outlined,
-                      size: 18, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                      size: 18, color: Theme.of(context).colorScheme.onSurface.withAlpha(153)),
                 ],
               ),
             ),
@@ -553,7 +559,7 @@ class _PlansStep extends StatelessWidget {
           Text(
             'Choose Plans',
             style: AppTextStyles.bodyMedium.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                color: Theme.of(context).colorScheme.onSurface.withAlpha(153)),
             textAlign: TextAlign.center,
           ),
           const Spacer(),
@@ -586,16 +592,16 @@ class _PlanCard extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.secondary : Theme.of(context).colorScheme.surface,
+            color: isSelected ? AppColors.forestGreen : Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: isSelected ? AppColors.secondary : Theme.of(context).colorScheme.outlineVariant,
+              color: isSelected ? AppColors.forestGreen : Theme.of(context).colorScheme.outlineVariant,
               width: isSelected ? 2 : 1,
             ),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: AppColors.secondary.withAlpha(40),
+                      color: AppColors.forestGreen.withAlpha(40),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     )
@@ -616,7 +622,7 @@ class _PlanCard extends StatelessWidget {
               Text(
                 price,
                 style: AppTextStyles.headlineMedium.copyWith(
-                  color: isSelected ? Colors.white : AppColors.secondary,
+                  color: isSelected ? Colors.white : AppColors.forestGreen,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -677,7 +683,7 @@ class _ServicesStep extends StatelessWidget {
                       ),
                     ),
                   ),
-                  activeColor: AppColors.secondary,
+                  activeColor: AppColors.forestGreen,
                   controlAffinity: ListTileControlAffinity.trailing,
                   contentPadding: EdgeInsets.zero,
                 );
@@ -729,7 +735,7 @@ class _ServicesStep extends StatelessWidget {
                 Text(
                   '$_kCurrency ${_fmt(budgetLeft)}',
                   style: AppTextStyles.headlineSmall
-                      .copyWith(color: AppColors.secondary),
+                      .copyWith(color: AppColors.forestGreen),
                 ),
               ],
             ),
@@ -786,7 +792,7 @@ class _AIBudgetStep extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             itemCount: preview.length,
-            separatorBuilder: (_, _) =>
+            separatorBuilder: (context, index) =>
                 const Divider(height: 1, indent: 44),
             itemBuilder: (_, i) {
               final item = preview[i];
@@ -816,11 +822,11 @@ class _AIBudgetStep extends StatelessWidget {
                     Text(
                       '$_kCurrency ${_fmt(item.amount)}',
                       style: AppTextStyles.bodyMedium
-                          .copyWith(color: AppColors.secondary),
+                          .copyWith(color: AppColors.forestGreen),
                     ),
                     const SizedBox(width: 8),
                     Icon(Icons.check_box,
-                        color: AppColors.secondary, size: 20),
+                        color: AppColors.amber, size: 20),
                   ],
                 ),
               );
@@ -903,7 +909,7 @@ class _RecommendationsStep extends ConsumerWidget {
                             Text(
                               bc.displayName,
                               style: AppTextStyles.caption.copyWith(
-                                color: selected ? Colors.white : cs.onSurface.withValues(alpha: 0.7),
+                                color: selected ? Colors.white : cs.onSurface.withAlpha(178),
                                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                               ),
                               textAlign: TextAlign.center,
@@ -920,7 +926,7 @@ class _RecommendationsStep extends ConsumerWidget {
               const SizedBox(height: 6),
               Text(
                 currentClass.subtitle,
-                style: AppTextStyles.caption.copyWith(color: cs.onSurface.withValues(alpha: 0.55)),
+                style: AppTextStyles.caption.copyWith(color: cs.onSurface.withAlpha(140)),
               ),
             ],
           ),
@@ -943,7 +949,7 @@ class _RecommendationsStep extends ConsumerWidget {
                         const SizedBox(height: 8),
                         Text('Try switching to Flexible mode to see all available vendors.',
                             style: AppTextStyles.bodySmall.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.6)),
+                                color: cs.onSurface.withAlpha(153)),
                             textAlign: TextAlign.center),
                       ],
                     ),
@@ -959,7 +965,7 @@ class _RecommendationsStep extends ConsumerWidget {
                         onPressed: onShowMore,
                         child: Text(
                           'SHOW MORE RECOMMENDATIONS ∨',
-                          style: AppTextStyles.labelLarge.copyWith(color: AppColors.secondary),
+                          style: AppTextStyles.labelLarge.copyWith(color: AppColors.amber),
                         ),
                       ),
                     ],
@@ -1006,7 +1012,7 @@ class _VendorRecommendationCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+        border: Border.all(color: cs.outlineVariant.withAlpha(128)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1075,7 +1081,7 @@ class _VendorRecommendationCard extends StatelessWidget {
                         Text(
                           vendor.description!,
                           style: AppTextStyles.caption.copyWith(
-                              color: cs.onSurface.withValues(alpha: 0.6)),
+                              color: cs.onSurface.withAlpha(153)),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1098,7 +1104,7 @@ class _VendorRecommendationCard extends StatelessWidget {
                             Expanded(
                               child: Text(vendor.location!,
                                   style: AppTextStyles.caption.copyWith(
-                                      color: cs.onSurface.withValues(alpha: 0.5)),
+                                      color: cs.onSurface.withAlpha(128)),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis),
                             ),
@@ -1129,7 +1135,7 @@ class _VendorRecommendationCard extends StatelessWidget {
                     child: Text(
                       match.reasoning!,
                       style: AppTextStyles.caption.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.7)),
+                          color: cs.onSurface.withAlpha(178)),
                     ),
                   ),
                 ],
@@ -1153,16 +1159,16 @@ class _RecsLoadingView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.auto_awesome, size: 48, color: AppColors.secondary),
+          const Icon(Icons.auto_awesome, size: 48, color: AppColors.amber),
           const SizedBox(height: 20),
           Text('AI is ranking vendors…', style: AppTextStyles.headlineSmall),
           const SizedBox(height: 8),
           Text('Applying your budget class preferences',
               style: AppTextStyles.bodySmall.copyWith(
-                  color: cs.onSurface.withValues(alpha: 0.6))),
+                  color: cs.onSurface.withAlpha(153))),
           const SizedBox(height: 24),
           const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondary)),
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.forestGreen)),
         ],
       ),
     );
@@ -1197,17 +1203,17 @@ class _DownloadReportStep extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
-              color: AppColors.secondary.withAlpha(15),
+              color: AppColors.forestGreen.withAlpha(12),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: AppColors.secondary.withAlpha(40)),
+                  color: AppColors.forestGreen.withAlpha(40)),
             ),
             child: Column(
               children: [
                 Text(
                   'WEDDING BUDGET SUMMARY',
                   style: AppTextStyles.headlineSmall.copyWith(
-                    color: AppColors.secondary,
+                    color: AppColors.amber,
                     letterSpacing: 1.2,
                   ),
                   textAlign: TextAlign.center,
@@ -1217,7 +1223,7 @@ class _DownloadReportStep extends StatelessWidget {
                   Text(
                     'Total: $_kCurrency ${_fmt(budget.totalAmount)}',
                     style: AppTextStyles.displaySmall
-                        .copyWith(color: AppColors.secondary),
+                        .copyWith(color: AppColors.forestGreen),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -1318,12 +1324,12 @@ class _SectionHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08),
+        color: Theme.of(context).colorScheme.onSurface.withAlpha(20),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(title,
           style: AppTextStyles.labelLarge.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+              color: Theme.of(context).colorScheme.onSurface.withAlpha(153))),
     );
   }
 }
@@ -1364,14 +1370,14 @@ class _ReportRow extends StatelessWidget {
                 if (sublabel != null)
                   Text(sublabel!,
                       style: AppTextStyles.caption.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
+                          color: Theme.of(context).colorScheme.onSurface.withAlpha(128))),
               ],
             ),
           ),
           Text(
             value,
             style: labelStyle.copyWith(
-              color: valueColor ?? AppColors.secondary,
+              color: valueColor ?? AppColors.forestGreen,
             ),
           ),
         ],
@@ -1390,7 +1396,7 @@ class _EmptySection extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Text(label,
           style: AppTextStyles.bodySmall.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
+              color: Theme.of(context).colorScheme.onSurface.withAlpha(128))),
     );
   }
 }
@@ -1427,7 +1433,7 @@ class _BudgetClassStep extends StatelessWidget {
                 Text(
                   'Our AI will tailor every vendor recommendation to match your budget class.',
                   style: AppTextStyles.bodySmall.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.6)),
+                      color: cs.onSurface.withAlpha(153)),
                 ),
                 const SizedBox(height: 20),
                 ...BudgetClass.values.map(
@@ -1533,7 +1539,7 @@ class _BudgetClassCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(budgetClass.description,
                       style: AppTextStyles.bodySmall.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.65))),
+                          color: cs.onSurface.withAlpha(166))),
                   const SizedBox(height: 10),
                   // Feature bullets
                   ...budgetClass.features.map(
@@ -1545,7 +1551,7 @@ class _BudgetClassCard extends StatelessWidget {
                           const SizedBox(width: 6),
                           Text(f,
                               style: AppTextStyles.caption.copyWith(
-                                  color: cs.onSurface.withValues(alpha: 0.75))),
+                                  color: cs.onSurface.withAlpha(191))),
                         ],
                       ),
                     ),
@@ -1579,9 +1585,9 @@ class _PrimaryButton extends StatelessWidget {
       width: double.infinity,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.secondary,
-          disabledBackgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 13),
+          backgroundColor: AppColors.forestGreen,
+          disabledBackgroundColor: AppColors.forestGreen.withAlpha(80),
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30)),
           elevation: 0,

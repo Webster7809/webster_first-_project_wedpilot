@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -89,6 +89,14 @@ class _ColorCategory {
   const _ColorCategory(this.name, this.swatches);
 }
 
+const _cardThemeColors = [
+  Color(0xFF1B3A2D), // Forest green
+  Color(0xFF00695C), // Deep teal
+  Color(0xFF8B1A1A), // Wine/crimson
+  Color(0xFF4A148C), // Deep purple
+  Color(0xFFBF360C), // Deep orange
+];
+
 final _colorCategories = <_ColorCategory>[
   _ColorCategory('Romantic', [
     _ColorSwatch('Blush', const Color(0xFFF06292)),
@@ -165,7 +173,8 @@ class _InvitationEditorScreenState
   String? _expandedSection;
 
   // Editor panel & image transform state
-  bool _editorOpen = false;
+  int _selectedTab = 0; // 0=Photo 1=Text 2=Font 3=Color 4=Layout
+  Color _cardBgColor = AppColors.forestGreen;
   double _imageScale = 1.0;
   Offset _imageOffset = Offset.zero;
 
@@ -406,7 +415,7 @@ class _InvitationEditorScreenState
           Container(
             width: 64, height: 64,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.09),
+              color: color.withAlpha(23),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 28),
@@ -441,10 +450,17 @@ class _InvitationEditorScreenState
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
+        leading: const BackButton(),
         title: Text(
-          'Design Your Invitation',
-          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
+          'INVITATION CARD',
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.8,
+            color: AppColors.amber,
+          ),
         ),
+        centerTitle: true,
         backgroundColor: theme.colorScheme.surface,
         foregroundColor: theme.colorScheme.onSurface,
         elevation: 0,
@@ -453,27 +469,29 @@ class _InvitationEditorScreenState
           child: Container(height: 1, color: theme.dividerColor),
         ),
         actions: [
-          // Editor sections toggle — narrow layout only
-          if (!isWide) _buildEditorToggle(theme),
-          if (widget.invitationId != null)
-            TextButton(
-              onPressed: () {
-                _saveEdits();
-                showWedSnackBar(context, 'Saved!', type: SnackType.success);
-              },
-              style: TextButton.styleFrom(
-                  foregroundColor:
-                      theme.colorScheme.onSurface.withValues(alpha: 0.7)),
-              child: Text('Save',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: ElevatedButton.icon(
+              onPressed: _saveAndShare,
+              icon: const Icon(Icons.share_rounded, size: 14),
+              label: Text(
+                'Share',
+                style: GoogleFonts.inter(
+                    fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.forestGreen,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                elevation: 0,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
-          TextButton.icon(
-            onPressed: _saveAndShare,
-            icon: const Icon(Icons.share_rounded, size: 16),
-            label: Text('Share',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            style:
-                TextButton.styleFrom(foregroundColor: AppColors.secondary),
           ),
         ],
       ),
@@ -483,161 +501,267 @@ class _InvitationEditorScreenState
     );
   }
 
-  // ── Narrow (mobile) — full-screen card with floating right-side editor panel ─
+  // ── Narrow (mobile) — preview + bottom tab bar + content panel ──────────────
   Widget _buildNarrowLayout(ThemeData theme, double screenWidth) {
-    final panelWidth = (screenWidth * 0.82).clamp(260.0, 350.0);
-    return Stack(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Full-screen invitation card preview
-        Positioned.fill(child: _buildPreview()),
-
-        // Tap-outside scrim to close editor
-        if (_editorOpen)
-          Positioned(
-            top: 0, left: 0, bottom: 0,
-            right: panelWidth,
-            child: GestureDetector(
-              onTap: () => setState(() => _editorOpen = false),
-              behavior: HitTestBehavior.opaque,
-              child: const SizedBox.expand(),
-            ),
-          ),
-
-        // Animated floating editor panel sliding from right
-        AnimatedPositioned(
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOutCubic,
-          top: 0,
-          bottom: 0,
-          right: _editorOpen ? 0 : -panelWidth,
-          width: panelWidth,
-          child: Container(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface.withValues(alpha: 0.97),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.22),
-                  blurRadius: 24,
-                  offset: const Offset(-6, 0),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Panel header
-                Container(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-                  decoration: BoxDecoration(
-                    color: _accentColor.withValues(alpha: 0.06),
-                    border: Border(
-                        bottom: BorderSide(color: theme.dividerColor)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.tune_rounded,
-                          size: 15, color: _accentColor),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Editor Sections',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: _accentColor,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.close_rounded,
-                            size: 18,
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.55)),
-                        onPressed: () =>
-                            setState(() => _editorOpen = false),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                            minWidth: 32, minHeight: 32),
-                      ),
-                    ],
-                  ),
-                ),
-                // Accordion sections
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: _buildAccordionColumn(theme),
-                  ),
-                ),
-              ],
-            ),
+        Expanded(child: _buildPreview()),
+        _buildTabBar(theme),
+        SizedBox(
+          height: 268,
+          child: SingleChildScrollView(
+            child: _buildTabContent(theme),
           ),
         ),
       ],
     );
   }
 
-  // ── Editor toggle button (shown in AppBar for narrow layout only) ─────────
-  Widget _buildEditorToggle(ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 4),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () => setState(() => _editorOpen = !_editorOpen),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: _editorOpen
-                  ? _accentColor.withValues(alpha: 0.12)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-              border: _editorOpen
-                  ? Border.all(
-                      color: _accentColor.withValues(alpha: 0.3))
-                  : null,
+  // ── Tab bar ───────────────────────────────────────────────────────────────
+  Widget _buildTabBar(ThemeData theme) {
+    const tabs = [
+      (icon: Icons.camera_alt_rounded, label: 'Photo'),
+      (icon: Icons.text_fields_rounded, label: 'Text'),
+      (icon: Icons.font_download_rounded, label: 'Font'),
+      (icon: Icons.palette_rounded, label: 'Color'),
+      (icon: Icons.grid_view_rounded, label: 'Layout'),
+    ];
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: theme.dividerColor),
+          bottom: BorderSide(color: theme.dividerColor),
+        ),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < tabs.length; i++)
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _selectedTab = i),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  color: _selectedTab == i
+                      ? AppColors.forestGreen
+                      : Colors.transparent,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        tabs[i].icon,
+                        size: 20,
+                        color: _selectedTab == i
+                            ? AppColors.amber
+                            : theme.colorScheme.onSurface.withAlpha(153),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        tabs[i].label,
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: _selectedTab == i
+                              ? AppColors.amber
+                              : theme.colorScheme.onSurface.withAlpha(153),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.tune_rounded,
-                    size: 14,
-                    color: _editorOpen
-                        ? _accentColor
-                        : theme.colorScheme.onSurface
-                            .withValues(alpha: 0.65)),
-                const SizedBox(width: 4),
-                Text(
-                  'Edit',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _editorOpen
-                        ? _accentColor
-                        : theme.colorScheme.onSurface
-                            .withValues(alpha: 0.65),
-                  ),
+        ],
+      ),
+    );
+  }
+
+  // ── Tab content dispatch ──────────────────────────────────────────────────
+  Widget _buildTabContent(ThemeData theme) {
+    return switch (_selectedTab) {
+      0 => _buildPhotoTabContent(theme),
+      1 => _buildDetailsContent(theme),
+      2 => _buildFontContent(theme),
+      3 => _buildStyleContent(theme),
+      _ => _buildLayoutTabContent(theme),
+    };
+  }
+
+  // ── Photo tab: card colour theme + heading font ───────────────────────────
+  Widget _buildPhotoTabContent(ThemeData theme) {
+    final hasPhoto = _backgroundImageBytes != null;
+    final displayName = _nameCtrl.text.trim().isEmpty
+        ? 'Chanda & Mwila'
+        : _nameCtrl.text.trim();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Photo import button
+          GestureDetector(
+            onTap: _showImageSourceSheet,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              decoration: BoxDecoration(
+                color: hasPhoto
+                    ? AppColors.success.withAlpha(20)
+                    : AppColors.secondary.withAlpha(18),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color:
+                      hasPhoto ? AppColors.success : AppColors.secondary,
+                  width: 1.2,
                 ),
-                const SizedBox(width: 2),
-                AnimatedRotation(
-                  turns: _editorOpen ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    hasPhoto
+                        ? Icons.check_circle_rounded
+                        : Icons.add_photo_alternate_rounded,
+                    color: hasPhoto
+                        ? AppColors.success
+                        : AppColors.secondary,
                     size: 16,
-                    color: _editorOpen
-                        ? _accentColor
-                        : theme.colorScheme.onSurface
-                            .withValues(alpha: 0.45),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      hasPhoto
+                          ? 'Photo added — tap to change'
+                          : 'Import a Photo for Your Card',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: hasPhoto
+                            ? AppColors.success
+                            : AppColors.secondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+
+          // Card colour theme
+          Text(
+            'Card colour theme',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (final clr in _cardThemeColors)
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _cardBgColor = clr),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: clr,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _cardBgColor.toARGB32() == clr.toARGB32()
+                              ? theme.colorScheme.onSurface
+                              : Colors.transparent,
+                          width: 2.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: clr.withAlpha(
+                                _cardBgColor.toARGB32() == clr.toARGB32()
+                                    ? 100
+                                    : 40),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: _cardBgColor.toARGB32() == clr.toARGB32()
+                          ? const Icon(Icons.check_rounded,
+                              color: Colors.white, size: 16)
+                          : null,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
+
+          // Heading font
+          Text(
+            'Heading font',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (var i = 0; i < _fontOptions.length.clamp(0, 3); i++) ...[
+            GestureDetector(
+              onTap: () => setState(() => _selectedFont = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: i == _selectedFont
+                      ? AppColors.amber.withAlpha(31)
+                      : theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: i == _selectedFont
+                        ? AppColors.amber
+                        : theme.dividerColor,
+                    width: i == _selectedFont ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  displayName,
+                  style: _fontOptions[i]
+                      .style(16, theme.colorScheme.onSurface),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Layout tab placeholder ────────────────────────────────────────────────
+  Widget _buildLayoutTabContent(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        children: [
+          Icon(Icons.grid_view_rounded,
+              size: 40,
+              color: theme.colorScheme.onSurface.withAlpha(80)),
+          const SizedBox(height: 12),
+          Text(
+            'Layout options coming soon',
+            style: AppTextStyles.bodySmall
+                .copyWith(color: AppColors.textSecondary),
+          ),
+        ],
       ),
     );
   }
@@ -765,6 +889,7 @@ class _InvitationEditorScreenState
         churchTime: _churchTimeCtrl.text,
         giftType: _giftTypeCtrl.text,
         color: _accentColor,
+        cardBgColor: _cardBgColor,
         fontOption: _fontOptions[_selectedFont],
         fontSize: _fontSize,
         backgroundImageBytes: _backgroundImageBytes,
@@ -835,8 +960,8 @@ class _InvitationEditorScreenState
                   vertical: 10, horizontal: 12),
               decoration: BoxDecoration(
                 color: hasPhoto
-                    ? AppColors.success.withValues(alpha: 0.08)
-                    : AppColors.secondary.withValues(alpha: 0.07),
+                    ? AppColors.success.withAlpha(20)
+                    : AppColors.secondary.withAlpha(18),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: hasPhoto
@@ -908,7 +1033,7 @@ class _InvitationEditorScreenState
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: _accentColor.withValues(alpha: 0.1),
+                          color: _accentColor.withAlpha(26),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -927,7 +1052,7 @@ class _InvitationEditorScreenState
                       activeTrackColor: _accentColor,
                       thumbColor: _accentColor,
                       inactiveTrackColor:
-                          _accentColor.withValues(alpha: 0.2),
+                          _accentColor.withAlpha(51),
                       trackHeight: 3,
                       thumbShape: const RoundSliderThumbShape(
                           enabledThumbRadius: 7),
@@ -950,7 +1075,7 @@ class _InvitationEditorScreenState
                           style: GoogleFonts.inter(
                               fontSize: 9,
                               color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.4))),
+                                  .withAlpha(102))),
                       if (_imageOffset != Offset.zero || _imageScale != 1.0)
                         GestureDetector(
                           onTap: () => setState(() {
@@ -970,7 +1095,7 @@ class _InvitationEditorScreenState
                           style: GoogleFonts.inter(
                               fontSize: 9,
                               color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.4))),
+                                  .withAlpha(102))),
                     ],
                   ),
                   const SizedBox(height: 2),
@@ -979,7 +1104,7 @@ class _InvitationEditorScreenState
                     style: GoogleFonts.inter(
                       fontSize: 10,
                       color: theme.colorScheme.onSurface
-                          .withValues(alpha: 0.45),
+                          .withAlpha(115),
                     ),
                   ),
                 ],
@@ -1104,7 +1229,7 @@ class _InvitationEditorScreenState
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.2,
                         color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.55),
+                            .withAlpha(140),
                       ),
                     ),
                     const Spacer(),
@@ -1112,7 +1237,7 @@ class _InvitationEditorScreenState
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 3),
                       decoration: BoxDecoration(
-                        color: _accentColor.withValues(alpha: 0.1),
+                        color: _accentColor.withAlpha(26),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -1135,7 +1260,7 @@ class _InvitationEditorScreenState
                         color: _fontSize > 18
                             ? _accentColor
                             : theme.colorScheme.onSurface
-                                .withValues(alpha: 0.3),
+                                .withAlpha(76),
                       ),
                       iconSize: 22,
                       onPressed: _fontSize > 18
@@ -1152,7 +1277,7 @@ class _InvitationEditorScreenState
                           activeTrackColor: _accentColor,
                           thumbColor: _accentColor,
                           inactiveTrackColor:
-                              _accentColor.withValues(alpha: 0.2),
+                              _accentColor.withAlpha(51),
                           trackHeight: 3,
                           thumbShape: const RoundSliderThumbShape(
                               enabledThumbRadius: 8),
@@ -1174,7 +1299,7 @@ class _InvitationEditorScreenState
                         color: _fontSize < 48
                             ? _accentColor
                             : theme.colorScheme.onSurface
-                                .withValues(alpha: 0.3),
+                                .withAlpha(76),
                       ),
                       iconSize: 22,
                       onPressed: _fontSize < 48
@@ -1233,7 +1358,7 @@ class _InvitationEditorScreenState
           Text(
             'Sets the primary colour for text and decorations on your invitation.',
             style: AppTextStyles.bodySmall.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              color: theme.colorScheme.onSurface.withAlpha(153),
             ),
           ),
           const SizedBox(height: 16),
@@ -1289,7 +1414,7 @@ class _InvitationEditorScreenState
                           'Mix your own with RGB controls',
                           style: AppTextStyles.caption.copyWith(
                             color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.55),
+                                .withAlpha(140),
                           ),
                         ),
                       ],
@@ -1307,7 +1432,7 @@ class _InvitationEditorScreenState
                   Icon(Icons.arrow_forward_ios_rounded,
                       size: 14,
                       color: theme.colorScheme.onSurface
-                          .withValues(alpha: 0.4)),
+                          .withAlpha(102)),
                 ],
               ),
             ),
@@ -1386,7 +1511,7 @@ class _AccordionSection extends StatelessWidget {
       children: [
         Material(
           color: isExpanded
-              ? accentColor.withValues(alpha: 0.06)
+              ? accentColor.withAlpha(15)
               : Colors.transparent,
           child: InkWell(
             onTap: () => onToggle(isExpanded ? null : id),
@@ -1399,16 +1524,16 @@ class _AccordionSection extends StatelessWidget {
                     width: 34, height: 34,
                     decoration: BoxDecoration(
                       color: isExpanded
-                          ? accentColor.withValues(alpha: 0.15)
+                          ? accentColor.withAlpha(38)
                           : theme.colorScheme.onSurface
-                              .withValues(alpha: 0.07),
+                              .withAlpha(18),
                       borderRadius: BorderRadius.circular(9),
                     ),
                     child: Icon(icon, size: 16,
                         color: isExpanded
                             ? accentColor
                             : theme.colorScheme.onSurface
-                                .withValues(alpha: 0.5)),
+                                .withAlpha(128)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1430,7 +1555,7 @@ class _AccordionSection extends StatelessWidget {
                           style: GoogleFonts.inter(
                             fontSize: 11,
                             color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.5),
+                                .withAlpha(128),
                           ),
                         ),
                       ],
@@ -1445,7 +1570,7 @@ class _AccordionSection extends StatelessWidget {
                       color: isExpanded
                           ? accentColor
                           : theme.colorScheme.onSurface
-                              .withValues(alpha: 0.4),
+                              .withAlpha(102),
                     ),
                   ),
                 ],
@@ -1473,6 +1598,7 @@ class _InvitationPreview extends StatefulWidget {
   final String names, subtitle, date, time, venue, receptionVenue, rsvpBy,
       contact, dressCode, message, churchTheme, churchTime, giftType;
   final Color color;
+  final Color cardBgColor;
   final _FontOption fontOption;
   final double fontSize;
   final Uint8List? backgroundImageBytes;
@@ -1496,6 +1622,7 @@ class _InvitationPreview extends StatefulWidget {
     required this.churchTime,
     required this.giftType,
     required this.color,
+    required this.cardBgColor,
     required this.fontOption,
     required this.fontSize,
     required this.onPhotoTap,
@@ -1544,38 +1671,22 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
     setState(() => _gestureActive = false);
   }
 
-  Widget _dot(Color c) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Container(
-            width: 1, height: 8, color: c.withValues(alpha: 0.4)),
-      );
-
   @override
   Widget build(BuildContext context) {
     final hasPhoto = widget.backgroundImageBytes != null;
-    final textColor = hasPhoto ? Colors.white : widget.color;
-    final subColor = hasPhoto
-        ? Colors.white.withValues(alpha: 0.85)
-        : widget.color.withValues(alpha: 0.7);
-    final metaColor = hasPhoto
-        ? Colors.white.withValues(alpha: 0.75)
-        : AppColors.textSecondary;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // White background
-        Positioned.fill(child: Container(color: Colors.white)),
-
-        // No-photo gradient
-        if (!hasPhoto)
+        // ── No-photo: dark themed card ──────────────────────────────────
+        if (!hasPhoto) ...[
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    widget.color.withValues(alpha: 0.08),
-                    widget.color.withValues(alpha: 0.02),
+                    widget.cardBgColor,
+                    _darkenColor(widget.cardBgColor, 0.22),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -1583,12 +1694,39 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
               ),
             ),
           ),
+          // Decorative gold circle ring
+          Positioned.fill(
+            child: IgnorePointer(
+              child: LayoutBuilder(
+                builder: (_, bc) {
+                  final sz = bc.maxWidth * 0.76;
+                  return Align(
+                    alignment: const Alignment(0, -0.1),
+                    child: SizedBox(
+                      width: sz,
+                      height: sz,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFD4A854).withAlpha(120),
+                            width: 0.8,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          // Card content
+          Positioned.fill(child: _buildDarkCardContent()),
+        ],
 
-        // Photo layer — fitWidth fills the card edge-to-edge with no side bars.
-        // Alignment.center frames the middle of the photo on upload so nothing is
-        // force-cropped; user drags down to reveal the top (head) or up to reveal
-        // the bottom (dress/feet), and pinches to zoom in.
-        if (hasPhoto)
+        // ── Photo mode ──────────────────────────────────────────────────
+        if (hasPhoto) ...[
+          Positioned.fill(child: Container(color: Colors.white)),
           Positioned.fill(
             child: GestureDetector(
               onScaleStart: _onScaleStart,
@@ -1612,17 +1750,14 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
               ),
             ),
           ),
-
-        // Overlay gradient for text legibility
-        if (hasPhoto)
           Positioned.fill(
             child: IgnorePointer(
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      widget.color.withValues(alpha: 0.45),
-                      Colors.black.withValues(alpha: 0.5),
+                      widget.color.withAlpha(115),
+                      Colors.black.withAlpha(128),
                     ],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -1631,20 +1766,15 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
               ),
             ),
           ),
-
-        // Pinch & drag hint — sits just above the accent bar
-        if (hasPhoto)
           Positioned(
-            bottom: 10,
-            left: 0,
-            right: 0,
+            bottom: 10, left: 0, right: 0,
             child: IgnorePointer(
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 9, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.42),
+                    color: Colors.black.withAlpha(107),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -1667,290 +1797,60 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
               ),
             ),
           ),
-
-        // Accent bar at bottom
-        Positioned(
-          bottom: 0, left: 0, right: 0,
-          child: Container(height: 3, color: widget.color),
-        ),
-
-        // ── All invitation text ──
-        Positioned.fill(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-            child: LayoutBuilder(
-              builder: (ctx, bc) => FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.center,
-                child: SizedBox(
-                  width: bc.maxWidth,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Opening line
-                      Text(
-                        widget.subtitle.isEmpty
-                            ? 'Together with their families'
-                            : widget.subtitle,
-                        style: GoogleFonts.inter(
-                          fontSize: 8,
-                          letterSpacing: 1.4,
-                          color: subColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: Container(height: 3, color: widget.color),
+          ),
+          // Photo-mode text overlay
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      widget.subtitle.isEmpty
+                          ? 'Together with their families'
+                          : widget.subtitle,
+                      style: GoogleFonts.inter(
+                        fontSize: 8,
+                        letterSpacing: 1.4,
+                        color: Colors.white.withAlpha(217),
+                        fontWeight: FontWeight.w500,
                       ),
-                      const SizedBox(height: 3),
-
-                      // Couple names
-                      Text(
-                        widget.names.isEmpty
-                            ? 'Couple Names'
-                            : widget.names,
-                        style: widget.fontOption
-                            .style(widget.fontSize, textColor),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.names.isEmpty ? 'Couple Names' : widget.names,
+                      style: widget.fontOption.style(widget.fontSize, Colors.white),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.date.isEmpty ? 'Wedding Date' : widget.date,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
                       ),
-                      const SizedBox(height: 4),
-
-                      // Divider
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                              width: 40,
-                              height: 0.8,
-                              color: textColor.withValues(alpha: 0.35)),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8),
-                            child: Icon(Icons.favorite_rounded,
-                                size: 9, color: textColor),
-                          ),
-                          Container(
-                              width: 40,
-                              height: 0.8,
-                              color: textColor.withValues(alpha: 0.35)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-
-                      // Date · Time
-                      Text(
-                        widget.time.isNotEmpty
-                            ? '${widget.date.isEmpty ? 'Wedding Date' : widget.date}  ·  ${widget.time}'
-                            : (widget.date.isEmpty
-                                ? 'Wedding Date'
-                                : widget.date),
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: textColor,
-                          letterSpacing: 0.3,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-
-                      // Church venue
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.church_rounded,
-                              size: 9, color: subColor),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              widget.venue.isEmpty
-                                  ? 'Church / Ceremony Venue'
-                                  : widget.venue,
-                              style: GoogleFonts.inter(
-                                  fontSize: 8.5, color: metaColor),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      // Church theme & service time
-                      if (widget.churchTheme.isNotEmpty ||
-                          widget.churchTime.isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.record_voice_over_rounded,
-                                size: 8, color: subColor),
-                            const SizedBox(width: 3),
-                            if (widget.churchTheme.isNotEmpty)
-                              Flexible(
-                                child: Text(
-                                  widget.churchTheme,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 8,
-                                    color: metaColor,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            if (widget.churchTheme.isNotEmpty &&
-                                widget.churchTime.isNotEmpty)
-                              _dot(metaColor),
-                            if (widget.churchTime.isNotEmpty)
-                              Text(
-                                widget.churchTime,
-                                style: GoogleFonts.inter(
-                                    fontSize: 8,
-                                    color: metaColor,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                          ],
-                        ),
-                      ],
-
-                      // Reception venue
-                      if (widget.receptionVenue.isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.location_on_rounded,
-                                size: 9, color: subColor),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Reception: ',
-                              style: GoogleFonts.inter(
-                                  fontSize: 8,
-                                  color: subColor,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                            Flexible(
-                              child: Text(
-                                widget.receptionVenue,
-                                style: GoogleFonts.inter(
-                                    fontSize: 8.5, color: metaColor),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 6),
-
-                      // RSVP pill — rsvpBy · contact · dressCode · giftType
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                              color: textColor.withValues(alpha: 0.22),
-                              width: 0.8),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (widget.rsvpBy.isNotEmpty) ...[
-                              Icon(Icons.event_available_rounded,
-                                  size: 7, color: metaColor),
-                              const SizedBox(width: 2),
-                              Text(
-                                'RSVP: ${widget.rsvpBy}',
-                                style: GoogleFonts.inter(
-                                    fontSize: 7.5,
-                                    color: metaColor,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                            if (widget.rsvpBy.isNotEmpty &&
-                                widget.contact.isNotEmpty)
-                              _dot(metaColor),
-                            if (widget.contact.isNotEmpty) ...[
-                              Icon(Icons.phone_rounded,
-                                  size: 7, color: metaColor),
-                              const SizedBox(width: 2),
-                              Flexible(
-                                child: Text(
-                                  widget.contact,
-                                  style: GoogleFonts.inter(
-                                      fontSize: 7.5, color: metaColor),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                            if (widget.dressCode.isNotEmpty) ...[
-                              _dot(metaColor),
-                              Flexible(
-                                child: Text(
-                                  widget.dressCode,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 7.5,
-                                    color: metaColor,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                            if (widget.giftType.isNotEmpty) ...[
-                              _dot(metaColor),
-                              Icon(Icons.card_giftcard_rounded,
-                                  size: 7, color: metaColor),
-                              const SizedBox(width: 2),
-                              Flexible(
-                                child: Text(
-                                  widget.giftType,
-                                  style: GoogleFonts.inter(
-                                      fontSize: 7.5, color: metaColor),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-
-                      // Personal message
-                      if (widget.message.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          widget.message,
-                          style: GoogleFonts.cormorantGaramond(
-                            fontSize: 9,
-                            color: subColor,
-                            fontStyle: FontStyle.italic,
-                            height: 1.4,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-        ),
+        ],
 
-        // Photo tap button (top-right corner)
+        // Photo tap button (always visible)
         Positioned(
           top: 8, right: 8,
           child: GestureDetector(
@@ -1961,10 +1861,9 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
               decoration: BoxDecoration(
                 color: hasPhoto
                     ? Colors.black54
-                    : widget.color.withValues(alpha: 0.12),
+                    : Colors.white.withAlpha(40),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.3)),
+                border: Border.all(color: Colors.white.withAlpha(76)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1974,7 +1873,7 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
                         ? Icons.edit_rounded
                         : Icons.add_photo_alternate_rounded,
                     size: 12,
-                    color: hasPhoto ? Colors.white : widget.color,
+                    color: Colors.white,
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -1982,7 +1881,7 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
                     style: GoogleFonts.inter(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      color: hasPhoto ? Colors.white : widget.color,
+                      color: Colors.white,
                     ),
                   ),
                 ],
@@ -1992,6 +1891,132 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
         ),
       ],
     );
+  }
+
+  // ── Dark card content (no-photo mode) ────────────────────────────────────
+  Widget _buildDarkCardContent() {
+    const gold = Color(0xFFD4A854);
+    final names = widget.names.isEmpty ? 'Chanda & Mwila' : widget.names;
+    final parts =
+        names.contains(' & ') ? names.split(' & ') : <String>[names];
+    final nameSz = widget.fontSize.clamp(20.0, 36.0);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Subtitle
+          Text(
+            (widget.subtitle.isEmpty
+                    ? 'Together with their families'
+                    : widget.subtitle)
+                .toUpperCase(),
+            style: GoogleFonts.inter(
+              fontSize: 7,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 2,
+              color: gold,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 14),
+
+          // Name 1
+          Text(
+            parts[0],
+            style: widget.fontOption.style(nameSz, Colors.white),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+
+          // "&" in gold
+          if (parts.length == 2) ...[
+            Text(
+              '&',
+              style: GoogleFonts.playfairDisplay(
+                fontSize: (nameSz * 0.72).clamp(14.0, 28.0),
+                fontWeight: FontWeight.bold,
+                color: gold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            // Name 2
+            Text(
+              parts[1],
+              style: widget.fontOption.style(nameSz, Colors.white),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+
+          const SizedBox(height: 14),
+          // Gold horizontal divider
+          Container(width: 32, height: 0.8, color: gold.withAlpha(204)),
+          const SizedBox(height: 14),
+
+          // Date
+          Text(
+            (widget.date.isEmpty ? 'Wedding Date' : widget.date).toUpperCase(),
+            style: GoogleFonts.inter(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              letterSpacing: 0.8,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+
+          // Venue
+          if (widget.venue.isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Text(
+              widget.venue,
+              style: GoogleFonts.inter(
+                fontSize: 9,
+                color: Colors.white.withAlpha(178),
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+
+          const SizedBox(height: 20),
+          // RSVP NOW outlined button
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
+            decoration: BoxDecoration(
+              border: Border.all(color: gold.withAlpha(204), width: 1),
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: Text(
+              'RSVP NOW',
+              style: GoogleFonts.inter(
+                fontSize: 8,
+                fontWeight: FontWeight.w700,
+                color: gold,
+                letterSpacing: 1.8,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _darkenColor(Color c, double amount) {
+    final hsl = HSLColor.fromColor(c);
+    return hsl
+        .withLightness((hsl.lightness - amount).clamp(0.0, 1.0))
+        .toColor();
   }
 }
 
@@ -2054,7 +2079,7 @@ class _EditorField extends StatelessWidget {
               hintStyle: GoogleFonts.inter(
                 fontSize: 13,
                 color:
-                    theme.colorScheme.onSurface.withValues(alpha: 0.35),
+                    theme.colorScheme.onSurface.withAlpha(89),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -2094,7 +2119,7 @@ class _SectionLabel extends StatelessWidget {
           fontSize: 9,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.4,
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+          color: theme.colorScheme.onSurface.withAlpha(115),
         ),
       ),
     );
@@ -2166,7 +2191,7 @@ class _FontCard extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: isSelected
-              ? accentColor.withValues(alpha: 0.07)
+              ? accentColor.withAlpha(18)
               : theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
@@ -2176,7 +2201,7 @@ class _FontCard extends StatelessWidget {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: accentColor.withValues(alpha: 0.15),
+                    color: accentColor.withAlpha(38),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   )
@@ -2192,7 +2217,7 @@ class _FontCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                   decoration: BoxDecoration(
-                    color: catColor.withValues(alpha: 0.12),
+                    color: catColor.withAlpha(31),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -2228,7 +2253,7 @@ class _FontCard extends StatelessWidget {
               font.label,
               style: GoogleFonts.inter(
                   fontSize: 9,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                  color: theme.colorScheme.onSurface.withAlpha(128)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -2264,7 +2289,7 @@ class _ColorCategoryRow extends StatelessWidget {
             fontSize: 10,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.2,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            color: theme.colorScheme.onSurface.withAlpha(128),
           ),
         ),
         const SizedBox(height: 10),
@@ -2312,7 +2337,7 @@ class _ColorCategoryRow extends StatelessWidget {
                         color: selected
                             ? selectedColor
                             : theme.colorScheme.onSurface
-                                .withValues(alpha: 0.55),
+                                .withAlpha(140),
                         fontWeight: selected
                             ? FontWeight.w700
                             : FontWeight.w400,
@@ -2394,7 +2419,7 @@ class _CustomColorPickerDialogState extends State<_CustomColorPickerDialog> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: _current.withValues(alpha: 0.45),
+                    color: _current.withAlpha(115),
                     blurRadius: 16,
                     spreadRadius: 2,
                   ),
@@ -2488,7 +2513,7 @@ class _RGBSlider extends StatelessWidget {
             data: SliderTheme.of(context).copyWith(
               activeTrackColor: activeColor,
               thumbColor: activeColor,
-              inactiveTrackColor: activeColor.withValues(alpha: 0.2),
+              inactiveTrackColor: activeColor.withAlpha(51),
               trackHeight: 4,
               thumbShape:
                   const RoundSliderThumbShape(enabledThumbRadius: 8),
@@ -2512,7 +2537,7 @@ class _RGBSlider extends StatelessWidget {
                 color: Theme.of(context)
                     .colorScheme
                     .onSurface
-                    .withValues(alpha: 0.55)),
+                    .withAlpha(140)),
             textAlign: TextAlign.end,
           ),
         ),

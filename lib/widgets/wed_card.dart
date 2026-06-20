@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../models/vendor_profile.dart';
@@ -86,14 +86,14 @@ class VendorCard extends StatelessWidget {
                       builder: (ctx) => Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Theme.of(ctx).colorScheme.surface.withValues(alpha: 0.9),
+                          color: Theme.of(ctx).colorScheme.surface.withAlpha(230),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           isWishlisted ? Icons.favorite : Icons.favorite_border,
                           color: isWishlisted
                               ? AppColors.secondary
-                              : Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6),
+                              : Theme.of(ctx).colorScheme.onSurface.withAlpha(153),
                           size: 18,
                         ),
                       ),
@@ -185,12 +185,12 @@ class VendorCard extends StatelessWidget {
                   Row(
                     children: [
                       Icon(Icons.location_on, size: 12,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                          color: Theme.of(context).colorScheme.onSurface.withAlpha(153)),
                       const SizedBox(width: 2),
                       Expanded(
                         child: Text(vendor.location ?? '',
                             style: AppTextStyles.caption.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                              color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                             ),
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
@@ -207,12 +207,12 @@ class VendorCard extends StatelessWidget {
                       ),
                       Text(' (${vendor.reviewCount})',
                           style: AppTextStyles.caption.copyWith(
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                            color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                           )),
                       const Spacer(),
                       if (vendor.services.isNotEmpty)
                         Text(
-                          'From \$${vendor.priceMin.toStringAsFixed(0)}',
+                          'From ZMW ${vendor.priceMin.toStringAsFixed(0)}',
                           style: AppTextStyles.labelMedium
                               .copyWith(color: AppColors.secondary, fontWeight: FontWeight.w600),
                         ),
@@ -281,7 +281,7 @@ class BudgetCategoryCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: percent,
-              backgroundColor: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
+              backgroundColor: Theme.of(context).colorScheme.outlineVariant.withAlpha(102),
               valueColor: AlwaysStoppedAnimation<Color>(barColor),
               minHeight: 6,
             ),
@@ -290,9 +290,9 @@ class BudgetCategoryCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('\$$currency ${spent.toStringAsFixed(0)} spent',
+              Text('$currency ${spent.toStringAsFixed(0)} spent',
                   style: AppTextStyles.caption),
-              Text('of \$$currency ${allocated.toStringAsFixed(0)}',
+              Text('of $currency ${allocated.toStringAsFixed(0)}',
                   style: AppTextStyles.caption),
             ],
           ),

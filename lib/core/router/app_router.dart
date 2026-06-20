@@ -22,12 +22,14 @@ import '../../features/couple/screens/chat_screen.dart';
 import '../../features/couple/screens/planning_checklist_screen.dart';
 import '../../features/couple/screens/review_submission_screen.dart';
 import '../../features/vendor/screens/vendor_dashboard_screen.dart';
+import '../../features/vendor/screens/vendor_listings_screen.dart';
 import '../../features/vendor/screens/vendor_profile_management_screen.dart';
 import '../../features/vendor/screens/availability_calendar_screen.dart';
 import '../../features/vendor/screens/lead_inbox_screen.dart';
 import '../../features/vendor/screens/vendor_analytics_screen.dart';
 import '../../features/vendor/screens/subscription_screen.dart';
 import '../../features/vendor/screens/vendor_messages_screen.dart';
+import '../../features/vendor/screens/vendor_reviews_screen.dart';
 import '../../features/admin/screens/admin_dashboard_screen.dart';
 import '../../features/admin/screens/user_management_screen.dart';
 import '../../features/admin/screens/vendor_verification_screen.dart';
@@ -46,15 +48,11 @@ import '../../shell/couple_shell.dart';
 import '../../shell/vendor_shell.dart';
 import '../../shell/admin_shell.dart';
 
-// ── Auth-state bridge so GoRouter re-evaluates redirect on login/logout ──────
-
 class _RouterNotifier extends ChangeNotifier {
   _RouterNotifier(Ref ref) {
     ref.listen(authProvider, (previous, next) => notifyListeners());
   }
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 String _homeForRole(AuthState auth) {
   if (auth.isCouple) return '/couple/dashboard';
@@ -62,8 +60,6 @@ String _homeForRole(AuthState auth) {
   if (auth.isAdmin) return '/admin/dashboard';
   return '/login';
 }
-
-// ── Router provider ───────────────────────────────────────────────────────────
 
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = _RouterNotifier(ref);
@@ -74,7 +70,6 @@ final routerProvider = Provider<GoRouter>((ref) {
     debugLogDiagnostics: false,
     refreshListenable: notifier,
 
-    // ── Global redirect guard ────────────────────────────────────────────────
     redirect: (context, state) {
       final auth = ref.read(authProvider);
       final loc = state.matchedLocation;
@@ -87,17 +82,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAuthScreen = authScreens.contains(loc);
       final isPublicInvite = loc.startsWith('/i/');
 
-      // Unauthenticated: send to login unless on a public path
       if (!auth.isAuthenticated && !isAuthScreen && !isPublicInvite) {
         return '/login';
       }
-
-      // Authenticated: skip auth screens, go straight to home
       if (auth.isAuthenticated && isAuthScreen) {
         return _homeForRole(auth);
       }
-
-      // Role guards: prevent cross-role access
       if (auth.isAuthenticated && !isAuthScreen && !isPublicInvite) {
         if (loc.startsWith('/couple') && !auth.isCouple) return _homeForRole(auth);
         if (loc.startsWith('/vendor') && !auth.isVendor) return _homeForRole(auth);
@@ -109,13 +99,13 @@ final routerProvider = Provider<GoRouter>((ref) {
 
     routes: [
       // ── Pre-auth ──────────────────────────────────────────────────────────
-      GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-      GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
-      GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
-      GoRoute(path: '/verify-email', builder: (context, state) => const EmailVerifyScreen()),
-      GoRoute(path: '/couple-planning', builder: (context, state) => const CouplePlanningScreen()),
-      GoRoute(path: '/vendor-onboarding', builder: (context, state) => const VendorOnboardingScreen()),
+      GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingScreen()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
+      GoRoute(path: '/forgot-password', builder: (_, _) => const ForgotPasswordScreen()),
+      GoRoute(path: '/verify-email', builder: (_, _) => const EmailVerifyScreen()),
+      GoRoute(path: '/couple-planning', builder: (_, _) => const CouplePlanningScreen()),
+      GoRoute(path: '/vendor-onboarding', builder: (_, _) => const VendorOnboardingScreen()),
 
       // ── Public invitation (no auth, no shell) ─────────────────────────────
       GoRoute(
@@ -124,13 +114,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             PublicInvitationScreen(shareToken: state.pathParameters['shareToken']!),
       ),
 
-      // ── Shared full-screen pushes (appear above all shells) ───────────────
+      // ── Shared full-screen pushes ─────────────────────────────────────────
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
       GoRoute(path: '/help', builder: (_, _) => const HelpScreen()),
       GoRoute(path: '/couple/reports', builder: (_, _) => const ReportsScreen()),
 
-      // ── Couple: full-screen pushes (no bottom nav) ────────────────────────
+      // ── Couple full-screen pushes ─────────────────────────────────────────
       GoRoute(
         path: '/couple/vendors/:id',
         builder: (_, state) =>
@@ -152,7 +142,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/couple/wishlist', builder: (_, _) => const WishlistScreen()),
       GoRoute(path: '/couple/reviews/new', builder: (_, _) => const ReviewSubmissionScreen()),
 
-      // ── Vendor: full-screen pushes (no bottom nav) ────────────────────────
+      // ── Vendor full-screen pushes ─────────────────────────────────────────
+      GoRoute(path: '/vendor/reviews', builder: (_, _) => const VendorReviewsScreen()),
       GoRoute(path: '/vendor/messages', builder: (_, _) => const VendorMessagesScreen()),
       GoRoute(
         path: '/vendor/messages/:convoId',
@@ -161,24 +152,24 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/vendor/availability', builder: (_, _) => const AvailabilityCalendarScreen()),
       GoRoute(path: '/vendor/subscription', builder: (_, _) => const SubscriptionScreen()),
 
-      // ── Admin: full-screen pushes (no bottom nav) ─────────────────────────
+      // ── Admin full-screen pushes ──────────────────────────────────────────
       GoRoute(path: '/admin/moderation', builder: (_, _) => const ContentModerationScreen()),
 
       // ══════════════════════════════════════════════════════════════════════
-      // COUPLE SHELL — 5 tabs, indexed stack (preserves tab state)
+      // COUPLE SHELL — 5 tabs: Home, Vendors, Budget, Invite, Profile
       // ══════════════════════════════════════════════════════════════════════
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => CoupleShell(navigationShell: shell),
         branches: [
-          // Tab 0 — Home
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/couple/dashboard',
-              builder: (_, _) => const CoupleDashboardScreen(),
-            ),
+            GoRoute(path: '/couple/dashboard', builder: (_, _) => const CoupleDashboardScreen()),
           ]),
-
-          // Tab 1 — Invitations
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/couple/vendors', builder: (_, _) => const VendorDiscoveryScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/couple/budget', builder: (_, _) => const BudgetOverviewScreen()),
+          ]),
           StatefulShellBranch(routes: [
             GoRoute(
               path: '/couple/invitations',
@@ -192,109 +183,53 @@ final routerProvider = Provider<GoRouter>((ref) {
               ],
             ),
           ]),
-
-          // Tab 2 — Budget
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/couple/budget',
-              builder: (_, _) => const BudgetOverviewScreen(),
-            ),
-          ]),
-
-          // Tab 3 — Vendors
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/couple/vendors',
-              builder: (_, _) => const VendorDiscoveryScreen(),
-            ),
-          ]),
-
-          // Tab 4 — Profile
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/couple/profile',
-              builder: (_, _) => const CoupleProfileScreen(),
-            ),
+            GoRoute(path: '/couple/profile', builder: (_, _) => const CoupleProfileScreen()),
           ]),
         ],
       ),
 
       // ══════════════════════════════════════════════════════════════════════
-      // VENDOR SHELL — 4 tabs, indexed stack
+      // VENDOR SHELL — 5 tabs: Dashboard, Listings, Inquiries, Reviews, Account
       // ══════════════════════════════════════════════════════════════════════
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => VendorShell(navigationShell: shell),
         branches: [
-          // Tab 0 — Home
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/vendor/dashboard',
-              builder: (_, _) => const VendorDashboardScreen(),
-            ),
+            GoRoute(path: '/vendor/dashboard', builder: (_, _) => const VendorDashboardScreen()),
           ]),
-
-          // Tab 1 — Leads
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/vendor/leads',
-              builder: (_, _) => const LeadInboxScreen(),
-            ),
+            GoRoute(path: '/vendor/listings', builder: (_, _) => const VendorListingsScreen()),
           ]),
-
-          // Tab 2 — Analytics
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/vendor/analytics',
-              builder: (_, _) => const VendorAnalyticsScreen(),
-            ),
+            GoRoute(path: '/vendor/leads', builder: (_, _) => const LeadInboxScreen()),
           ]),
-
-          // Tab 3 — Profile
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/vendor/profile',
-              builder: (_, _) => const VendorProfileManagementScreen(),
-            ),
+            GoRoute(path: '/vendor/analytics', builder: (_, _) => const VendorAnalyticsScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/vendor/profile', builder: (_, _) => const VendorProfileManagementScreen()),
           ]),
         ],
       ),
 
       // ══════════════════════════════════════════════════════════════════════
-      // ADMIN SHELL — 4 tabs, indexed stack
+      // ADMIN SHELL — 4 tabs: Dashboard, Users, Vendors, Analytics
       // ══════════════════════════════════════════════════════════════════════
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AdminShell(navigationShell: shell),
         branches: [
-          // Tab 0 — Overview
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/admin/dashboard',
-              builder: (_, _) => const AdminDashboardScreen(),
-            ),
+            GoRoute(path: '/admin/dashboard', builder: (_, _) => const AdminDashboardScreen()),
           ]),
-
-          // Tab 1 — Users
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/admin/users',
-              builder: (_, _) => const UserManagementScreen(),
-            ),
+            GoRoute(path: '/admin/users', builder: (_, _) => const UserManagementScreen()),
           ]),
-
-          // Tab 2 — Vendors (verification hub)
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/admin/vendors',
-              builder: (_, _) => const VendorVerificationScreen(),
-            ),
+            GoRoute(path: '/admin/vendors', builder: (_, _) => const VendorVerificationScreen()),
           ]),
-
-          // Tab 3 — Reports (analytics hub)
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/admin/analytics',
-              builder: (_, _) => const PlatformAnalyticsScreen(),
-            ),
+            GoRoute(path: '/admin/analytics', builder: (_, _) => const PlatformAnalyticsScreen()),
           ]),
         ],
       ),

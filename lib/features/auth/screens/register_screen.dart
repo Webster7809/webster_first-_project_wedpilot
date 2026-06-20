@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
 import '../../../models/user.dart';
 import '../../../providers/auth_provider.dart';
-import '../../../widgets/wed_button.dart';
-import '../../../widgets/wed_text_field.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -15,349 +13,335 @@ class RegisterScreen extends ConsumerStatefulWidget {
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+class _RegisterScreenState extends ConsumerState<RegisterScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tab;
   final _formKey = GlobalKey<FormState>();
-  final _nameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
+
+  // Couple fields
+  final _partner1Ctrl = TextEditingController();
+  final _partner2Ctrl = TextEditingController();
+  // Vendor field
+  final _businessNameCtrl = TextEditingController();
+  // Shared
   final _phoneCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  final _confirmPassCtrl = TextEditingController();
-  UserRole _role = UserRole.couple;
-  bool _agreedToTerms = false;
+
+  UserRole get _role => _tab.index == 0 ? UserRole.couple : UserRole.vendor;
+
+  @override
+  void initState() {
+    super.initState();
+    _tab = TabController(length: 2, vsync: this);
+    _tab.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _emailCtrl.dispose();
+    _tab.dispose();
+    _partner1Ctrl.dispose();
+    _partner2Ctrl.dispose();
+    _businessNameCtrl.dispose();
     _phoneCtrl.dispose();
+    _emailCtrl.dispose();
     _passCtrl.dispose();
-    _confirmPassCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _register() async {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (!_agreedToTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please agree to the terms and conditions')),
-      );
-      return;
-    }
+    final name = _role == UserRole.couple
+        ? _partner1Ctrl.text.trim()
+        : _businessNameCtrl.text.trim();
     await ref.read(authProvider.notifier).register(
-          _nameCtrl.text.trim(),
+          name,
           _emailCtrl.text.trim(),
           _passCtrl.text,
           _role,
+          partner2Name: _role == UserRole.couple ? _partner2Ctrl.text.trim() : null,
+          phone: _phoneCtrl.text.trim(),
         );
     if (!mounted) return;
-    context.go('/verify-email');
+    final err = ref.read(authProvider).error;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: AppColors.error),
+      );
+    } else {
+      context.go('/verify-email');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
-
+    final auth = ref.watch(authProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Account'),
-        elevation: 0,
-      ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Join Wedpilot', style: AppTextStyles.displaySmall),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Create your free account to get started',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-
-                  Text('I am a...', style: AppTextStyles.headlineSmall),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Choose your account type',
-                    style: AppTextStyles.caption.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _RoleCard(
-                    emoji: '💑',
-                    label: 'Couple',
-                    subtitle: 'Planning our perfect wedding together',
-                    description:
-                        'Access budget tools, vendor search, planning checklists, and digital invitations.',
-                    color: AppColors.secondary,
-                    isSelected: _role == UserRole.couple,
-                    onTap: () => setState(() => _role = UserRole.couple),
-                  ),
-                  const SizedBox(height: 10),
-                  _RoleCard(
-                    emoji: '🏢',
-                    label: 'Vendor',
-                    subtitle: 'Offering professional wedding services',
-                    description:
-                        'Showcase your business, manage bookings, and connect with couples in your area.',
-                    color: AppColors.info,
-                    isSelected: _role == UserRole.vendor,
-                    onTap: () => setState(() => _role = UserRole.vendor),
-                  ),
-                  const SizedBox(height: 28),
-
-                  WedTextField(
-                    label: _role == UserRole.couple ? 'Full Name' : 'Business Name',
-                    hint: _role == UserRole.couple ? 'Alex & Jordan' : 'Blossom Photography',
-                    controller: _nameCtrl,
-                    prefixIcon: _role == UserRole.vendor
-                        ? Icons.business_outlined
-                        : Icons.person_outline,
-                    validator: (v) => v == null || v.isEmpty ? 'This field is required' : null,
-                  ),
-                  const SizedBox(height: 14),
-
-                  WedTextField(
-                    label: 'Email Address',
-                    hint: 'you@example.com',
-                    controller: _emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    prefixIcon: Icons.email_outlined,
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Please enter your email';
-                      if (!v.contains('@') || !v.contains('.')) {
-                        return 'Please enter a valid email';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 14),
-
-                  WedTextField(
-                    label: 'Phone Number',
-                    hint: '+1 (555) 000-0000',
-                    controller: _phoneCtrl,
-                    keyboardType: TextInputType.phone,
-                    prefixIcon: Icons.phone_outlined,
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Please enter your phone number';
-                      if (v.replaceAll(RegExp(r'[\s\-\+\(\)]'), '').length < 7) {
-                        return 'Please enter a valid phone number';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 14),
-
-                  WedTextField(
-                    label: 'Password',
-                    hint: '••••••••',
-                    controller: _passCtrl,
-                    isPassword: true,
-                    prefixIcon: Icons.lock_outline,
-                    helperText: 'Minimum 8 characters',
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Please enter a password';
-                      if (v.length < 8) return 'Password must be at least 8 characters';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 14),
-
-                  WedTextField(
-                    label: 'Confirm Password',
-                    hint: '••••••••',
-                    controller: _confirmPassCtrl,
-                    isPassword: true,
-                    prefixIcon: Icons.lock_outline,
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Please confirm your password';
-                      if (v != _passCtrl.text) return 'Passwords do not match';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Checkbox(
-                        value: _agreedToTerms,
-                        activeColor: AppColors.secondary,
-                        onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
+      backgroundColor: AppColors.forestGreen,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Logo
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.amber,
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: RichText(
-                            text: TextSpan(
-                              style: AppTextStyles.bodySmall,
-                              children: [
-                                const TextSpan(text: 'I agree to the '),
-                                const TextSpan(
-                                  text: 'Terms of Service',
-                                  style: TextStyle(
-                                    color: AppColors.secondary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const TextSpan(text: ' and '),
-                                const TextSpan(
-                                  text: 'Privacy Policy',
-                                  style: TextStyle(
-                                    color: AppColors.secondary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+                      child: const Icon(Icons.favorite, color: Colors.white, size: 22),
+                    ),
+                    const SizedBox(width: 10),
+                    Text('WedPilot',
+                        style: GoogleFonts.playfairDisplay(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        )),
+                  ],
+                ),
+                const SizedBox(height: 28),
+
+                // Label + Headline
+                Text('PLAN TOGETHER',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.amber,
+                      letterSpacing: 1.5,
+                    )),
+                const SizedBox(height: 8),
+                Text('Start planning the\nwedding you both want',
+                    style: GoogleFonts.playfairDisplay(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      height: 1.2,
+                    )),
+                const SizedBox(height: 28),
+
+                // Tab row
+                Container(
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: Colors.white24)),
+                  ),
+                  child: TabBar(
+                    controller: _tab,
+                    isScrollable: false,
+                    dividerColor: Colors.transparent,
+                    indicator: const UnderlineTabIndicator(
+                      borderSide: BorderSide(color: AppColors.amber, width: 2),
+                    ),
+                    labelColor: AppColors.amber,
+                    unselectedLabelColor: Colors.white54,
+                    labelStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600),
+                    unselectedLabelStyle: GoogleFonts.inter(fontSize: 15),
+                    tabs: const [
+                      Tab(text: "I'm a couple"),
+                      Tab(text: "I'm a vendor"),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                ),
+                const SizedBox(height: 24),
 
-                  WedButton(
-                    label: 'Create Account',
-                    onPressed: _register,
-                    isLoading: authState.isLoading,
+                // Fields
+                if (_role == UserRole.couple) ...[
+                  Row(
+                    children: [
+                      Expanded(child: _GreenField(label: 'Partner 1 name', hint: 'Chanda', controller: _partner1Ctrl, validator: _required)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text('&', style: GoogleFonts.playfairDisplay(fontSize: 20, color: AppColors.amber, fontWeight: FontWeight.w600)),
+                      ),
+                      Expanded(child: _GreenField(label: 'Partner 2 name', hint: 'Mwila', controller: _partner2Ctrl, validator: _required)),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Already have an account? ', style: AppTextStyles.bodySmall),
-                        TextButton(
-                          onPressed: () => context.go('/login'),
-                          child: Text(
-                            'Sign in',
-                            style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary),
+                ] else ...[
+                  _GreenField(label: 'Business name', hint: 'Mukuba Gardens', controller: _businessNameCtrl, validator: _required),
+                ],
+                const SizedBox(height: 14),
+                _GreenField(
+                  label: 'Phone number',
+                  hint: '+260 9X XXX XXXX',
+                  controller: _phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 14),
+                _GreenField(
+                  label: 'Email address',
+                  hint: 'you@email.com',
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    if (!v.contains('@')) return 'Invalid email';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                _GreenField(
+                  label: 'Create password',
+                  hint: '••••••••',
+                  controller: _passCtrl,
+                  isPassword: true,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    if (v.length < 8) return 'Min 8 characters';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 28),
+
+                // CTA
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: auth.isLoading ? null : _submit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.amber,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                      elevation: 0,
+                    ),
+                    child: auth.isLoading
+                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : Text(
+                            _role == UserRole.couple ? 'Create our account' : 'Create your account',
+                            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
                           ),
-                        ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Legal
+                Center(
+                  child: RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: GoogleFonts.inter(fontSize: 12, color: Colors.white54),
+                      children: [
+                        const TextSpan(text: "By continuing you agree to WedPilot's "),
+                        TextSpan(text: 'Terms of Service', style: const TextStyle(color: AppColors.amber, decoration: TextDecoration.underline)),
+                        const TextSpan(text: ' and '),
+                        TextSpan(text: 'Privacy Policy', style: const TextStyle(color: AppColors.amber, decoration: TextDecoration.underline)),
                       ],
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 32),
+
+                // Login link
+                Center(
+                  child: GestureDetector(
+                    onTap: () => context.go('/login'),
+                    child: RichText(
+                      text: TextSpan(
+                        style: GoogleFonts.inter(fontSize: 14, color: Colors.white60),
+                        children: [
+                          const TextSpan(text: 'Already planning with us? '),
+                          TextSpan(
+                            text: 'Log in',
+                            style: const TextStyle(color: AppColors.amber, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
   }
+
+  String? _required(String? v) => (v == null || v.isEmpty) ? 'Required' : null;
 }
 
-class _RoleCard extends StatelessWidget {
-  final String emoji;
+class _GreenField extends StatefulWidget {
   final String label;
-  final String subtitle;
-  final String description;
-  final Color color;
-  final bool isSelected;
-  final VoidCallback onTap;
+  final String hint;
+  final TextEditingController controller;
+  final String? Function(String?)? validator;
+  final TextInputType? keyboardType;
+  final bool isPassword;
 
-  const _RoleCard({
-    required this.emoji,
+  const _GreenField({
     required this.label,
-    required this.subtitle,
-    required this.description,
-    required this.color,
-    required this.isSelected,
-    required this.onTap,
+    required this.hint,
+    required this.controller,
+    this.validator,
+    this.keyboardType,
+    this.isPassword = false,
   });
 
   @override
+  State<_GreenField> createState() => _GreenFieldState();
+}
+
+class _GreenFieldState extends State<_GreenField> {
+  bool _obscure = true;
+
+  @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final secondary = cs.onSurface.withValues(alpha: 0.6);
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withAlpha(18) : cs.surface,
-          border: Border.all(
-            color: isSelected ? color : cs.outlineVariant,
-            width: isSelected ? 2 : 1,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.label,
+            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white70)),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: widget.controller,
+          keyboardType: widget.keyboardType,
+          obscureText: widget.isPassword && _obscure,
+          validator: widget.validator,
+          style: GoogleFonts.inter(color: Colors.white, fontSize: 15),
+          decoration: InputDecoration(
+            hintText: widget.hint,
+            hintStyle: GoogleFonts.inter(color: Colors.white30, fontSize: 14),
+            filled: true,
+            fillColor: Colors.white.withAlpha(18),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.white24),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.white24),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.error),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.error, width: 1.5),
+            ),
+            errorStyle: GoogleFonts.inter(color: const Color(0xFFFF8A80), fontSize: 11),
+            suffixIcon: widget.isPassword
+                ? IconButton(
+                    icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.white38, size: 20),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  )
+                : null,
           ),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: isSelected
-              ? [BoxShadow(color: color.withAlpha(40), blurRadius: 10, offset: const Offset(0, 3))]
-              : [],
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: isSelected ? color.withAlpha(26) : cs.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 28))),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: isSelected ? color : cs.onSurface,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: isSelected ? color.withAlpha(200) : secondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    description,
-                    style: AppTextStyles.caption.copyWith(
-                      color: secondary,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected ? color : Colors.transparent,
-                border: Border.all(
-                  color: isSelected ? color : cs.outlineVariant,
-                  width: 2,
-                ),
-              ),
-              child: isSelected
-                  ? const Icon(Icons.check, color: Colors.white, size: 14)
-                  : null,
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }

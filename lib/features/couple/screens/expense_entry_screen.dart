@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
@@ -290,7 +290,7 @@ class _CategoryExpenseList extends ConsumerWidget {
                 style: AppTextStyles.labelLarge),
             Text('Tap to delete',
                 style: AppTextStyles.caption.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                 )),
           ],
         ),
@@ -321,7 +321,7 @@ class _ExpenseRow extends ConsumerWidget {
         subtitle: expense.vendorName != null
             ? Text(expense.vendorName!,
                 style: AppTextStyles.caption.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                 ))
             : null,
         trailing: Row(

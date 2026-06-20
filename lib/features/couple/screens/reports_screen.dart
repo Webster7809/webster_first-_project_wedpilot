@@ -38,7 +38,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
     final reportState = ref.watch(reportProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.cream,
       appBar: AppBar(
         title: const Text('Reports'),
         actions: [
@@ -227,7 +227,7 @@ class _BudgetReportTab extends StatelessWidget {
                           ? AppColors.error
                           : c.isNearLimit
                               ? AppColors.warning
-                              : AppColors.secondary,
+                              : AppColors.forestGreen,
                     ),
                     minHeight: 6,
                     borderRadius: BorderRadius.circular(3),
@@ -342,7 +342,7 @@ class _RsvpReportTab extends StatelessWidget {
               value: s.totalInvited > 0 ? s.responded / s.totalInvited : 0,
               backgroundColor: AppColors.divider,
               valueColor:
-                  AlwaysStoppedAnimation<Color>(AppColors.secondary),
+                  AlwaysStoppedAnimation<Color>(AppColors.forestGreen),
               minHeight: 10,
               borderRadius: BorderRadius.circular(5),
             ),
@@ -395,7 +395,7 @@ class _RsvpReportTab extends StatelessWidget {
                       value: pct,
                       backgroundColor: AppColors.divider,
                       valueColor: AlwaysStoppedAnimation<Color>(
-                          AppColors.secondary),
+                          AppColors.forestGreen),
                       minHeight: 6,
                       borderRadius: BorderRadius.circular(3),
                     ),
@@ -475,7 +475,7 @@ class _VendorReportTab extends StatelessWidget {
                         color: [
                               AppColors.warning,
                               AppColors.textSecondary,
-                              AppColors.secondary,
+                              AppColors.forestGreen,
                             ][i]
                             .withAlpha(40),
                         shape: BoxShape.circle,
@@ -487,7 +487,7 @@ class _VendorReportTab extends StatelessWidget {
                           color: [
                             AppColors.warning,
                             AppColors.textSecondary,
-                            AppColors.secondary,
+                            AppColors.forestGreen,
                           ][i],
                         ),
                       ),
@@ -576,14 +576,14 @@ class _TaskReportTab extends StatelessWidget {
                       Text(
                         r.progressLabel,
                         style: AppTextStyles.displaySmall.copyWith(
-                            color: AppColors.secondary),
+                            color: AppColors.forestGreen),
                       ),
                       const SizedBox(height: 6),
                       LinearProgressIndicator(
                         value: r.overallProgress,
                         backgroundColor: AppColors.divider,
                         valueColor: AlwaysStoppedAnimation<Color>(
-                            AppColors.secondary),
+                            AppColors.forestGreen),
                         minHeight: 10,
                         borderRadius: BorderRadius.circular(5),
                       ),
@@ -661,7 +661,7 @@ class _TaskReportTab extends StatelessWidget {
                     value: pct,
                     backgroundColor: AppColors.divider,
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      pct == 1.0 ? AppColors.success : AppColors.secondary,
+                      pct == 1.0 ? AppColors.success : AppColors.forestGreen,
                     ),
                     minHeight: 6,
                     borderRadius: BorderRadius.circular(3),

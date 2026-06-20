@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
@@ -8,14 +8,14 @@ class AppTheme {
   static ThemeData get light => ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.secondary,
-          primary: AppColors.secondary,
-          secondary: AppColors.primary,
+          seedColor: AppColors.forestGreen,
+          primary: AppColors.amber,
+          secondary: AppColors.forestGreen,
           tertiary: AppColors.tertiary,
           surface: AppColors.surface,
           error: AppColors.error,
           onPrimary: Colors.white,
-          onSecondary: AppColors.textPrimary,
+          onSecondary: Colors.white,
           onSurface: AppColors.textPrimary,
         ),
         scaffoldBackgroundColor: AppColors.background,
@@ -92,7 +92,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         chipTheme: ChipThemeData(
-          backgroundColor: AppColors.primary.withValues(alpha: 0.3),
+          backgroundColor: AppColors.primary.withAlpha(76),
           selectedColor: AppColors.secondary,
           labelStyle: GoogleFonts.inter(fontSize: 13),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -100,7 +100,7 @@ class AppTheme {
         ),
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: AppColors.surface,
-          indicatorColor: AppColors.primary.withValues(alpha: 0.5),
+          indicatorColor: AppColors.primary.withAlpha(128),
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
               return GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondary);
@@ -260,7 +260,7 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.secondary.withValues(alpha: 0.15),
+        backgroundColor: AppColors.secondary.withAlpha(38),
         selectedColor: AppColors.secondary,
         labelStyle: GoogleFonts.inter(fontSize: 13, color: darkText),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -268,7 +268,7 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: darkSurface,
-        indicatorColor: AppColors.secondary.withValues(alpha: 0.2),
+        indicatorColor: AppColors.secondary.withAlpha(51),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondary);
@@ -322,7 +322,7 @@ class AppTheme {
         ),
         trackColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
-              ? AppColors.secondary.withValues(alpha: 0.4)
+              ? AppColors.secondary.withAlpha(102)
               : const Color(0xFF2C2E35),
         ),
       ),
