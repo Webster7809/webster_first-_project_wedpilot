@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
-import '../../../widgets/wed_button.dart';
-import '../../../widgets/wed_text_field.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 class VendorProfileManagementScreen extends ConsumerStatefulWidget {
@@ -17,10 +16,20 @@ class VendorProfileManagementScreen extends ConsumerStatefulWidget {
 
 class _VendorProfileManagementScreenState
     extends ConsumerState<VendorProfileManagementScreen> {
-  final _descCtrl = TextEditingController(text: 'Award-winning wedding photography studio');
-  final _phoneCtrl = TextEditingController(text: '+1 (555) 123-4567');
-  final _websiteCtrl = TextEditingController(text: 'www.blossomphotography.com');
+  late final TextEditingController _descCtrl;
+  late final TextEditingController _phoneCtrl;
+  late final TextEditingController _websiteCtrl;
   bool _saving = false;
+  bool _notificationsEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _descCtrl = TextEditingController(
+        text: 'Spacious garden venue seating up to 300 guests');
+    _phoneCtrl = TextEditingController(text: '+260 97 712 3456');
+    _websiteCtrl = TextEditingController(text: 'www.mukubagardens.zm');
+  }
 
   @override
   void dispose() {
@@ -33,121 +42,483 @@ class _VendorProfileManagementScreenState
   @override
   Widget build(BuildContext context) {
     final vendor = ref.watch(vendorProfileProvider);
+    final businessName = vendor?.businessName ?? 'Mukuba Gardens';
+    final category = vendor?.category ?? 'Outdoor venue';
+    final location = vendor?.location ?? 'Ndola, Copperbelt';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Manage Profile')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Logo upload
-            Center(
-              child: Stack(
-                children: [
-                  Container(
-                    width: 90, height: 90,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withAlpha(77),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(child: Text('📷', style: TextStyle(fontSize: 36))),
-                  ),
-                  Positioned(
-                    bottom: 0, right: 0,
-                    child: Container(
-                      width: 28, height: 28,
-                      decoration: BoxDecoration(
-                        color: AppColors.secondary,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: const Icon(Icons.edit, size: 14, color: Colors.white),
-                    ),
-                  ),
-                ],
+      backgroundColor: AppColors.cream,
+      body: CustomScrollView(
+        slivers: [
+          // ── Dark green header ────────────────────────────────────────────
+          SliverAppBar(
+            pinned: true,
+            floating: false,
+            backgroundColor: AppColors.forestGreen,
+            expandedHeight: 120,
+            elevation: 0,
+            automaticallyImplyLeading: false,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined,
+                    color: Colors.white, size: 24),
+                onPressed: () => context.push('/notifications'),
               ),
-            ),
-            const SizedBox(height: 24),
-
-            Text('Business Information', style: AppTextStyles.headlineSmall),
-            const SizedBox(height: 16),
-            WedTextField(
-              label: 'Business Name',
-              controller: TextEditingController(text: vendor?.businessName ?? ''),
-              readOnly: true,
-            ),
-            const SizedBox(height: 16),
-            WedTextField(
-              label: 'Description',
-              controller: _descCtrl,
-              maxLines: 4,
-            ),
-            const SizedBox(height: 16),
-            WedTextField(
-              label: 'Phone Number',
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              prefixIcon: Icons.phone_outlined,
-            ),
-            const SizedBox(height: 16),
-            WedTextField(
-              label: 'Website',
-              controller: _websiteCtrl,
-              keyboardType: TextInputType.url,
-              prefixIcon: Icons.language_outlined,
-            ),
-            const SizedBox(height: 24),
-
-            Text('Portfolio', style: AppTextStyles.headlineSmall),
-            const SizedBox(height: 12),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 3,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              children: [
-                ...List.generate(4, (i) => Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withAlpha(77),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Center(child: Text('🌸', style: TextStyle(fontSize: 28))),
-                )),
-                GestureDetector(
-                  onTap: () {},
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.divider, style: BorderStyle.solid),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_photo_alternate_outlined, color: AppColors.textSecondary),
-                        SizedBox(height: 4),
-                        Text('Add', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                      ],
-                    ),
+              const SizedBox(width: 4),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        'YOUR ACCOUNT',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.amber,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Profile & settings',
+                        style: AppTextStyles.headlineMedium.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-            const SizedBox(height: 32),
-            WedButton(
-              label: 'Save Changes',
-              onPressed: () async {
-                setState(() => _saving = true);
-                await Future.delayed(const Duration(milliseconds: 600));
-                if (mounted && context.mounted) {
-                  setState(() => _saving = false);
-                  showWedSnackBar(context, 'Profile updated successfully!', type: SnackType.success);
-                }
-              },
-              isLoading: _saving,
+          ),
+
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 48),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+
+                // ── Business identity card ───────────────────────────────
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.forestGreen.withAlpha(12),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: AppColors.amber,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(Icons.storefront_rounded,
+                            color: Colors.white, size: 28),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              businessName,
+                              style: AppTextStyles.titleLarge.copyWith(
+                                color: AppColors.forestGreen,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$category · $location',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textSecondary),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.successBg,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.verified_user_outlined,
+                                      size: 12, color: AppColors.success),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Verified vendor',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.success,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // ── Business info section ───────────────────────────────
+                _SectionHeader(
+                    icon: Icons.edit_outlined, label: 'Business info'),
+                const SizedBox(height: 12),
+                _AccountField(
+                  icon: Icons.storefront_outlined,
+                  label: 'Business name',
+                  value: businessName,
+                  readOnly: true,
+                ),
+                const SizedBox(height: 10),
+                _AccountTextArea(
+                  icon: Icons.description_outlined,
+                  label: 'Description',
+                  controller: _descCtrl,
+                ),
+                const SizedBox(height: 10),
+                _AccountField(
+                  icon: Icons.phone_outlined,
+                  label: 'Phone number',
+                  controller: _phoneCtrl,
+                  inputType: TextInputType.phone,
+                ),
+                const SizedBox(height: 10),
+                _AccountField(
+                  icon: Icons.language_outlined,
+                  label: 'Website',
+                  controller: _websiteCtrl,
+                  inputType: TextInputType.url,
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton(
+                    onPressed: _saving
+                        ? null
+                        : () async {
+                            setState(() => _saving = true);
+                            await Future.delayed(
+                                const Duration(milliseconds: 700));
+                            if (mounted && context.mounted) {
+                              setState(() => _saving = false);
+                              showWedSnackBar(context,
+                                  'Profile updated successfully!',
+                                  type: SnackType.success);
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.amber,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24)),
+                      elevation: 0,
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Save changes',
+                            style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(height: 28),
+
+                // ── Preferences section ─────────────────────────────────
+                _SectionHeader(
+                    icon: Icons.tune_outlined, label: 'Preferences'),
+                const SizedBox(height: 12),
+                _ToggleRow(
+                  icon: Icons.notifications_outlined,
+                  label: 'New inquiry notifications',
+                  value: _notificationsEnabled,
+                  onChanged: (v) =>
+                      setState(() => _notificationsEnabled = v),
+                ),
+                const SizedBox(height: 10),
+                _MenuRow(
+                  icon: Icons.lock_outline_rounded,
+                  label: 'Change password',
+                  onTap: () {},
+                ),
+                const SizedBox(height: 10),
+                _MenuRow(
+                  icon: Icons.help_outline_rounded,
+                  label: 'Help & support',
+                  onTap: () => context.push('/help'),
+                ),
+                const SizedBox(height: 10),
+                _MenuRow(
+                  icon: Icons.settings_outlined,
+                  label: 'App settings',
+                  onTap: () => context.push('/settings'),
+                ),
+                const SizedBox(height: 28),
+
+                // ── Danger zone ─────────────────────────────────────────
+                _MenuRow(
+                  icon: Icons.logout_rounded,
+                  label: 'Sign out',
+                  onTap: () {
+                    ref.read(authProvider.notifier).logout();
+                  },
+                  isDestructive: true,
+                ),
+              ]),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Section header ────────────────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _SectionHeader({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.amber),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: AppTextStyles.titleMedium.copyWith(
+            color: AppColors.forestGreen,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Single-line account field ─────────────────────────────────────────────────
+
+class _AccountField extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String? value;
+  final TextEditingController? controller;
+  final bool readOnly;
+  final TextInputType inputType;
+
+  const _AccountField({
+    required this.icon,
+    required this.label,
+    this.value,
+    this.controller,
+    this.readOnly = false,
+    this.inputType = TextInputType.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller ?? TextEditingController(text: value),
+      readOnly: readOnly,
+      keyboardType: inputType,
+      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle:
+            AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+        prefixIcon: Icon(icon, size: 18, color: AppColors.amber),
+        filled: true,
+        fillColor: readOnly ? AppColors.creamDark : Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.divider),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.divider),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide:
+              const BorderSide(color: AppColors.forestGreen, width: 1.5),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      ),
+    );
+  }
+}
+
+// ── Multi-line text area ──────────────────────────────────────────────────────
+
+class _AccountTextArea extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final TextEditingController controller;
+
+  const _AccountTextArea({
+    required this.icon,
+    required this.label,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      maxLines: 3,
+      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle:
+            AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(bottom: 44),
+          child: Icon(icon, size: 18, color: AppColors.amber),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.divider),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.divider),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide:
+              const BorderSide(color: AppColors.forestGreen, width: 1.5),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      ),
+    );
+  }
+}
+
+// ── Toggle preference row ─────────────────────────────────────────────────────
+
+class _ToggleRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _ToggleRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.amber),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.bodyMedium
+                  .copyWith(color: AppColors.textPrimary),
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: AppColors.forestGreen,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Menu row ──────────────────────────────────────────────────────────────────
+
+class _MenuRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  const _MenuRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        isDestructive ? AppColors.error : AppColors.textPrimary;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: isDestructive ? AppColors.errorBg : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDestructive
+                ? AppColors.error.withAlpha(60)
+                : AppColors.divider,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: isDestructive ? AppColors.error : AppColors.amber),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: color,
+                  fontWeight:
+                      isDestructive ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+            if (!isDestructive)
+              const Icon(Icons.chevron_right,
+                  size: 18, color: AppColors.textHint),
           ],
         ),
       ),

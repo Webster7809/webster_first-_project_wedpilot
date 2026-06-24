@@ -152,23 +152,30 @@ class _AdminSidebar extends StatelessWidget {
           ),
 
           // Sections
-          _SidebarSection(label: 'OVERVIEW', children: [
-            _SidebarItem(icon: Icons.dashboard_outlined, label: 'Dashboard', index: 0, currentIndex: currentIndex, onTap: onBranch),
-          ]),
-          _SidebarSection(label: 'PEOPLE', children: [
-            _SidebarItem(icon: Icons.people_outline, label: 'Couples', index: 1, currentIndex: currentIndex, onTap: onBranch),
-            _SidebarItem(icon: Icons.store_outlined, label: 'Vendors', index: 2, currentIndex: currentIndex, onTap: onBranch),
-            _SidebarItem(icon: Icons.verified_outlined, label: 'Verifications', index: 2, currentIndex: currentIndex, onTap: onBranch),
-          ]),
-          _SidebarSection(label: 'PLATFORM', children: [
-            _SidebarRouteItem(icon: Icons.flag_outlined, label: 'Reported listings', route: '/admin/moderation', context: context),
-            _SidebarItem(icon: Icons.bar_chart_outlined, label: 'Match algorithm', index: 3, currentIndex: currentIndex, onTap: onBranch),
-          ]),
-          _SidebarSection(label: 'SYSTEM', children: [
-            _SidebarRouteItem(icon: Icons.settings_outlined, label: 'Settings', route: '/settings', context: context),
-          ]),
-
-          const Spacer(),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _SidebarSection(label: 'OVERVIEW', children: [
+                  _SidebarItem(icon: Icons.dashboard_outlined, label: 'Dashboard', index: 0, currentIndex: currentIndex, onTap: onBranch),
+                ]),
+                _SidebarSection(label: 'PEOPLE', children: [
+                  _SidebarItem(icon: Icons.people_outline, label: 'Couples', index: 1, currentIndex: currentIndex, onTap: onBranch),
+                  _SidebarItem(icon: Icons.store_outlined, label: 'Vendors', index: 2, currentIndex: currentIndex, onTap: onBranch),
+                  _SidebarItem(icon: Icons.verified_outlined, label: 'Verifications', index: 2, currentIndex: currentIndex, onTap: onBranch),
+                ]),
+                _SidebarSection(label: 'PLATFORM', children: [
+                  _SidebarRouteItem(icon: Icons.flag_outlined, label: 'Reported listings', route: '/admin/moderation', context: context),
+                  _SidebarStaticItem(icon: Icons.category_outlined, label: 'Categories'),
+                  _SidebarStaticItem(icon: Icons.article_outlined, label: 'Invitation templates'),
+                  _SidebarItem(icon: Icons.bar_chart_outlined, label: 'Match algorithm', index: 3, currentIndex: currentIndex, onTap: onBranch),
+                ]),
+                _SidebarSection(label: 'SYSTEM', children: [
+                  _SidebarRouteItem(icon: Icons.settings_outlined, label: 'Settings', route: '/settings', context: context),
+                ]),
+              ],
+            ),
+          ),
 
           // Log out
           Padding(
@@ -274,6 +281,27 @@ class _SidebarItem extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SidebarStaticItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _SidebarStaticItem({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext _) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.white70),
+          const SizedBox(width: 12),
+          Text(label, style: GoogleFonts.inter(fontSize: 14, color: Colors.white70)),
+        ],
       ),
     );
   }

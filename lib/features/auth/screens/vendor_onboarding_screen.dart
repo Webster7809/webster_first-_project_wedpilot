@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../widgets/wed_button.dart';
-import '../../../widgets/wed_text_field.dart';
-import '../../../widgets/wed_snack_bar.dart';
+import '../../../widgets/dash_progress_bar.dart';
+import '../../../providers/auth_provider.dart';
 
 class VendorOnboardingScreen extends ConsumerStatefulWidget {
   const VendorOnboardingScreen({super.key});
@@ -18,176 +18,99 @@ class VendorOnboardingScreen extends ConsumerStatefulWidget {
 class _VendorOnboardingScreenState
     extends ConsumerState<VendorOnboardingScreen> {
   int _step = 0;
+  static const int _totalSteps = 4;
 
-  // Step 0
-  final _businessNameCtrl = TextEditingController();
+  // Step 0 — Category & location
   String? _selectedCategory;
-
-  // Step 1
-  final _descCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-
-  // Step 2
   final _locationCtrl = TextEditingController();
-  final _priceCtrl = TextEditingController();
-  final List<_ServiceItem> _services = [];
 
-  // Step 3
-  int _portfolioCount = 0;
-  bool _saving = false;
+  // Step 1 — Portfolio
+  final _titleCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+
+  // Step 2 — Contact
+  final _phoneCtrl = TextEditingController();
+  final _whatsappCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _addressCtrl = TextEditingController();
+  final _instagramCtrl = TextEditingController();
+
+  static const _stepLabels = [
+    'TELL US ABOUT YOUR BUSINESS',
+    'SHOWCASE YOUR WORK',
+    'HOW SHOULD COUPLES REACH YOU',
+    'ALMOST THERE',
+  ];
 
   static const _stepTitles = [
-    'Business basics',
-    'About & contact',
-    'Services & location',
-    'Portfolio photos',
+    'What service do\nyou offer couples?',
+    'Build your\nportfolio listing',
+    'Add your\ncontact details',
+    'Your listing is\nunder review',
+  ];
+
+  static const _categories = [
+    ('Venue', Icons.grid_view_rounded),
+    ('Catering', Icons.restaurant_outlined),
+    ('Photography', Icons.camera_alt_outlined),
+    ('Decor & flowers', Icons.local_florist_outlined),
+    ('DJ & MC', Icons.music_note_outlined),
+    ('Transport', Icons.local_shipping_outlined),
+    ('Wedding attire', Icons.checkroom_outlined),
+    ('Cake & sweets', Icons.cake_outlined),
   ];
 
   @override
   void dispose() {
-    _businessNameCtrl.dispose();
+    _locationCtrl.dispose();
+    _titleCtrl.dispose();
     _descCtrl.dispose();
     _phoneCtrl.dispose();
-    _locationCtrl.dispose();
-    _priceCtrl.dispose();
+    _whatsappCtrl.dispose();
+    _emailCtrl.dispose();
+    _addressCtrl.dispose();
+    _instagramCtrl.dispose();
     super.dispose();
   }
 
-  bool get _canProceed {
-    if (_step == 0) return _businessNameCtrl.text.trim().isNotEmpty && _selectedCategory != null;
-    if (_step == 1) return _phoneCtrl.text.trim().isNotEmpty;
-    if (_step == 2) return _locationCtrl.text.trim().isNotEmpty;
-    return true;
-  }
-
   void _next() {
-    if (_step < 3) {
+    if (_step < _totalSteps - 1) {
       setState(() => _step++);
-    } else {
-      _finish();
-    }
-  }
-
-  void _back() {
-    if (_step > 0) setState(() => _step--);
-  }
-
-  void _showAddServiceDialog() {
-    final nameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Add Service / Listing',
-            style: AppTextStyles.titleMedium
-                .copyWith(color: AppColors.forestGreen)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: InputDecoration(
-                labelText: 'Service Name',
-                labelStyle:
-                    const TextStyle(color: AppColors.textSecondary),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: AppColors.forestGreen),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: priceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Starting Price (ZMW)',
-                labelStyle:
-                    const TextStyle(color: AppColors.textSecondary),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: AppColors.forestGreen),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameCtrl.text.trim().isNotEmpty) {
-                setState(() => _services.add(_ServiceItem(
-                      name: nameCtrl.text.trim(),
-                      price: priceCtrl.text.trim(),
-                    )));
-                Navigator.pop(ctx);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.forestGreen,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Add Listing'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _finish() async {
-    setState(() => _saving = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      setState(() => _saving = false);
-      showWedSnackBar(
-        context,
-        'Profile created! Welcome to Wedpilot.',
-        type: SnackType.success,
-      );
-      context.go('/vendor/dashboard');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.cream,
-      body: Column(
-        children: [
-          // ── Dark green header ──────────────────────────────────────────
-          _OnboardingHeader(
-            step: _step,
-            totalSteps: _stepTitles.length,
-            title: _stepTitles[_step],
-            onBack: _step > 0 ? _back : null,
-          ),
-
-          // ── Step body ──────────────────────────────────────────────────
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              child: KeyedSubtree(
-                key: ValueKey(_step),
-                child: _buildStep(),
-              ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: AppColors.cream,
+        body: Column(
+          children: [
+            _VendorWizardHeader(
+              step: _step,
+              totalSteps: _totalSteps,
+              stepLabel: _stepLabels[_step],
+              stepTitle: _stepTitles[_step],
+              onBack: _step > 0 && _step < 3
+                  ? () => setState(() => _step--)
+                  : null,
             ),
-          ),
-        ],
+            Expanded(
+              child: _step == 3
+                  ? _buildConfirmationStep()
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 500),
+                          child: _buildStep(),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -195,59 +118,414 @@ class _VendorOnboardingScreenState
   Widget _buildStep() {
     switch (_step) {
       case 0:
-        return _Step0(
-          businessNameCtrl: _businessNameCtrl,
-          selectedCategory: _selectedCategory,
-          onCategorySelect: (c) => setState(() => _selectedCategory = c),
-          canProceed: _canProceed,
-          onNext: _next,
-          onSkip: () => context.go('/vendor/dashboard'),
-        );
+        return _buildCategoryStep();
       case 1:
-        return _Step1(
-          descCtrl: _descCtrl,
-          phoneCtrl: _phoneCtrl,
-          canProceed: _canProceed,
-          onNext: _next,
-        );
+        return _buildPortfolioStep();
       case 2:
-        return _Step2(
-          locationCtrl: _locationCtrl,
-          priceCtrl: _priceCtrl,
-          services: _services,
-          onAddService: _showAddServiceDialog,
-          onRemoveService: (i) => setState(() => _services.removeAt(i)),
-          canProceed: _canProceed,
-          onNext: _next,
-        );
-      case 3:
-        return _Step3(
-          portfolioCount: _portfolioCount,
-          onAdd: () => setState(() => _portfolioCount++),
-          onRemove: () => setState(() => _portfolioCount--),
-          saving: _saving,
-          onFinish: _finish,
-          onSkip: () => context.go('/vendor/dashboard'),
-        );
+        return _buildContactStep();
       default:
-        return const SizedBox.shrink();
+        return const SizedBox();
     }
   }
+
+  // ── Step 0: Category & location ─────────────────────────────────────────────
+
+  Widget _buildCategoryStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _VendorSectionLabel(icon: Icons.grid_view_outlined, label: 'Vendor category'),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 1.2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: _categories.map((cat) {
+            final (name, icon) = cat;
+            final isSelected = _selectedCategory == name;
+            return GestureDetector(
+              onTap: () => setState(() => _selectedCategory = name),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.amber.withAlpha(30) : AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isSelected ? AppColors.amber : AppColors.divider,
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.amber
+                            : AppColors.creamDark,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        icon,
+                        size: 22,
+                        color: isSelected ? Colors.white : AppColors.forestGreen,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? AppColors.amber
+                            : AppColors.textPrimary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 24),
+        _VendorSectionLabel(icon: Icons.location_on_outlined, label: 'Where are you based?'),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _locationCtrl,
+          style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
+          decoration: _fieldDec('Ndola, Copperbelt'),
+        ),
+        const SizedBox(height: 32),
+        _VendorContinueButton(
+          onTap: _next,
+          label: 'Continue to portfolio',
+        ),
+      ],
+    );
+  }
+
+  // ── Step 1: Portfolio ────────────────────────────────────────────────────────
+
+  Widget _buildPortfolioStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _VendorSectionLabel(icon: Icons.camera_alt_outlined, label: 'Portfolio photos'),
+        const SizedBox(height: 12),
+        _DashedUploadArea(
+          onTap: () {},
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.upload_rounded, size: 32, color: AppColors.amber),
+              const SizedBox(height: 8),
+              Text(
+                'Upload cover photo',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.amber,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'JPG or PNG, up to 10MB',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            for (int i = 0; i < 3; i++) ...[
+              Expanded(
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.amber.withAlpha(20),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.camera_alt_outlined,
+                        color: AppColors.amber, size: 24),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: GestureDetector(
+                  onTap: () {},
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: const Icon(Icons.add_rounded,
+                        color: AppColors.textHint, size: 28),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Add at least 4 photos — listings with 6+ photos get 3x more inquiries',
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 24),
+        _VendorSectionLabel(icon: Icons.edit_outlined, label: 'Listing title'),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _titleCtrl,
+          style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
+          decoration: _fieldDec('Mukuba Gardens — Open Air Venue'),
+        ),
+        const SizedBox(height: 20),
+        _VendorSectionLabel(icon: Icons.grid_view_outlined, label: 'Description'),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _descCtrl,
+          maxLines: 4,
+          style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
+          decoration: _fieldDec(
+            'Spacious garden venue seating up to 300 guests...',
+          ),
+        ),
+        const SizedBox(height: 32),
+        _VendorContinueButton(
+          onTap: _next,
+          label: 'Continue to contact info',
+        ),
+      ],
+    );
+  }
+
+  // ── Step 2: Contact ──────────────────────────────────────────────────────────
+
+  Widget _buildContactStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.success.withAlpha(20),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.success.withAlpha(80)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.verified_user_outlined,
+                  size: 20, color: AppColors.success),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Verified vendors ',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.success,
+                        ),
+                      ),
+                      TextSpan(
+                        text:
+                            'get a trust badge and rank higher in match results. We may call to confirm these details.',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        _VendorSectionLabel(icon: Icons.phone_outlined, label: 'Phone number'),
+        const SizedBox(height: 10),
+        _IconField(
+          controller: _phoneCtrl,
+          icon: Icons.phone_outlined,
+          hint: '+260 97 712 3456',
+          inputType: TextInputType.phone,
+        ),
+        const SizedBox(height: 20),
+        _VendorSectionLabel(
+            icon: Icons.chat_bubble_outline_rounded, label: 'WhatsApp number'),
+        const SizedBox(height: 10),
+        _IconField(
+          controller: _whatsappCtrl,
+          icon: Icons.chat_bubble_outline_rounded,
+          hint: '+260 97 712 3456',
+          inputType: TextInputType.phone,
+        ),
+        const SizedBox(height: 20),
+        _VendorSectionLabel(icon: Icons.email_outlined, label: 'Email address'),
+        const SizedBox(height: 10),
+        _IconField(
+          controller: _emailCtrl,
+          icon: Icons.email_outlined,
+          hint: 'bookings@mukubagardens.zm',
+          inputType: TextInputType.emailAddress,
+        ),
+        const SizedBox(height: 20),
+        _VendorSectionLabel(
+            icon: Icons.location_on_outlined, label: 'Physical address'),
+        const SizedBox(height: 10),
+        _IconField(
+          controller: _addressCtrl,
+          icon: Icons.location_on_outlined,
+          hint: 'Plot 14, Kansenshi Road, Ndola',
+          inputType: TextInputType.streetAddress,
+        ),
+        const SizedBox(height: 20),
+        _VendorSectionLabel(
+          icon: Icons.language_outlined,
+          label: 'Social links',
+          suffix: '(optional)',
+        ),
+        const SizedBox(height: 10),
+        _IconField(
+          controller: _instagramCtrl,
+          icon: Icons.camera_alt_outlined,
+          hint: 'Instagram handle',
+          inputType: TextInputType.url,
+        ),
+        const SizedBox(height: 32),
+        _VendorContinueButton(
+          onTap: _next,
+          label: 'Submit for verification',
+        ),
+      ],
+    );
+  }
+
+  // ── Step 3: Confirmation ─────────────────────────────────────────────────────
+
+  Widget _buildConfirmationStep() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withAlpha(30),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      size: 40,
+                      color: AppColors.success,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Submitted!',
+                    style: AppTextStyles.displaySmall.copyWith(
+                      color: AppColors.forestGreen,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Your listing is now under review. Our team will verify your details and notify you within 24 hours.',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.6,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        ref.read(authProvider.notifier).completeVendorOnboarding();
+                        context.go('/vendor/dashboard');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.forestGreen,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(28)),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Go to dashboard',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  InputDecoration _fieldDec(String hint) => InputDecoration(
+        hintText: hint,
+        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+        filled: true,
+        fillColor: AppColors.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.divider),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.divider),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+      );
 }
 
-// ── Shared header ──────────────────────────────────────────────────────────────
+// ── Vendor wizard header ──────────────────────────────────────────────────────
 
-class _OnboardingHeader extends StatelessWidget {
+class _VendorWizardHeader extends StatelessWidget {
   final int step;
   final int totalSteps;
-  final String title;
+  final String stepLabel;
+  final String stepTitle;
   final VoidCallback? onBack;
 
-  const _OnboardingHeader({
+  const _VendorWizardHeader({
     required this.step,
     required this.totalSteps,
-    required this.title,
-    required this.onBack,
+    required this.stepLabel,
+    required this.stepTitle,
+    this.onBack,
   });
 
   @override
@@ -257,60 +535,67 @@ class _OnboardingHeader extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Back / close row
               Row(
                 children: [
                   if (onBack != null)
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new,
-                          size: 18, color: Colors.white),
-                      onPressed: onBack,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
+                    GestureDetector(
+                      onTap: onBack,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withAlpha(30),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.chevron_left_rounded,
+                            color: Colors.white, size: 22),
+                      ),
                     )
                   else
-                    const SizedBox(width: 24),
-                  const Spacer(),
-                  Text(
-                    'Step ${step + 1} of $totalSteps',
-                    style: AppTextStyles.caption.copyWith(
-                        color: Colors.white.withAlpha(178)),
+                    const SizedBox(width: 36),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'STEP ${step + 1} OF $totalSteps',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        letterSpacing: 1.2,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
+                  const SizedBox(width: 48),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               Text(
-                'VENDOR ONBOARDING',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.amber,
+                stepLabel,
+                style: const TextStyle(
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
+                  color: AppColors.amber,
+                  letterSpacing: 1.4,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
-                title,
-                style: AppTextStyles.headlineMedium.copyWith(
-                  color: Colors.white,
+                stepTitle,
+                style: const TextStyle(
+                  fontFamily: 'Playfair Display',
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  height: 1.25,
                 ),
               ),
               const SizedBox(height: 16),
-              // Progress bar
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: (step + 1) / totalSteps,
-                  backgroundColor: Colors.white.withAlpha(40),
-                  valueColor:
-                      const AlwaysStoppedAnimation<Color>(AppColors.amber),
-                  minHeight: 5,
-                ),
-              ),
+              DashProgressBar(total: totalSteps, current: step),
             ],
           ),
         ),
@@ -319,560 +604,187 @@ class _OnboardingHeader extends StatelessWidget {
   }
 }
 
-// ── Step 0: Business basics ────────────────────────────────────────────────────
+// ── Section label ─────────────────────────────────────────────────────────────
 
-class _Step0 extends StatelessWidget {
-  final TextEditingController businessNameCtrl;
-  final String? selectedCategory;
-  final ValueChanged<String> onCategorySelect;
-  final bool canProceed;
-  final VoidCallback onNext;
-  final VoidCallback onSkip;
+class _VendorSectionLabel extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String? suffix;
 
-  static const _categories = [
-    'Venue', 'Catering', 'Photography', 'Decoration',
-    'Entertainment', 'Transport', 'Music / DJ', 'Flowers',
-    'Cake & Bakery', 'Makeup & Hair', 'Attire', 'Other',
-  ];
-
-  const _Step0({
-    required this.businessNameCtrl,
-    required this.selectedCategory,
-    required this.onCategorySelect,
-    required this.canProceed,
-    required this.onNext,
-    required this.onSkip,
+  const _VendorSectionLabel({
+    required this.icon,
+    required this.label,
+    this.suffix,
   });
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              // Logo upload
-              Center(
-                child: Stack(
-                  children: [
-                    Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        color: AppColors.forestGreen.withAlpha(20),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: AppColors.forestGreen.withAlpha(60),
-                            width: 2),
-                      ),
-                      child: const Center(
-                          child: Text('🏢',
-                              style: TextStyle(fontSize: 36))),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: AppColors.amber,
-                          shape: BoxShape.circle,
-                          border:
-                              Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: const Icon(Icons.camera_alt,
-                            size: 14, color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 6),
-              Center(
-                child: Text('Upload business logo',
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.textSecondary)),
-              ),
-              const SizedBox(height: 28),
-
-              WedTextField(
-                label: 'Business Name',
-                hint: 'e.g. Mukuba Gardens',
-                controller: businessNameCtrl,
-                prefixIcon: Icons.business_outlined,
-              ),
-              const SizedBox(height: 24),
-
-              Text('Service Category',
-                  style: AppTextStyles.headlineSmall
-                      .copyWith(color: AppColors.forestGreen)),
-              const SizedBox(height: 6),
-              Text(
-                'Select the primary category that describes your business',
-                style: AppTextStyles.caption
-                    .copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _categories.map((cat) {
-                  final isSelected = selectedCategory == cat;
-                  return GestureDetector(
-                    onTap: () => onCategorySelect(cat),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.forestGreen
-                            : Colors.white,
-                        border: Border.all(
-                          color: isSelected
-                              ? AppColors.forestGreen
-                              : AppColors.divider,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color:
-                                      AppColors.forestGreen.withAlpha(30),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                )
-                              ]
-                            : [],
-                      ),
-                      child: Text(
-                        cat,
-                        style: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : AppColors.textPrimary,
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 36),
-
-              WedButton(
-                label: 'Next',
-                onPressed: canProceed ? onNext : null,
-                icon: Icons.arrow_forward_rounded,
-              ),
-              const SizedBox(height: 12),
-              Center(
-                child: TextButton(
-                  onPressed: onSkip,
-                  child: Text('Skip for now',
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textSecondary)),
-                ),
-              ),
-            ]),
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.amber),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: AppTextStyles.titleMedium.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
           ),
         ),
-      ],
-    );
-  }
-}
-
-// ── Step 1: About & contact ────────────────────────────────────────────────────
-
-class _Step1 extends StatelessWidget {
-  final TextEditingController descCtrl;
-  final TextEditingController phoneCtrl;
-  final bool canProceed;
-  final VoidCallback onNext;
-
-  const _Step1({
-    required this.descCtrl,
-    required this.phoneCtrl,
-    required this.canProceed,
-    required this.onNext,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              Text('Tell couples about your business',
-                  style: AppTextStyles.headlineSmall
-                      .copyWith(color: AppColors.forestGreen)),
-              const SizedBox(height: 16),
-              WedTextField(
-                label: 'Business Description',
-                hint:
-                    'What makes you special? Tell couples about your experience and style...',
-                controller: descCtrl,
-                maxLines: 4,
-              ),
-              const SizedBox(height: 16),
-              WedTextField(
-                label: 'Phone Number',
-                hint: '+260 9X XXX XXXX',
-                controller: phoneCtrl,
-                keyboardType: TextInputType.phone,
-                prefixIcon: Icons.phone_outlined,
-              ),
-              const SizedBox(height: 36),
-              WedButton(
-                label: 'Next',
-                onPressed: canProceed ? onNext : null,
-                icon: Icons.arrow_forward_rounded,
-              ),
-            ]),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Step 2: Services & location ────────────────────────────────────────────────
-
-class _Step2 extends StatelessWidget {
-  final TextEditingController locationCtrl;
-  final TextEditingController priceCtrl;
-  final List<_ServiceItem> services;
-  final VoidCallback onAddService;
-  final ValueChanged<int> onRemoveService;
-  final bool canProceed;
-  final VoidCallback onNext;
-
-  const _Step2({
-    required this.locationCtrl,
-    required this.priceCtrl,
-    required this.services,
-    required this.onAddService,
-    required this.onRemoveService,
-    required this.canProceed,
-    required this.onNext,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              WedTextField(
-                label: 'Location / City',
-                hint: 'e.g. Ndola, Copperbelt',
-                controller: locationCtrl,
-                prefixIcon: Icons.location_on_outlined,
-              ),
-              const SizedBox(height: 16),
-              WedTextField(
-                label: 'Starting Price (ZMW)',
-                hint: 'e.g. 15000',
-                controller: priceCtrl,
-                keyboardType: TextInputType.number,
-                prefixIcon: Icons.payments_outlined,
-              ),
-              const SizedBox(height: 28),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Services & Listings',
-                      style: AppTextStyles.headlineSmall
-                          .copyWith(color: AppColors.forestGreen)),
-                  TextButton.icon(
-                    onPressed: onAddService,
-                    icon: const Icon(Icons.add_circle_outline,
-                        size: 18, color: AppColors.amber),
-                    label: Text('Add',
-                        style: AppTextStyles.labelMedium
-                            .copyWith(color: AppColors.amber)),
-                  ),
-                ],
-              ),
-              Text(
-                'List the specific services or packages you offer',
-                style: AppTextStyles.caption
-                    .copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 12),
-
-              if (services.isEmpty)
-                _EmptyListings()
-              else
-                ...services.asMap().entries.map(
-                      (e) => _ServiceTile(
-                        service: e.value,
-                        onRemove: () => onRemoveService(e.key),
-                      ),
-                    ),
-              const SizedBox(height: 36),
-
-              WedButton(
-                label: 'Next',
-                onPressed: canProceed ? onNext : null,
-                icon: Icons.arrow_forward_rounded,
-              ),
-            ]),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Step 3: Portfolio ──────────────────────────────────────────────────────────
-
-class _Step3 extends StatelessWidget {
-  final int portfolioCount;
-  final VoidCallback onAdd;
-  final VoidCallback onRemove;
-  final bool saving;
-  final VoidCallback onFinish;
-  final VoidCallback onSkip;
-
-  const _Step3({
-    required this.portfolioCount,
-    required this.onAdd,
-    required this.onRemove,
-    required this.saving,
-    required this.onFinish,
-    required this.onSkip,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              Text('Showcase your best work',
-                  style: AppTextStyles.headlineSmall
-                      .copyWith(color: AppColors.forestGreen)),
-              const SizedBox(height: 6),
-              Text(
-                'Upload portfolio photos to attract more couples. You can add more later.',
-                style: AppTextStyles.caption
-                    .copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 20),
-
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 3,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                children: [
-                  ...List.generate(
-                    portfolioCount,
-                    (i) => _PortfolioThumb(onRemove: onRemove),
-                  ),
-                  _AddPhotoTile(onTap: onAdd),
-                ],
-              ),
-              const SizedBox(height: 36),
-
-              WedButton(
-                label: 'Finish Setup',
-                onPressed: onFinish,
-                isLoading: saving,
-                icon: Icons.check_circle_outline,
-              ),
-              const SizedBox(height: 12),
-              Center(
-                child: TextButton(
-                  onPressed: onSkip,
-                  child: Text('Skip for now',
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textSecondary)),
-                ),
-              ),
-            ]),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Data ───────────────────────────────────────────────────────────────────────
-
-class _ServiceItem {
-  final String name;
-  final String price;
-  const _ServiceItem({required this.name, required this.price});
-}
-
-// ── Sub-widgets ────────────────────────────────────────────────────────────────
-
-class _EmptyListings extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppColors.divider),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          const Icon(Icons.inventory_2_outlined,
-              color: AppColors.textHint, size: 36),
-          const SizedBox(height: 10),
+        if (suffix != null) ...[
+          const SizedBox(width: 6),
           Text(
-            'No listings yet.\nTap "Add" to create your first service.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.caption.copyWith(
-                color: AppColors.textSecondary, height: 1.5),
+            suffix!,
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
           ),
         ],
-      ),
+      ],
     );
   }
 }
 
-class _ServiceTile extends StatelessWidget {
-  final _ServiceItem service;
-  final VoidCallback onRemove;
+// ── Icon-prefix field ─────────────────────────────────────────────────────────
 
-  const _ServiceTile({required this.service, required this.onRemove});
+class _IconField extends StatelessWidget {
+  final TextEditingController controller;
+  final IconData icon;
+  final String hint;
+  final TextInputType inputType;
+
+  const _IconField({
+    required this.controller,
+    required this.icon,
+    required this.hint,
+    this.inputType = TextInputType.text,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppColors.divider),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.forestGreen.withAlpha(8),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.forestGreen.withAlpha(18),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.inventory_2_outlined,
-                color: AppColors.forestGreen, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(service.name,
-                    style: AppTextStyles.titleMedium
-                        .copyWith(color: AppColors.forestGreen)),
-                if (service.price.isNotEmpty)
-                  Text('From ZMW ${service.price}',
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textSecondary)),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline,
-                color: AppColors.error, size: 20),
-            onPressed: onRemove,
-            tooltip: 'Remove listing',
-          ),
-        ],
+    return TextField(
+      controller: controller,
+      keyboardType: inputType,
+      style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
+      decoration: InputDecoration(
+        prefixIcon: Icon(icon, size: 20, color: AppColors.textSecondary),
+        hintText: hint,
+        hintStyle:
+            AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+        filled: true,
+        fillColor: AppColors.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.divider),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.divider),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide:
+              const BorderSide(color: AppColors.amber, width: 1.5),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
       ),
     );
   }
 }
 
-class _PortfolioThumb extends StatelessWidget {
-  final VoidCallback onRemove;
-  const _PortfolioThumb({required this.onRemove});
+// ── Dashed upload area ────────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.forestGreen.withAlpha(20),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Stack(
-        children: [
-          const Center(
-              child: Text('📷', style: TextStyle(fontSize: 26))),
-          Positioned(
-            top: 4,
-            right: 4,
-            child: GestureDetector(
-              onTap: onRemove,
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: const BoxDecoration(
-                    color: AppColors.error, shape: BoxShape.circle),
-                child:
-                    const Icon(Icons.close, size: 13, color: Colors.white),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AddPhotoTile extends StatelessWidget {
+class _DashedUploadArea extends StatelessWidget {
   final VoidCallback onTap;
-  const _AddPhotoTile({required this.onTap});
+  final Widget child;
+
+  const _DashedUploadArea({required this.onTap, required this.child});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(
-              color: AppColors.divider,
-              width: 1.5,
-              style: BorderStyle.solid),
-          borderRadius: BorderRadius.circular(10),
+      child: CustomPaint(
+        painter: _DashBorderPainter(),
+        child: Container(
+          height: 116,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: AppColors.amber.withAlpha(15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: child,
         ),
-        child: Column(
+      ),
+    );
+  }
+}
+
+class _DashBorderPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppColors.amber
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    const dashWidth = 6.0;
+    const dashSpace = 4.0;
+    const radius = 12.0;
+
+    final path = Path()
+      ..addRRect(
+          RRect.fromLTRBR(0, 0, size.width, size.height, const Radius.circular(radius)));
+
+    final dashPath = _dashPath(path, dashWidth, dashSpace);
+    canvas.drawPath(dashPath, paint);
+  }
+
+  Path _dashPath(Path source, double dashWidth, double dashSpace) {
+    final dest = Path();
+    for (final metric in source.computeMetrics()) {
+      double dist = 0;
+      while (dist < metric.length) {
+        final len = (dist + dashWidth).clamp(dist, metric.length);
+        dest.addPath(metric.extractPath(dist, len), Offset.zero);
+        dist += dashWidth + dashSpace;
+      }
+    }
+    return dest;
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ── Continue button ───────────────────────────────────────────────────────────
+
+class _VendorContinueButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final String label;
+
+  const _VendorContinueButton({required this.onTap, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.forestGreen,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          elevation: 0,
+        ),
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.add_photo_alternate_outlined,
-                color: AppColors.textHint, size: 28),
-            const SizedBox(height: 4),
-            Text('Add Photo',
-                style: AppTextStyles.caption
-                    .copyWith(color: AppColors.textSecondary)),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward_rounded, size: 16),
           ],
         ),
       ),

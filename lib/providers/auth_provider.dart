@@ -9,6 +9,7 @@ class AuthState {
   final VendorProfile? vendorProfile;
   final bool isLoading;
   final String? error;
+  final bool needsOnboarding;
 
   const AuthState({
     this.user,
@@ -16,6 +17,7 @@ class AuthState {
     this.vendorProfile,
     this.isLoading = false,
     this.error,
+    this.needsOnboarding = false,
   });
 
   bool get isAuthenticated => user != null;
@@ -29,6 +31,7 @@ class AuthState {
     VendorProfile? vendorProfile,
     bool? isLoading,
     String? error,
+    bool? needsOnboarding,
   }) =>
       AuthState(
         user: user ?? this.user,
@@ -36,6 +39,7 @@ class AuthState {
         vendorProfile: vendorProfile ?? this.vendorProfile,
         isLoading: isLoading ?? this.isLoading,
         error: error,
+        needsOnboarding: needsOnboarding ?? this.needsOnboarding,
       );
 }
 
@@ -152,7 +156,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         partnerName: partner2Name,
       );
     }
-    state = state.copyWith(user: user, coupleProfile: coupleProfile, isLoading: false);
+    state = state.copyWith(
+      user: user,
+      coupleProfile: coupleProfile,
+      isLoading: false,
+      needsOnboarding: true,
+    );
   }
 
   void updateCoupleProfile({
@@ -173,7 +182,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       totalBudget: budget > 0 ? budget : null,
       currency: 'ZMW',
     );
-    state = state.copyWith(coupleProfile: profile);
+    state = state.copyWith(coupleProfile: profile, needsOnboarding: false);
+  }
+
+  void completeVendorOnboarding() {
+    state = state.copyWith(needsOnboarding: false);
   }
 
   Future<void> logout() async {

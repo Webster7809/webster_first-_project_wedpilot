@@ -97,32 +97,34 @@ class VendorDashboardScreen extends ConsumerWidget {
           SliverList(
             delegate: SliverChildListDelegate([
               // ── Stats cards — overlap the header ──────────────────────────
-              Container(
-                margin: const EdgeInsets.fromLTRB(16, -28, 16, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _StatCard(
-                        value: vendor?.rating?.toStringAsFixed(1) ?? '4.9',
-                        label: 'AVG RATING',
+              Transform.translate(
+                offset: const Offset(0, -28),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          value: vendor?.rating?.toStringAsFixed(1) ?? '4.9',
+                          label: 'AVG RATING',
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: _StatCard(value: '38', label: 'INQUIRIES'),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StatCard(
-                        value:
-                            '${vendor?.compositeScore.round() ?? 96}%',
-                        label: 'MATCH\nSCORE',
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: _StatCard(value: '38', label: 'INQUIRIES'),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          value:
+                              '${vendor?.compositeScore.round() ?? 96}%',
+                          label: 'MATCH\nSCORE',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 28),
 
               // ── Portfolio gallery ──────────────────────────────────────────
               Padding(
@@ -190,7 +192,7 @@ class VendorDashboardScreen extends ConsumerWidget {
                         value: vendor?.businessName != null
                             ? '${vendor!.businessName} — Open Air Venue'
                             : 'Mukuba Gardens — Open Air Venue',
-                        onTap: () => context.push('/vendor/profile'),
+                        onTap: () => context.push('/vendor/account'),
                       ),
                       const Divider(height: 1, indent: 52),
                       _ListingField(
@@ -199,47 +201,10 @@ class VendorDashboardScreen extends ConsumerWidget {
                         value: vendor != null && vendor.services.isNotEmpty
                             ? 'ZMW ${vendor.priceMin.toStringAsFixed(0)} – ${vendor.priceMax.toStringAsFixed(0)} per event'
                             : 'ZMW 28,000 – 35,000 per event',
-                        onTap: () => context.push('/vendor/profile'),
+                        onTap: () => context.push('/vendor/account'),
                       ),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(height: 28),
-
-              // ── Quick links ────────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text('Quick actions',
-                    style: AppTextStyles.headlineSmall
-                        .copyWith(color: AppColors.forestGreen)),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    _QuickLink(
-                      icon: Icons.bar_chart_rounded,
-                      label: 'Analytics',
-                      color: AppColors.amber,
-                      onTap: () => context.push('/vendor/analytics'),
-                    ),
-                    const SizedBox(width: 10),
-                    _QuickLink(
-                      icon: Icons.star_outline_rounded,
-                      label: 'Reviews',
-                      color: AppColors.forestGreen,
-                      onTap: () => context.push('/vendor/reviews'),
-                    ),
-                    const SizedBox(width: 10),
-                    _QuickLink(
-                      icon: Icons.person_outline_rounded,
-                      label: 'Edit Profile',
-                      color: const Color(0xFF4A8B6F),
-                      onTap: () => context.push('/vendor/profile'),
-                    ),
-                  ],
                 ),
               ),
               const SizedBox(height: 48),
@@ -381,55 +346,3 @@ class _ListingField extends StatelessWidget {
   }
 }
 
-// ── Quick link tile ────────────────────────────────────────────────────────────
-
-class _QuickLink extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QuickLink({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: color.withAlpha(18),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

@@ -38,294 +38,344 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         SnackBar(content: Text(state.error!), backgroundColor: AppColors.error),
       );
     }
-    // Router handles navigation on auth state change
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+
     return Scaffold(
       backgroundColor: AppColors.forestGreen,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              // ── Green Hero ─────────────────────────────────────────
-              SizedBox(
-                height: 280,
-                width: double.infinity,
-                child: Stack(
-                  children: [
-                    Container(color: AppColors.forestGreen),
-                    // Decorative circles
-                    Positioned(
-                      top: -40,
-                      right: -40,
-                      child: Container(
-                        width: 180,
-                        height: 180,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withAlpha(10),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 30,
-                      right: 60,
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.amber.withAlpha(30),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 40,
-                      left: -20,
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withAlpha(8),
-                        ),
-                      ),
-                    ),
-                    // Content
-                    Positioned.fill(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.amber,
-                                    borderRadius: BorderRadius.circular(13),
-                                  ),
-                                  child: const Icon(Icons.favorite, color: Colors.white, size: 24),
-                                ),
-                                const SizedBox(width: 12),
-                                Text('WedPilot',
-                                    style: GoogleFonts.playfairDisplay(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    )),
-                              ],
-                            ),
-                            const SizedBox(height: 28),
-                            Text('WELCOME BACK',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.amber,
-                                  letterSpacing: 1.5,
-                                )),
-                            const SizedBox(height: 8),
-                            Text('Continue planning\nyour perfect day',
-                                style: GoogleFonts.playfairDisplay(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  height: 1.2,
-                                )),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            final isTablet = w >= 600;
+            final isDesktop = w >= 900;
+            final maxWidth = isDesktop ? 450.0 : (isTablet ? 500.0 : double.infinity);
+
+            final content = Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _HeroSection(isDesktop: isDesktop),
+                _FormCard(
+                  formKey: _formKey,
+                  emailCtrl: _emailCtrl,
+                  passCtrl: _passCtrl,
+                  obscurePass: _obscurePass,
+                  onToggleObscure: () => setState(() => _obscurePass = !_obscurePass),
+                  onLogin: _login,
+                  isLoading: authState.isLoading,
                 ),
+              ],
+            );
+
+            return SingleChildScrollView(
+              child: Center(
+                child: maxWidth.isFinite
+                    ? ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: maxWidth),
+                        child: content,
+                      )
+                    : content,
               ),
-
-              // ── Form ──────────────────────────────────────────────
-              Container(
-                width: double.infinity,
-                constraints: const BoxConstraints(minHeight: 400),
-                decoration: BoxDecoration(
-                  color: AppColors.cream,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(28),
-                    topRight: Radius.circular(28),
-                  ),
-                ),
-                padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Sign in to your account',
-                          style: GoogleFonts.playfairDisplay(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.forestGreen,
-                          )),
-                      const SizedBox(height: 24),
-
-                      _CreamField(
-                        label: 'Email address',
-                        hint: 'you@email.com',
-                        controller: _emailCtrl,
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return 'Required';
-                          if (!v.contains('@')) return 'Invalid email';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      _CreamField(
-                        label: 'Password',
-                        hint: '••••••••',
-                        controller: _passCtrl,
-                        isPassword: true,
-                        obscure: _obscurePass,
-                        onToggleObscure: () => setState(() => _obscurePass = !_obscurePass),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return 'Required';
-                          if (v.length < 6) return 'Min 6 characters';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: GestureDetector(
-                          onTap: () => context.push('/forgot-password'),
-                          child: Text('Forgot password?',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.amber,
-                              )),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      SizedBox(
-                        width: double.infinity,
-                        height: 54,
-                        child: ElevatedButton(
-                          onPressed: authState.isLoading ? null : _login,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.forestGreen,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(28)),
-                            elevation: 0,
-                          ),
-                          child: authState.isLoading
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white),
-                                )
-                              : Text('Sign In',
-                                  style: GoogleFonts.inter(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Demo hint
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppColors.amber.withAlpha(20),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.amber.withAlpha(50)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Demo accounts',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.amber,
-                                )),
-                            const SizedBox(height: 6),
-                            _DemoRow(role: 'Couple', email: 'chanda@example.com'),
-                            _DemoRow(role: 'Vendor', email: 'vendor@example.com'),
-                            _DemoRow(role: 'Admin', email: 'admin@wedpilot.app'),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-
-                      Center(
-                        child: GestureDetector(
-                          onTap: () => context.go('/register'),
-                          child: RichText(
-                            text: TextSpan(
-                              style: GoogleFonts.inter(
-                                  fontSize: 14, color: AppColors.textSecondary),
-                              children: [
-                                const TextSpan(text: "New to WedPilot? "),
-                                TextSpan(
-                                  text: 'Create an account',
-                                  style: const TextStyle(
-                                    color: AppColors.amber,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 }
 
-class _DemoRow extends StatelessWidget {
-  final String role;
-  final String email;
-  const _DemoRow({required this.role, required this.email});
+// ── Hero ──────────────────────────────────────────────────────────────────────
+
+class _HeroSection extends StatelessWidget {
+  final bool isDesktop;
+  const _HeroSection({this.isDesktop = false});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 3),
-      child: Row(
+    return SizedBox(
+      height: isDesktop ? 220 : 280,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          SizedBox(
-            width: 55,
-            child: Text(role,
-                style: GoogleFonts.inter(
-                    fontSize: 11, color: AppColors.textSecondary)),
+          Positioned.fill(child: Container(color: AppColors.forestGreen)),
+          // Decorative circles
+          Positioned(
+            top: -40,
+            right: -40,
+            child: _Circle(size: 180, color: Colors.white.withAlpha(10)),
           ),
-          Text(email,
-              style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: AppColors.forestGreen,
-                  fontWeight: FontWeight.w500)),
+          Positioned(
+            top: 30,
+            right: 60,
+            child: _Circle(size: 80, color: AppColors.amber.withAlpha(30)),
+          ),
+          Positioned(
+            bottom: 40,
+            left: -20,
+            child: _Circle(size: 120, color: Colors.white.withAlpha(8)),
+          ),
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.amber,
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: const Icon(Icons.favorite, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'WedPilot',
+                        style: GoogleFonts.playfairDisplay(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    'WELCOME BACK',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.amber,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Continue planning\nyour perfect day',
+                    style: GoogleFonts.playfairDisplay(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _CreamField extends StatelessWidget {
+class _Circle extends StatelessWidget {
+  final double size;
+  final Color color;
+  const _Circle({required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+    );
+  }
+}
+
+// ── Form card ─────────────────────────────────────────────────────────────────
+
+class _FormCard extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
+  final TextEditingController emailCtrl;
+  final TextEditingController passCtrl;
+  final bool obscurePass;
+  final VoidCallback onToggleObscure;
+  final VoidCallback onLogin;
+  final bool isLoading;
+
+  const _FormCard({
+    required this.formKey,
+    required this.emailCtrl,
+    required this.passCtrl,
+    required this.obscurePass,
+    required this.onToggleObscure,
+    required this.onLogin,
+    required this.isLoading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(28),
+          topRight: Radius.circular(28),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
+      child: Form(
+        key: formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Sign in to your account',
+              style: GoogleFonts.playfairDisplay(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.forestGreen,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            _LabeledField(
+              label: 'Email address',
+              hint: 'you@email.com',
+              controller: emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Required';
+                if (!v.contains('@')) return 'Invalid email';
+                return null;
+              },
+            ),
+            const SizedBox(height: 20),
+            _LabeledField(
+              label: 'Password',
+              hint: '••••••••',
+              controller: passCtrl,
+              isPassword: true,
+              obscure: obscurePass,
+              onToggleObscure: onToggleObscure,
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Required';
+                if (v.length < 6) return 'Min 6 characters';
+                return null;
+              },
+            ),
+            const SizedBox(height: 10),
+
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: () => context.push('/forgot-password'),
+                child: Text(
+                  'Forgot password?',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.amber,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: isLoading ? null : onLogin,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.forestGreen,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  elevation: 0,
+                ),
+                child: isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        'Sign In',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // Demo accounts hint
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.amber.withAlpha(20),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.amber.withAlpha(50)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Demo accounts',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.amber,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const _DemoRow(role: 'Couple', email: 'chanda@example.com'),
+                  const _DemoRow(role: 'Vendor', email: 'vendor@example.com'),
+                  const _DemoRow(role: 'Admin', email: 'admin@wedpilot.app'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            Center(
+              child: GestureDetector(
+                onTap: () => context.go('/register'),
+                child: RichText(
+                  text: TextSpan(
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                    ),
+                    children: const [
+                      TextSpan(text: 'New to WedPilot? '),
+                      TextSpan(
+                        text: 'Create an account',
+                        style: TextStyle(
+                          color: AppColors.amber,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Labeled text field ────────────────────────────────────────────────────────
+
+class _LabeledField extends StatelessWidget {
   final String label;
   final String hint;
   final TextEditingController controller;
@@ -335,7 +385,7 @@ class _CreamField extends StatelessWidget {
   final bool obscure;
   final VoidCallback? onToggleObscure;
 
-  const _CreamField({
+  const _LabeledField({
     required this.label,
     required this.hint,
     required this.controller,
@@ -351,11 +401,14 @@ class _CreamField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppColors.forestGreen)),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.forestGreen,
+          ),
+        ),
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
@@ -365,26 +418,21 @@ class _CreamField extends StatelessWidget {
           style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 15),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.inter(
-                color: AppColors.textHint, fontSize: 14),
+            hintStyle: GoogleFonts.inter(color: AppColors.textHint, fontSize: 14),
             filled: true,
             fillColor: AppColors.surface,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: AppColors.divider),
+              borderSide: const BorderSide(color: AppColors.divider),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: AppColors.divider),
+              borderSide: const BorderSide(color: AppColors.divider),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: AppColors.amber, width: 1.5),
+              borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -392,8 +440,7 @@ class _CreamField extends StatelessWidget {
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: AppColors.error, width: 1.5),
+              borderSide: const BorderSide(color: AppColors.error, width: 1.5),
             ),
             suffixIcon: isPassword
                 ? IconButton(
@@ -410,6 +457,40 @@ class _CreamField extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Demo row ──────────────────────────────────────────────────────────────────
+
+class _DemoRow extends StatelessWidget {
+  final String role;
+  final String email;
+  const _DemoRow({required this.role, required this.email});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 55,
+            child: Text(
+              role,
+              style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary),
+            ),
+          ),
+          Text(
+            email,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: AppColors.forestGreen,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

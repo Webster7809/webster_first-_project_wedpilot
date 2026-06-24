@@ -39,8 +39,6 @@ const Map<String, Color> _kColor = {
   'Cake': Color(0xFFFB5607), 'Transport': Color(0xFF38B000),
 };
 
-const _kPlanLow = 'Low Budget Plan';
-const _kPlanMedium = 'Medium Budget Plan';
 const _kCurrency = 'ZMW';
 
 String _fmt(double v) => NumberFormat('#,##0').format(v.round());
@@ -67,9 +65,6 @@ class _BudgetSetupWizardState extends ConsumerState<BudgetSetupWizardScreen> {
 
   // Step 1 — budget class
   BudgetClass _budgetClass = BudgetClass.flexible;
-
-  // Step 2 — plans
-  String _selectedPlan = _kPlanLow;
 
   // Step 2 — services
   final List<String> _selectedServices = [
@@ -128,7 +123,6 @@ class _BudgetSetupWizardState extends ConsumerState<BudgetSetupWizardScreen> {
   static const List<String> _titles = [
     'Start Planning',
     'Select Budget Class',
-    'Budget Plans Options',
     'Select Items & Services',
     'AI Generated Budget',
     'AI Recommendations',
@@ -151,7 +145,7 @@ class _BudgetSetupWizardState extends ConsumerState<BudgetSetupWizardScreen> {
     if (!mounted) return;
     setState(() {
       _isGenerating = false;
-      _step = 5;
+      _step = 4;
     });
   }
 
@@ -335,18 +329,6 @@ class _BudgetSetupWizardState extends ConsumerState<BudgetSetupWizardScreen> {
           onNext: () => setState(() => _step = 2),
         );
       case 2:
-        return _PlansStep(
-          selectedPlan: _selectedPlan,
-          onSelectPlan: (plan) => setState(() {
-            _selectedPlan = plan;
-            _selectedServices.clear();
-            _selectedServices.addAll(plan == _kPlanLow
-                ? ['Venue', 'Catering', 'Photography', 'Decoration', 'Entertainment']
-                : _kServices);
-          }),
-          onNext: () => setState(() => _step = 3),
-        );
-      case 3:
         return _ServicesStep(
           selectedServices: _selectedServices,
           onToggle: (s) => setState(() => _selectedServices.contains(s)
@@ -355,16 +337,16 @@ class _BudgetSetupWizardState extends ConsumerState<BudgetSetupWizardScreen> {
           budgetLeft: _budgetLeft,
           customItems: _customItems,
           onAddCustomItem: _openAddCustomItem,
-          onNext: () => setState(() => _step = 4),
+          onNext: () => setState(() => _step = 3),
         );
-      case 4:
+      case 3:
         return _AIBudgetStep(
           preview: _preview,
           budgetAmount: _budgetAmount,
           isGenerating: _isGenerating,
           onGenerate: _generateBudget,
         );
-      case 5:
+      case 4:
         return aiRecs.when(
           loading: () => const _RecsLoadingView(),
           error: (err, _) => const Center(child: Text('Could not load recommendations. Please try again.')),
@@ -373,10 +355,10 @@ class _BudgetSetupWizardState extends ConsumerState<BudgetSetupWizardScreen> {
             budgetAmount: _budgetAmount,
             showAll: _showAllRecs,
             onShowMore: () => setState(() => _showAllRecs = true),
-            onNext: () => setState(() => _step = 6),
+            onNext: () => setState(() => _step = 5),
           ),
         );
-      case 6:
+      case 5:
         return _DownloadReportStep(
           budgetState: budgetState,
           recs: aiRecs.value?.map((m) => m.vendor).toList() ?? [],
@@ -513,122 +495,6 @@ class _DetailsStep extends StatelessWidget {
           const SizedBox(height: 36),
           _PrimaryButton(label: 'NEXT', onPressed: onNext),
         ],
-      ),
-    );
-  }
-}
-
-// ── Step 1: Budget Plans Options ───────────────────────────────────────────
-
-class _PlansStep extends StatelessWidget {
-  final String selectedPlan;
-  final ValueChanged<String> onSelectPlan;
-  final VoidCallback onNext;
-
-  const _PlansStep({
-    required this.selectedPlan,
-    required this.onSelectPlan,
-    required this.onNext,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              _PlanCard(
-                title: 'Low\nBudget\nPlan',
-                price: '$_kCurrency 50,000',
-                isSelected: selectedPlan == _kPlanLow,
-                onTap: () => onSelectPlan(_kPlanLow),
-              ),
-              const SizedBox(width: 14),
-              _PlanCard(
-                title: 'Medium\nBudget Plan',
-                price: '$_kCurrency 100,000+',
-                isSelected: selectedPlan == _kPlanMedium,
-                onTap: () => onSelectPlan(_kPlanMedium),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Choose Plans',
-            style: AppTextStyles.bodyMedium.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withAlpha(153)),
-            textAlign: TextAlign.center,
-          ),
-          const Spacer(),
-          _PrimaryButton(label: 'generate', onPressed: onNext),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlanCard extends StatelessWidget {
-  final String title;
-  final String price;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _PlanCard({
-    required this.title,
-    required this.price,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.forestGreen : Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isSelected ? AppColors.forestGreen : Theme.of(context).colorScheme.outlineVariant,
-              width: isSelected ? 2 : 1,
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: AppColors.forestGreen.withAlpha(40),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    )
-                  ]
-                : [],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: AppTextStyles.headlineSmall.copyWith(
-                  color: isSelected ? Colors.white : Theme.of(context).colorScheme.onSurface,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                price,
-                style: AppTextStyles.headlineMedium.copyWith(
-                  color: isSelected ? Colors.white : AppColors.forestGreen,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

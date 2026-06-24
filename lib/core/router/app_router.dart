@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../features/auth/screens/onboarding_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
 import '../../features/auth/screens/forgot_password_screen.dart';
@@ -40,6 +39,7 @@ import '../../features/invitation/screens/invitation_editor_screen.dart';
 import '../../features/invitation/screens/rsvp_dashboard_screen.dart';
 import '../../features/invitation/screens/public_invitation_screen.dart';
 import '../../features/couple/screens/reports_screen.dart';
+import '../../features/couple/screens/budget_share_screen.dart';
 import '../../features/shared/screens/notifications_screen.dart';
 import '../../features/shared/screens/settings_screen.dart';
 import '../../features/shared/screens/help_screen.dart';
@@ -66,7 +66,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(notifier.dispose);
 
   return GoRouter(
-    initialLocation: '/onboarding',
+    initialLocation: '/register',
     debugLogDiagnostics: false,
     refreshListenable: notifier,
 
@@ -75,7 +75,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final loc = state.matchedLocation;
 
       const authScreens = {
-        '/onboarding', '/login', '/register', '/forgot-password',
+        '/login', '/register', '/forgot-password',
         '/verify-email', '/couple-planning', '/vendor-onboarding',
       };
 
@@ -85,6 +85,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (!auth.isAuthenticated && !isAuthScreen && !isPublicInvite) {
         return '/login';
       }
+
+      if (auth.isAuthenticated && auth.needsOnboarding) {
+        final target = auth.isVendor ? '/vendor-onboarding' : '/couple-planning';
+        return loc == target ? null : target;
+      }
+
       if (auth.isAuthenticated && isAuthScreen) {
         return _homeForRole(auth);
       }
@@ -99,7 +105,6 @@ final routerProvider = Provider<GoRouter>((ref) {
 
     routes: [
       // ── Pre-auth ──────────────────────────────────────────────────────────
-      GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(path: '/forgot-password', builder: (_, _) => const ForgotPasswordScreen()),
@@ -126,6 +131,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state) =>
             VendorProfileScreen(vendorId: state.pathParameters['id']!),
       ),
+      GoRoute(path: '/couple/budget/share', builder: (_, _) => const BudgetShareScreen()),
       GoRoute(path: '/couple/budget/setup', builder: (_, _) => const BudgetSetupWizardScreen()),
       GoRoute(path: '/couple/budget/expense/new', builder: (_, _) => const ExpenseEntryScreen()),
       GoRoute(
@@ -143,7 +149,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/couple/reviews/new', builder: (_, _) => const ReviewSubmissionScreen()),
 
       // ── Vendor full-screen pushes ─────────────────────────────────────────
-      GoRoute(path: '/vendor/reviews', builder: (_, _) => const VendorReviewsScreen()),
+      GoRoute(path: '/vendor/analytics', builder: (_, _) => const VendorAnalyticsScreen()),
       GoRoute(path: '/vendor/messages', builder: (_, _) => const VendorMessagesScreen()),
       GoRoute(
         path: '/vendor/messages/:convoId',
@@ -205,10 +211,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             GoRoute(path: '/vendor/leads', builder: (_, _) => const LeadInboxScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/vendor/analytics', builder: (_, _) => const VendorAnalyticsScreen()),
+            GoRoute(path: '/vendor/reviews', builder: (_, _) => const VendorReviewsScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/vendor/profile', builder: (_, _) => const VendorProfileManagementScreen()),
+            GoRoute(path: '/vendor/account', builder: (_, _) => const VendorProfileManagementScreen()),
           ]),
         ],
       ),

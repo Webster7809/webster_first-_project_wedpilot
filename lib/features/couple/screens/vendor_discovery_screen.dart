@@ -1,407 +1,632 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../providers/auth_provider.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/vendor_provider.dart';
-import '../../../widgets/wed_card.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../widgets/loading_shimmer.dart';
 
-class VendorDiscoveryScreen extends ConsumerWidget {
+// Category budget allocations (derived from couple profile budget)
+const _kCategoryBudgets = {
+  'Venue': 32000,
+  'Catering': 28000,
+  'Decor & flowers': 14500,
+  'Photography': 12000,
+  'DJ & MC': 5000,
+  'Transport': 3500,
+};
+
+const _kAllCategories = [
+  'Venue',
+  'Catering',
+  'Photography',
+  'Decor & flowers',
+  'DJ & MC',
+  'Transport',
+];
+
+const _kFilters = ['All', 'Under 30k', '200+ capacity', 'Verified'];
+
+class VendorDiscoveryScreen extends ConsumerStatefulWidget {
   const VendorDiscoveryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final category = ref.watch(selectedCategoryProvider);
-    final vendorsAsync = ref.watch(vendorListProvider(category));
-    final wishlist = ref.watch(wishlistProvider);
-    final picked = ref.watch(pickedVendorsProvider);
-    final couple = ref.watch(coupleProfileProvider);
-    final location = couple?.location;
-    final hasLocation = location != null && location.isNotEmpty;
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Find Vendors'),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(icon: const Icon(Icons.tune_outlined), onPressed: () {}),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: TextField(
-              onChanged: (v) =>
-                  ref.read(vendorSearchQueryProvider.notifier).state = v,
-              decoration: InputDecoration(
-                hintText: 'Search vendors...',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: AppColors.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.divider),
-                ),
-                contentPadding:
-                    const EdgeInsets.symmetric(vertical: 12),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // Location match banner
-          if (hasLocation)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.info.withAlpha(20),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                      color: AppColors.info.withAlpha(64)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.location_on,
-                        size: 15, color: AppColors.info),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Showing best vendors near $location',
-                        style: AppTextStyles.caption
-                            .copyWith(color: AppColors.info),
-                      ),
-                    ),
-                    const Icon(Icons.auto_awesome,
-                        size: 14, color: AppColors.goldPremium),
-                    const SizedBox(width: 4),
-                    Text('AI matched',
-                        style: AppTextStyles.caption.copyWith(
-                            color: AppColors.goldPremium,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-            ),
-          const SizedBox(height: 8),
-
-          // Category tabs
-          SizedBox(
-            height: 42,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: AppConstants.vendorCategories.length,
-              itemBuilder: (_, i) {
-                final cat = AppConstants.vendorCategories[i];
-                final icon = AppConstants.vendorCategoryIcons[i];
-                final isSelected = cat == category;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: FilterChip(
-                    label: Text('$icon $cat'),
-                    selected: isSelected,
-                    onSelected: (_) =>
-                        ref
-                            .read(selectedCategoryProvider.notifier)
-                            .state = cat,
-                    selectedColor:
-                        AppColors.secondary.withAlpha(38),
-                    checkmarkColor: AppColors.secondary,
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // Vendor picker dropdown
-          const _VendorPickerDropdown(),
-          const SizedBox(height: 8),
-
-          // Vendor grid
-          Expanded(
-            child: vendorsAsync.when(
-              loading: () => GridView.count(
-                crossAxisCount: 2,
-                padding: const EdgeInsets.all(16),
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.78,
-                children: const [
-                  VendorCardShimmer(),
-                  VendorCardShimmer(),
-                  VendorCardShimmer(),
-                  VendorCardShimmer(),
-                ],
-              ),
-              error: (e, _) => Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline,
-                        size: 48, color: AppColors.error),
-                    const SizedBox(height: 8),
-                    Text('Failed to load vendors',
-                        style: AppTextStyles.bodyMedium),
-                  ],
-                ),
-              ),
-              data: (vendors) {
-                if (vendors.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('🔍',
-                            style: TextStyle(fontSize: 48)),
-                        const SizedBox(height: 12),
-                        Text('No $category vendors yet',
-                            style: AppTextStyles.headlineMedium),
-                        Text('Check back soon!',
-                            style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  );
-                }
-                return GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 0.75,
-                  ),
-                  itemCount: vendors.length,
-                  itemBuilder: (_, i) {
-                    final vendor = vendors[i];
-                    return VendorCard(
-                      vendor: vendor,
-                      isWishlisted: wishlist.contains(vendor.id),
-                      isPicked: picked.contains(vendor.id),
-                      rank: i + 1,
-                      onTap: () =>
-                          context.push('/couple/vendors/${vendor.id}'),
-                      onWishlistToggle: () => ref
-                          .read(wishlistProvider.notifier)
-                          .toggle(vendor.id),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  ConsumerState<VendorDiscoveryScreen> createState() =>
+      _VendorDiscoveryScreenState();
 }
 
-// ── Vendor picker dropdown ──────────────────────────────────────────────────
-
-class _VendorPickerDropdown extends ConsumerStatefulWidget {
-  const _VendorPickerDropdown();
-
-  @override
-  ConsumerState<_VendorPickerDropdown> createState() =>
-      _VendorPickerDropdownState();
-}
-
-class _VendorPickerDropdownState extends ConsumerState<_VendorPickerDropdown> {
-  bool _expanded = false;
+class _VendorDiscoveryScreenState
+    extends ConsumerState<VendorDiscoveryScreen> {
+  String _selectedCategory = 'Venue';
+  int _filterIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(selectedCategoryProvider, (prev, _) {
-      if (_expanded) setState(() => _expanded = false);
-    });
+    final coupleProfile = ref.watch(coupleProfileProvider);
+    final city = coupleProfile?.location?.split(',').first.trim() ?? 'your city';
+    final vendorAsync = ref.watch(vendorListProvider(_selectedCategory));
 
-    final category = ref.watch(selectedCategoryProvider);
-    final vendorsAsync = ref.watch(vendorListProvider(category));
-    final picked = ref.watch(pickedVendorsProvider);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: vendorsAsync.when(
-        loading: () => const SizedBox.shrink(),
-        error: (err, _) => const SizedBox.shrink(),
-        data: (vendors) {
-          final pickedCount =
-              vendors.where((v) => picked.contains(v.id)).length;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header button
-              InkWell(
-                onTap: () => setState(() => _expanded = !_expanded),
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: pickedCount > 0
-                          ? AppColors.secondary.withAlpha(128)
-                          : AppColors.divider,
-                    ),
-                  ),
-                  child: Row(
+    return Scaffold(
+      backgroundColor: AppColors.cream,
+      body: CustomScrollView(
+        slivers: [
+          // ── Dark green header with match banner ──────────────────────────────
+          SliverAppBar(
+            pinned: true,
+            backgroundColor: AppColors.forestGreen,
+            expandedHeight: 160,
+            automaticallyImplyLeading: false,
+            elevation: 0,
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: IconButton(
+                  icon: const Icon(Icons.tune_rounded, color: Colors.white),
+                  onPressed: () {},
+                ),
+              ),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 60, 16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        pickedCount > 0
-                            ? Icons.check_circle
-                            : Icons.checklist_outlined,
-                        size: 18,
-                        color: pickedCount > 0
-                            ? AppColors.secondary
-                            : AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          pickedCount > 0
-                              ? '$pickedCount vendor${pickedCount > 1 ? 's' : ''} picked in $category'
-                              : 'Pick a $category vendor',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: pickedCount > 0
-                                ? AppColors.secondary
-                                : AppColors.textSecondary,
-                            fontWeight: pickedCount > 0
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
+                      Text(
+                        'VENDOR MATCHES',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.amber,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.4,
                         ),
                       ),
-                      Icon(
-                        _expanded ? Icons.expand_less : Icons.expand_more,
-                        color: AppColors.textSecondary,
-                        size: 20,
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withAlpha(18),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: const BoxDecoration(
+                                color: AppColors.amber,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.star_rounded,
+                                  color: Colors.white, size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '12 vendors matched to your wedding',
+                                    style: AppTextStyles.titleMedium.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Ranked by fit, budget & ratings in $city',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: Colors.white.withAlpha(178),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-              // Expanded list
-              if (_expanded)
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.divider),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(15),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      for (int i = 0; i < vendors.length; i++) ...[
-                        if (i > 0)
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                        _VendorPickerTile(
-                          vendor: vendors[i],
-                          isPicked: picked.contains(vendors[i].id),
-                          onToggle: () => ref
-                              .read(pickedVendorsProvider.notifier)
-                              .toggle(vendors[i].id),
+            ),
+          ),
+
+          // ── Category budget tabs ─────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Container(
+              color: AppColors.forestGreen,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _kAllCategories.map((cat) {
+                      final budget = _kCategoryBudgets[cat];
+                      final isSelected = _selectedCategory == cat;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () =>
+                              setState(() => _selectedCategory = cat),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.amber.withAlpha(40)
+                                  : Colors.white.withAlpha(18),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.amber
+                                    : Colors.transparent,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  cat,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? AppColors.amber
+                                        : Colors.white,
+                                  ),
+                                ),
+                                if (budget != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'ZMW ${_fmt(budget)}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isSelected
+                                          ? AppColors.amber.withAlpha(200)
+                                          : Colors.white.withAlpha(160),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
-                      ],
-                    ],
+                      );
+                    }).toList(),
                   ),
                 ),
-            ],
-          );
-        },
+              ),
+            ),
+          ),
+
+          // ── Filter pills ─────────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: List.generate(_kFilters.length, (i) {
+                    final active = _filterIndex == i;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () => setState(() => _filterIndex = i),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: active
+                                ? AppColors.forestGreen
+                                : AppColors.surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: active
+                                  ? AppColors.forestGreen
+                                  : AppColors.divider,
+                            ),
+                          ),
+                          child: Text(
+                            _filterLabel(i),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: active
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: active
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Match count text ─────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: vendorAsync.when(
+                data: (vendors) => Text(
+                  '${vendors.length} ${_selectedCategory.toLowerCase()} vendors'
+                  ' match your Flexible tier in $city',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                loading: () => const SizedBox.shrink(),
+                error: (e, st) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+
+          // ── Vendor cards ─────────────────────────────────────────────────────
+          vendorAsync.when(
+            loading: () => SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) => const Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: LoadingShimmer(
+                      width: double.infinity,
+                      height: 280,
+                      borderRadius: 16,
+                    ),
+                  ),
+                  childCount: 3,
+                ),
+              ),
+            ),
+            error: (e, st) => SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Text(
+                    'Failed to load vendors',
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                ),
+              ),
+            ),
+            data: (vendors) => vendors.isEmpty
+                ? SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(48),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.search_off_rounded,
+                                size: 48, color: AppColors.textHint),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No $_selectedCategory vendors in $city yet',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.textSecondary),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                : SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (_, i) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: _VendorMatchCard(
+                            vendor: vendors[i],
+                            matchPercent: _matchPercent(vendors[i], i),
+                          ),
+                        ),
+                        childCount: vendors.length,
+                      ),
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }
+
+  int _matchPercent(VendorProfile v, int rank) {
+    final base = (v.compositeScore * 0.7 + (v.rating ?? 0) * 6).round();
+    return (base - rank * 3).clamp(70, 99);
+  }
+
+  String _filterLabel(int i) {
+    final cat = _selectedCategory.toLowerCase();
+    return switch (i) {
+      0 => 'All ${cat}s',
+      1 => 'Under 30k',
+      2 => '200+ capacity',
+      3 => 'Verified',
+      _ => _kFilters[i],
+    };
+  }
+
+  String _fmt(int n) {
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(0)},000';
+    return n.toString();
+  }
 }
 
-class _VendorPickerTile extends StatelessWidget {
-  final VendorProfile vendor;
-  final bool isPicked;
-  final VoidCallback onToggle;
+// ── Vendor match card ─────────────────────────────────────────────────────────
 
-  const _VendorPickerTile({
+class _VendorMatchCard extends ConsumerWidget {
+  final VendorProfile vendor;
+  final int matchPercent;
+
+  const _VendorMatchCard({
     required this.vendor,
-    required this.isPicked,
-    required this.onToggle,
+    required this.matchPercent,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final priceMin = vendor.priceMin > 0
+        ? 'ZMW ${_fmt(vendor.priceMin.round())} – ${_fmt(vendor.priceMax.round())}'
+        : null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.cardShadow,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Photo area with match badge
+          Stack(
+            children: [
+              Container(
+                height: 180,
+                decoration: BoxDecoration(
+                  color: AppColors.amber.withAlpha(20),
+                  borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16)),
+                ),
+                child: const Center(
+                  child: Icon(Icons.camera_alt_outlined,
+                      size: 44, color: AppColors.amber),
+                ),
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.forestGreen,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$matchPercent% match',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Name + rating
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        vendor.businessName,
+                        style: AppTextStyles.headlineLarge.copyWith(
+                          color: AppColors.forestGreen,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    if (vendor.rating != null) ...[
+                      const SizedBox(width: 8),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.star_rounded,
+                              color: AppColors.amber, size: 16),
+                          const SizedBox(width: 3),
+                          Text(
+                            vendor.rating!.toStringAsFixed(1),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${vendor.category} · ${vendor.location ?? ''}',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 10),
+
+                // Chips row
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    _TagChip(label: 'Up to 300 guests', icon: Icons.people_outline_rounded),
+                    if (vendor.isVerified)
+                      _TagChip(
+                        label: 'Verified',
+                        icon: Icons.verified_user_outlined,
+                        color: AppColors.success,
+                        textColor: AppColors.success,
+                        bgColor: AppColors.successBg,
+                      ),
+                  ],
+                ),
+
+                if (priceMin != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    priceMin,
+                    style: AppTextStyles.priceTag.copyWith(
+                      color: AppColors.amber,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 12),
+                // Action row
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.favorite_border_rounded,
+                          color: AppColors.textSecondary, size: 22),
+                      onPressed: () {},
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            context.push('/couple/vendors/${vendor.id}'),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.divider),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          foregroundColor: AppColors.textPrimary,
+                        ),
+                        child: const Text('View profile',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 13)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.amber,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          elevation: 0,
+                        ),
+                        child: const Text('Shortlist',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 13)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmt(int n) {
+    if (n >= 1000) {
+      final thousands = n ~/ 1000;
+      final rem = n % 1000;
+      return rem == 0 ? '$thousands,000' : '$thousands,${rem.toString().padLeft(3, '0')}';
+    }
+    return n.toString();
+  }
+}
+
+// ── Tag chip ──────────────────────────────────────────────────────────────────
+
+class _TagChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Color textColor;
+  final Color bgColor;
+
+  const _TagChip({
+    required this.label,
+    required this.icon,
+    this.color = AppColors.textSecondary,
+    this.textColor = AppColors.textSecondary,
+    this.bgColor = AppColors.creamDark,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onToggle,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                color: isPicked ? AppColors.secondary : Colors.transparent,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: isPicked ? AppColors.secondary : AppColors.divider,
-                  width: 2,
-                ),
-              ),
-              child: isPicked
-                  ? const Icon(Icons.check, size: 14, color: Colors.white)
-                  : null,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: textColor,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    vendor.businessName,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      fontWeight:
-                          isPicked ? FontWeight.w600 : FontWeight.normal,
-                      color: isPicked
-                          ? AppColors.secondary
-                          : AppColors.textPrimary,
-                    ),
-                  ),
-                  Text(
-                    vendor.location ?? '',
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.star, size: 12, color: AppColors.goldPremium),
-            const SizedBox(width: 2),
-            Text(
-              vendor.rating?.toStringAsFixed(1) ?? '—',
-              style: AppTextStyles.caption
-                  .copyWith(color: AppColors.textPrimary),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

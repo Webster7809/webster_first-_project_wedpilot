@@ -10,6 +10,10 @@ import '../../../providers/budget_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../providers/vendor_provider.dart';
 
+const _kTabletBreak = 600.0;
+const _kDesktopBreak = 1024.0;
+const _kMaxWidth = 900.0;
+
 class CoupleDashboardScreen extends ConsumerWidget {
   const CoupleDashboardScreen({super.key});
 
@@ -87,59 +91,134 @@ class CoupleDashboardScreen extends ConsumerWidget {
             ],
           ),
 
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 48),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
+          // ── Responsive Content ────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 48),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final screenWidth = MediaQuery.of(context).size.width;
+                  final isTablet = screenWidth >= _kTabletBreak;
+                  final isDesktop = screenWidth >= _kDesktopBreak;
 
-                // ── Wedding Countdown ──────────────────────────────────────────
-                _CountdownCard(couple: couple),
-                const SizedBox(height: 14),
+                  final content = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Stat cards (responsive grid) ─────────────────────────
+                      _StatCardsGrid(
+                        couple: couple,
+                        budget: budget,
+                        isTablet: isTablet,
+                        onBudgetDetails: () => context.go('/couple/budget'),
+                        onBudgetSetup: () => context.push('/couple/budget/setup'),
+                      ),
+                      const SizedBox(height: 24),
 
-                // ── Budget Overview ────────────────────────────────────────────
-                if (budget != null)
-                  _BudgetOverviewCard(
-                    budget: budget,
-                    onDetails: () => context.go('/couple/budget'),
-                  )
-                else
-                  _SetupBudgetPrompt(onTap: () => context.push('/couple/budget/setup')),
-                const SizedBox(height: 14),
+                      // ── Shortlist ─────────────────────────────────────────────
+                      _SectionRow(
+                        title: 'Your shortlist',
+                        actionLabel: 'See all',
+                        onAction: () => context.push('/couple/wishlist'),
+                      ),
+                      const SizedBox(height: 12),
+                      _ShortlistScroll(
+                        vendors: shortlisted,
+                        onTap: (id) => context.push('/couple/vendors/$id'),
+                        onDiscover: () => context.go('/couple/vendors'),
+                      ),
+                      const SizedBox(height: 28),
 
-                // ── RSVP Card ─────────────────────────────────────────────────
-                const _RsvpCard(confirmed: 118, total: 150),
-                const SizedBox(height: 24),
+                      // ── Planning Checklist ────────────────────────────────────
+                      _SectionRow(
+                        title: 'Planning checklist',
+                        actionLabel: 'View all',
+                        onAction: () => context.push('/couple/checklist'),
+                      ),
+                      const SizedBox(height: 12),
+                      _ChecklistPreview(
+                        tasks: tasks.take(3).toList(),
+                        onTap: () => context.push('/couple/checklist'),
+                      ),
+                    ],
+                  );
 
-                // ── Your Shortlist ─────────────────────────────────────────────
-                _SectionRow(
-                  title: 'Your shortlist',
-                  actionLabel: 'See all',
-                  onAction: () => context.push('/couple/wishlist'),
-                ),
-                const SizedBox(height: 12),
-                _ShortlistScroll(
-                  vendors: shortlisted,
-                  onTap: (id) => context.push('/couple/vendors/$id'),
-                  onDiscover: () => context.go('/couple/vendors'),
-                ),
-                const SizedBox(height: 24),
+                  if (isDesktop) {
+                    return Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: _kMaxWidth),
+                        child: content,
+                      ),
+                    );
+                  }
 
-                // ── Planning Checklist ─────────────────────────────────────────
-                _SectionRow(
-                  title: 'Planning checklist',
-                  actionLabel: 'View all',
-                  onAction: () => context.push('/couple/checklist'),
-                ),
-                const SizedBox(height: 12),
-                _ChecklistPreview(
-                  tasks: tasks.take(3).toList(),
-                  onTap: () => context.push('/couple/checklist'),
-                ),
-              ]),
+                  return Padding(
+                    padding: EdgeInsets.symmetric(horizontal: isTablet ? 24.0 : 16.0),
+                    child: content,
+                  );
+                },
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Responsive stat card grid ──────────────────────────────────────────────────
+
+class _StatCardsGrid extends StatelessWidget {
+  final dynamic couple;
+  final dynamic budget;
+  final bool isTablet;
+  final VoidCallback onBudgetDetails;
+  final VoidCallback onBudgetSetup;
+
+  const _StatCardsGrid({
+    required this.couple,
+    this.budget,
+    required this.isTablet,
+    required this.onBudgetDetails,
+    required this.onBudgetSetup,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final countdown = _CountdownCard(couple: couple);
+    final budgetCard = budget != null
+        ? _BudgetOverviewCard(budget: budget, onDetails: onBudgetDetails)
+        : _SetupBudgetPrompt(onTap: onBudgetSetup);
+    const rsvp = _RsvpCard(confirmed: 118, total: 150);
+
+    if (isTablet) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          countdown,
+          const SizedBox(height: 12),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: budgetCard),
+                const SizedBox(width: 12),
+                Expanded(child: rsvp),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        countdown,
+        const SizedBox(height: 12),
+        budgetCard,
+        const SizedBox(height: 12),
+        rsvp,
+      ],
     );
   }
 }
@@ -158,7 +237,8 @@ class _SectionRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: AppTextStyles.headlineSmall.copyWith(color: AppColors.forestGreen)),
+        Text(title,
+            style: AppTextStyles.headlineSmall.copyWith(color: AppColors.forestGreen)),
         if (actionLabel != null)
           GestureDetector(
             onTap: onAction,
@@ -193,10 +273,17 @@ class _CountdownCard extends StatelessWidget {
         : '12 September 2026';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.forestGreen,
         borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.forestGreen.withAlpha(60),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -212,11 +299,11 @@ class _CountdownCard extends StatelessWidget {
                     letterSpacing: 1.2,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   dateLabel,
                   style: GoogleFonts.playfairDisplay(
-                    fontSize: 20,
+                    fontSize: 17,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
@@ -229,9 +316,8 @@ class _CountdownCard extends StatelessWidget {
             children: [
               Text(
                 days,
-                style: const TextStyle(
-                  fontFamily: 'Playfair Display',
-                  fontSize: 48,
+                style: GoogleFonts.playfairDisplay(
+                  fontSize: 36,
                   fontWeight: FontWeight.w800,
                   color: AppColors.amber,
                   height: 1.0,
@@ -243,6 +329,7 @@ class _CountdownCard extends StatelessWidget {
                   color: AppColors.amber,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.0,
+                  fontSize: 9,
                 ),
               ),
             ],
@@ -261,7 +348,6 @@ class _BudgetOverviewCard extends StatelessWidget {
 
   const _BudgetOverviewCard({required this.budget, required this.onDetails});
 
-  // Each budget category gets a color for the segmented bar
   static const _catColors = <String, Color>{
     'Venue': Color(0xFFC9892B),
     'Catering': Color(0xFFD4A017),
@@ -286,13 +372,13 @@ class _BudgetOverviewCard extends StatelessWidget {
     final unallocated = (total - spent).clamp(0.0, total);
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: AppColors.forestGreen.withAlpha(15),
+            color: AppColors.forestGreen.withAlpha(18),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -301,7 +387,6 @@ class _BudgetOverviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -316,16 +401,14 @@ class _BudgetOverviewCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
-
-          // Spent line
+          const SizedBox(height: 8),
           RichText(
             text: TextSpan(
               children: [
                 TextSpan(
                   text: 'ZMW ${spent.toStringAsFixed(0)} ',
                   style: GoogleFonts.playfairDisplay(
-                    fontSize: 22,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: AppColors.forestGreen,
                   ),
@@ -338,17 +421,12 @@ class _BudgetOverviewCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 12),
-
-          // Segmented bar
+          const SizedBox(height: 10),
           _SegmentedBar(
             segments: [
               ...categories.take(4).map((c) => _BarSegment(
-                    fraction: total > 0
-                        ? (c.spentAmount as double) / total
-                        : 0,
-                    color: _catColors[c.categoryName] ??
-                        AppColors.forestGreen,
+                    fraction: total > 0 ? (c.spentAmount as double) / total : 0,
+                    color: _catColors[c.categoryName] ?? AppColors.forestGreen,
                   )),
               if (unallocated > 0 && total > 0)
                 _BarSegment(
@@ -357,9 +435,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 10),
-
-          // Legend
+          const SizedBox(height: 12),
           Wrap(
             spacing: 14,
             runSpacing: 4,
@@ -404,10 +480,7 @@ class _SegmentedBar extends StatelessWidget {
         children: segments.map((seg) {
           return Flexible(
             flex: (seg.fraction * 1000).round().clamp(1, 1000),
-            child: Container(
-              height: 8,
-              color: seg.color,
-            ),
+            child: Container(height: 8, color: seg.color),
           );
         }).toList(),
       ),
@@ -432,12 +505,13 @@ class _LegendDot extends StatelessWidget {
         ),
         const SizedBox(width: 4),
         Text(label,
-            style:
-                AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
       ],
     );
   }
 }
+
+// ── Budget setup prompt ────────────────────────────────────────────────────────
 
 class _SetupBudgetPrompt extends StatelessWidget {
   final VoidCallback onTap;
@@ -448,15 +522,15 @@ class _SetupBudgetPrompt extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: AppColors.amber.withAlpha(80)),
           boxShadow: [
             BoxShadow(
-              color: AppColors.forestGreen.withAlpha(12),
-              blurRadius: 12,
+              color: AppColors.forestGreen.withAlpha(15),
+              blurRadius: 16,
               offset: const Offset(0, 4),
             ),
           ],
@@ -464,16 +538,16 @@ class _SetupBudgetPrompt extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 color: AppColors.amber.withAlpha(26),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.account_balance_wallet_outlined,
-                  color: AppColors.amber, size: 22),
+                  color: AppColors.amber, size: 20),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -481,6 +555,7 @@ class _SetupBudgetPrompt extends StatelessWidget {
                   Text('Set up your budget',
                       style: AppTextStyles.titleMedium
                           .copyWith(color: AppColors.forestGreen)),
+                  const SizedBox(height: 2),
                   Text('Let AI allocate across all categories',
                       style: AppTextStyles.caption
                           .copyWith(color: AppColors.textSecondary)),
@@ -505,13 +580,13 @@ class _RsvpCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: AppColors.forestGreen.withAlpha(12),
+            color: AppColors.forestGreen.withAlpha(18),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -520,27 +595,27 @@ class _RsvpCard extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 64,
-            height: 64,
+            width: 52,
+            height: 52,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 PieChart(
                   PieChartData(
                     sectionsSpace: 2,
-                    centerSpaceRadius: 22,
+                    centerSpaceRadius: 16,
                     startDegreeOffset: -90,
                     sections: [
                       PieChartSectionData(
                         value: confirmed.toDouble(),
                         color: AppColors.forestGreen,
-                        radius: 10,
+                        radius: 11,
                         showTitle: false,
                       ),
                       PieChartSectionData(
                         value: (total - confirmed).toDouble(),
                         color: const Color(0xFFE0DDD6),
-                        radius: 10,
+                        radius: 11,
                         showTitle: false,
                       ),
                     ],
@@ -567,7 +642,7 @@ class _RsvpCard extends StatelessWidget {
                   style: AppTextStyles.titleMedium
                       .copyWith(color: AppColors.forestGreen),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   "Guests have RSVP'd to your invitation",
                   style: AppTextStyles.caption
@@ -604,8 +679,15 @@ class _ShortlistScroll extends StatelessWidget {
           height: 120,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(color: AppColors.divider),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.forestGreen.withAlpha(12),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -622,7 +704,7 @@ class _ShortlistScroll extends StatelessWidget {
     }
 
     return SizedBox(
-      height: 130,
+      height: 140,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: vendors.length,
@@ -650,14 +732,14 @@ class _ShortlistCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 110,
+        width: 120,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: AppColors.forestGreen.withAlpha(15),
-              blurRadius: 8,
+              color: AppColors.forestGreen.withAlpha(18),
+              blurRadius: 10,
               offset: const Offset(0, 3),
             ),
           ],
@@ -666,9 +748,8 @@ class _ShortlistCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image area
             Container(
-              height: 78,
+              height: 88,
               color: AppColors.cream,
               child: Center(
                 child: Icon(
@@ -678,9 +759,8 @@ class _ShortlistCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Info
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -727,12 +807,12 @@ class _ChecklistPreview extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: AppColors.forestGreen.withAlpha(12),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+              color: AppColors.forestGreen.withAlpha(15),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -744,8 +824,8 @@ class _ChecklistPreview extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Text(
                   'No tasks yet — tap to set up your checklist',
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.textSecondary),
+                  style:
+                      AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                 ),
               ),
           ],
@@ -763,7 +843,7 @@ class _ChecklistRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final done = task.isCompleted as bool;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       child: Row(
         children: [
           Container(
@@ -787,8 +867,7 @@ class _ChecklistRow extends StatelessWidget {
               task.task as String,
               style: AppTextStyles.bodySmall.copyWith(
                 color: done ? AppColors.textSecondary : AppColors.textPrimary,
-                decoration:
-                    done ? TextDecoration.lineThrough : TextDecoration.none,
+                decoration: done ? TextDecoration.lineThrough : TextDecoration.none,
               ),
             ),
           ),

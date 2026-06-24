@@ -1,12 +1,84 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/admin_provider.dart';
-import '../../../providers/auth_provider.dart';
-import '../../../widgets/wed_card.dart';
-import '../../../widgets/section_header.dart';
+
+// ── Display-only data for "Recent vendor signups" panel ───────────────────────
+
+class _SignupRow {
+  final String name;
+  final String category;
+  final String location;
+  final String status;
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  const _SignupRow(this.name, this.category, this.location, this.status,
+      this.icon, this.iconBg, this.iconColor);
+}
+
+const _kRecentSignups = [
+  _SignupRow('Mukuba Gardens', 'Venue', 'Ndola', 'verified',
+      Icons.apartment_outlined, Color(0xFFE4F3EC), AppColors.adminGreen),
+  _SignupRow('Copperbelt Catering', 'Catering', 'Kitwe', 'pending',
+      Icons.restaurant_outlined, Color(0xFFFEF0E7), AppColors.adminAmber),
+  _SignupRow('Lumwana Decor', 'Decor & flowers', 'Ndola', 'verified',
+      Icons.local_florist_outlined, Color(0xFFFCE4EC), AppColors.adminPink),
+  _SignupRow('Zambezi Sounds DJ', 'DJ & MC', 'Lusaka', 'flagged',
+      Icons.music_note_outlined, Color(0xFFE8EAF6), AppColors.adminIndigo),
+];
+
+// ── Category helpers ──────────────────────────────────────────────────────────
+
+IconData _iconForCategory(String category) {
+  switch (category.toLowerCase()) {
+    case 'venue':
+      return Icons.apartment_outlined;
+    case 'attire':
+      return Icons.checkroom_outlined;
+    case 'transport':
+      return Icons.directions_bus_outlined;
+    case 'catering':
+      return Icons.restaurant_outlined;
+    case 'floristry':
+      return Icons.local_florist_outlined;
+    default:
+      return Icons.storefront_outlined;
+  }
+}
+
+Color _bgForCategory(String category) {
+  switch (category.toLowerCase()) {
+    case 'venue':
+      return AppColors.adminGreenBg;
+    case 'attire':
+      return AppColors.adminPinkBg;
+    case 'transport':
+      return AppColors.adminBlueBg;
+    case 'catering':
+      return AppColors.adminAmberBg;
+    default:
+      return AppColors.adminNeutralBg;
+  }
+}
+
+Color _colorForCategory(String category) {
+  switch (category.toLowerCase()) {
+    case 'venue':
+      return AppColors.adminGreen;
+    case 'attire':
+      return AppColors.adminPink;
+    case 'transport':
+      return AppColors.adminBlue;
+    case 'catering':
+      return AppColors.adminAmber;
+    default:
+      return AppColors.adminNeutral;
+  }
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -17,525 +89,481 @@ class AdminDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
-  bool _alertDismissed = false;
+  final _searchController = TextEditingController();
 
-  void _confirmLogout() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Sign out?'),
-        content: const Text('You will be returned to the login screen.'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ref.read(authProvider.notifier).logout();
-            },
-            child: const Text('Sign out',
-                style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _alertMessage(AdminState s) {
-    final parts = <String>[];
-    if (s.pendingVendors.isNotEmpty) {
-      parts.add('${s.pendingVendors.length} vendors pending approval');
-    }
-    if (s.totalFlaggedItems > 0) {
-      parts.add('${s.totalFlaggedItems} items flagged');
-    }
-    return parts.join(' · ');
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final adminState = ref.watch(adminProvider);
-    final hour = DateTime.now().hour;
-    final greeting =
-        hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-
-    final hasAlerts = adminState.pendingVendors.isNotEmpty ||
-        adminState.totalFlaggedItems > 0;
+    final isWide = MediaQuery.sizeOf(context).width >= 600;
 
     return Scaffold(
-      backgroundColor: AppColors.adminPage,
-      body: CustomScrollView(
-        slivers: [
-            // ── Sticky Header ────────────────────────────────────────
-            SliverAppBar(
-              pinned: true,
-              floating: false,
-              backgroundColor: AppColors.adminPage,
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
-              scrolledUnderElevation: 1,
-              automaticallyImplyLeading: false,
-              toolbarHeight: 72,
-              title: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    greeting,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+      backgroundColor: AppColors.cream,
+      appBar: AppBar(
+        backgroundColor: AppColors.cream,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        toolbarHeight: 68,
+        titleSpacing: 24,
+        title: Text(
+          'Platform overview',
+          style: AppTextStyles.headlineMedium.copyWith(
+            color: AppColors.forestGreen,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          if (isWide) ...[
+            SizedBox(
+              width: 260,
+              height: 40,
+              child: TextField(
+                controller: _searchController,
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Search couples, vendors...',
+                  hintStyle: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textHint),
+                  prefixIcon: const Icon(Icons.search_rounded,
+                      color: AppColors.textHint, size: 18),
+                  filled: true,
+                  fillColor: Colors.white,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: const BorderSide(color: AppColors.divider),
                   ),
-                  Text(
-                    'Admin',
-                    style: AppTextStyles.displayMedium.copyWith(
-                      color: AppColors.textPrimary,
-                      fontSize: 24,
-                    ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: const BorderSide(color: AppColors.divider),
                   ),
-                ],
-              ),
-              actions: [
-                _CircleBtn(icon: Icons.notifications_outlined, onTap: () {}),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _confirmLogout,
-                  child: const _AdminAvatar(),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: const BorderSide(
+                        color: AppColors.forestGreen, width: 1.5),
+                  ),
                 ),
-                const SizedBox(width: 16),
-              ],
+              ),
+            ),
+            const SizedBox(width: 4),
+          ] else
+            IconButton(
+              icon: const Icon(Icons.search_rounded,
+                  color: AppColors.textPrimary, size: 22),
+              onPressed: () {},
+            ),
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined,
+                color: AppColors.textPrimary, size: 22),
+            onPressed: () {},
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 20),
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: const BoxDecoration(
+                color: Color(0xFF2A9D8F),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'AD',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // KPI cards — 4 in a row on desktop, 2×2 on mobile
+            LayoutBuilder(
+              builder: (_, constraints) {
+                final wide = constraints.maxWidth >= 600;
+                final cards = [
+                  _KpiCard(
+                    icon: Icons.people_alt_outlined,
+                    iconBg: AppColors.adminGreenBg,
+                    iconColor: AppColors.adminGreen,
+                    trend: '+12.4%',
+                    trendColor: AppColors.adminGreen,
+                    value: '2,418',
+                    label: 'Active couples',
+                  ),
+                  _KpiCard(
+                    icon: Icons.list_alt_outlined,
+                    iconBg: AppColors.adminIndigoBg,
+                    iconColor: AppColors.adminIndigo,
+                    trend: '+8.1%',
+                    trendColor: AppColors.adminGreen,
+                    value: '643',
+                    label: 'Registered vendors',
+                  ),
+                  _KpiCard(
+                    icon: Icons.verified_user_outlined,
+                    iconBg: AppColors.adminAmberBg,
+                    iconColor: AppColors.adminAmber,
+                    trend: '29 pending',
+                    trendColor: AppColors.amber,
+                    value: '94%',
+                    label: 'Vendor verification rate',
+                  ),
+                  _KpiCard(
+                    icon: Icons.credit_card_outlined,
+                    iconBg: AppColors.adminBlueBg,
+                    iconColor: AppColors.adminBlue,
+                    trend: 'this week',
+                    trendColor: AppColors.adminBlue,
+                    value: '312',
+                    label: 'Invitations sent',
+                  ),
+                ];
+
+                if (wide) {
+                  return Row(
+                    children: [
+                      for (int i = 0; i < cards.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 14),
+                        Expanded(child: cards[i]),
+                      ],
+                    ],
+                  );
+                }
+
+                return GridView.count(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.4,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: cards,
+                );
+              },
             ),
 
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
+            const SizedBox(height: 24),
 
-                  // ── Alert Banner ──────────────────────────────────
-                  if (!_alertDismissed && hasAlerts) ...[
-                    _AlertBanner(
-                      message: _alertMessage(adminState),
-                      onReview: () => context.go('/admin/vendors'),
-                      onDismiss: () => setState(() => _alertDismissed = true),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
+            // Bottom panels — side by side on desktop, stacked on mobile
+            LayoutBuilder(
+              builder: (_, constraints) {
+                final wide = constraints.maxWidth >= 600;
+                final signups = const _RecentSignupsPanel();
+                final queue = _VerificationQueuePanel(
+                  vendors: adminState.pendingVendors,
+                  onApprove: (id) =>
+                      ref.read(adminProvider.notifier).approveVendor(id),
+                  onReject: (id) =>
+                      ref.read(adminProvider.notifier).rejectVendor(id),
+                );
 
-                  // ── KPI Cards ─────────────────────────────────────
-                  Row(
-                    children: const [
-                      Expanded(
-                        child: _StatCard(
-                          label: 'Couples',
-                          value: '2,847',
-                          icon: Icons.people_alt_outlined,
-                          iconColor: AppColors.adminGreen,
-                          iconBg: AppColors.adminGreenBg,
-                          trend: '+12.4%',
-                          trendUp: true,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: _StatCard(
-                          label: 'Vendors',
-                          value: '456',
-                          icon: Icons.storefront_outlined,
-                          iconColor: AppColors.adminIndigo,
-                          iconBg: AppColors.adminIndigoBg,
-                          trend: '+8.1%',
-                          trendUp: true,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: _StatCard(
-                          label: 'Revenue',
-                          value: 'ZMW 24.5K',
-                          icon: Icons.payments_outlined,
-                          iconColor: AppColors.adminAmber,
-                          iconBg: AppColors.adminAmberBg,
-                          trend: '+23%',
-                          trendUp: true,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: _StatCard(
-                          label: 'Active',
-                          value: '1,203',
-                          icon: Icons.show_chart_rounded,
-                          iconColor: AppColors.adminPink,
-                          iconBg: AppColors.adminPinkBg,
-                          trend: '-2.1%',
-                          trendUp: false,
-                        ),
-                      ),
+                if (wide) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 3, child: signups),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 2, child: queue),
                     ],
-                  ),
-                  const SizedBox(height: 28),
+                  );
+                }
 
-                  // ── Management ────────────────────────────────────
-                  const SectionHeader(title: 'Management'),
-                  const SizedBox(height: 12),
-                  _ActionTile(
-                    icon: Icons.verified_user_rounded,
-                    iconColor: AppColors.adminAmber,
-                    iconBg: AppColors.adminAmberBg,
-                    title: 'Vendor Approval',
-                    subtitle: adminState.pendingVendors.isEmpty
-                        ? 'No vendors pending review'
-                        : '${adminState.pendingVendors.length} vendors awaiting review',
-                    badge: adminState.pendingVendors.isNotEmpty
-                        ? '${adminState.pendingVendors.length}'
-                        : null,
-                    badgeColor: AppColors.adminAmber,
-                    onTap: () => context.go('/admin/vendors'),
-                  ),
-                  const SizedBox(height: 8),
-                  _ActionTile(
-                    icon: Icons.manage_accounts_rounded,
-                    iconColor: AppColors.adminIndigo,
-                    iconBg: AppColors.adminIndigoBg,
-                    title: 'User Management',
-                    subtitle:
-                        'View, edit, and suspend users',
-                    onTap: () => context.push('/admin/users'),
-                  ),
-                  const SizedBox(height: 8),
-                  _ActionTile(
-                    icon: Icons.bar_chart_rounded,
-                    iconColor: AppColors.adminBlue,
-                    iconBg: AppColors.adminBlueBg,
-                    title: 'Reports & Analytics',
-                    subtitle: 'Revenue, growth, and engagement',
-                    onTap: () => context.push('/admin/analytics'),
-                  ),
-                  const SizedBox(height: 8),
-                  _ActionTile(
-                    icon: Icons.shield_outlined,
-                    iconColor: AppColors.error,
-                    iconBg: AppColors.adminRedBg,
-                    title: 'Content Moderation',
-                    subtitle: adminState.totalFlaggedItems == 0
-                        ? 'No items flagged'
-                        : '${adminState.totalFlaggedItems} items flagged for review',
-                    badge: adminState.totalFlaggedItems > 0
-                        ? '${adminState.totalFlaggedItems}'
-                        : null,
-                    badgeColor: AppColors.error,
-                    onTap: () => context.push('/admin/moderation'),
-                  ),
-                  const SizedBox(height: 28),
-
-                  // ── System Health ─────────────────────────────────
-                  const SectionHeader(title: 'System Health'),
-                  const SizedBox(height: 12),
-                  WedCard(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        _HealthRow(
-                            label: 'API Response Time (p95)',
-                            value: '280 ms',
-                            good: true),
-                        Divider(height: 24, color: AppColors.adminNeutralBg),
-                        _HealthRow(
-                            label: 'Database Query Time',
-                            value: '45 ms',
-                            good: true),
-                        Divider(height: 24, color: AppColors.adminNeutralBg),
-                        _HealthRow(
-                            label: 'Error Rate', value: '0.02%', good: true),
-                        Divider(height: 24, color: AppColors.adminNeutralBg),
-                        _HealthRow(
-                            label: 'Uptime (30 days)',
-                            value: '99.98%',
-                            good: true),
-                      ],
-                    ),
-                  ),
-                ]),
-              ),
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    signups,
+                    const SizedBox(height: 20),
+                    queue,
+                  ],
+                );
+              },
             ),
           ],
         ),
-    );
-  }
-}
-
-// ── Admin Avatar ──────────────────────────────────────────────────────────────
-
-class _AdminAvatar extends StatelessWidget {
-  const _AdminAvatar();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 42,
-      height: 42,
-      decoration: const BoxDecoration(
-        color: AppColors.adminIndigo,
-        shape: BoxShape.circle,
-      ),
-      child: const Center(
-        child: Text(
-          'A',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
-          ),
-        ),
       ),
     );
   }
 }
 
-// ── Alert Banner ──────────────────────────────────────────────────────────────
+// ── KPI card ──────────────────────────────────────────────────────────────────
 
-class _AlertBanner extends StatelessWidget {
-  final String message;
-  final VoidCallback onReview;
-  final VoidCallback onDismiss;
+class _KpiCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  final String trend;
+  final Color trendColor;
+  final String value;
+  final String label;
 
-  const _AlertBanner({
-    required this.message,
-    required this.onReview,
-    required this.onDismiss,
+  const _KpiCard({
+    required this.icon,
+    required this.iconBg,
+    required this.iconColor,
+    required this.trend,
+    required this.trendColor,
+    required this.value,
+    required this.label,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.adminAmberBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.adminAmber.withAlpha(60)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber_rounded,
-              color: AppColors.adminAmber, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: onReview,
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.adminAmber,
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(
-              'Review',
-              style: AppTextStyles.caption
-                  .copyWith(color: AppColors.adminAmber, fontWeight: FontWeight.w700),
-            ),
-          ),
-          GestureDetector(
-            onTap: onDismiss,
-            child: const Icon(Icons.close_rounded,
-                size: 16, color: AppColors.adminAmber),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Circle Button ─────────────────────────────────────────────────────────────
-
-class _CircleBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _CircleBtn({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final surface = Theme.of(context).colorScheme.surface;
-    return Container(
-      width: 42,
-      height: 42,
-      decoration: BoxDecoration(
-        color: surface,
-        shape: BoxShape.circle,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(15),
-            blurRadius: 10,
+            color: AppColors.cardShadow,
+            blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Icon(icon, size: 20, color: AppColors.textSecondary),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Stat Card ─────────────────────────────────────────────────────────────────
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final String trend;
-  final bool trendUp;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.trend,
-    required this.trendUp,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final trendColor = trendUp ? AppColors.success : AppColors.error;
-    return Container(
-      decoration: BoxDecoration(
-        color: iconColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: iconColor.withAlpha(50),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 18),
+              ),
+              const Spacer(),
+              Text(
+                trend,
+                style: TextStyle(
+                  color: trendColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            value,
+            style: AppTextStyles.displaySmall.copyWith(
+              color: AppColors.forestGreen,
+              fontWeight: FontWeight.bold,
+              fontSize: 26,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
-      child: Container(
-        margin: const EdgeInsets.only(top: 3),
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [iconBg, Colors.white],
-            stops: const [0.0, 0.7],
+    );
+  }
+}
+
+// ── Recent signups panel ──────────────────────────────────────────────────────
+
+class _RecentSignupsPanel extends StatelessWidget {
+  const _RecentSignupsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.cardShadow,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          borderRadius: const BorderRadius.only(
-            bottomLeft: Radius.circular(14),
-            bottomRight: Radius.circular(14),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: iconColor.withAlpha(22),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: iconColor, size: 16),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-                height: 1.0,
-                letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 7),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-              decoration: BoxDecoration(
-                color: trendColor.withAlpha(20),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    trendUp
-                        ? Icons.arrow_upward_rounded
-                        : Icons.arrow_downward_rounded,
-                    size: 8,
-                    color: trendColor,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+            child: Row(
+              children: [
+                Text(
+                  'Recent vendor signups',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.forestGreen,
+                    fontWeight: FontWeight.w700,
                   ),
-                  const SizedBox(width: 2),
-                  Text(
-                    trend,
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: trendColor,
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () {},
+                  child: Text(
+                    'View all',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.amber,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          // Column headers
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: Text('Vendor',
+                      style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3)),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text('Category',
+                      style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3)),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text('Location',
+                      style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3)),
+                ),
+                SizedBox(
+                  width: 68,
+                  child: Text('Status',
+                      style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3)),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.divider),
+          // Data rows
+          ..._kRecentSignups.asMap().entries.map((entry) {
+            final i = entry.key;
+            final row = entry.value;
+            return Column(
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 5,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: row.iconBg,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child:
+                                  Icon(row.icon, size: 15, color: row.iconColor),
+                            ),
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                row.name,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          row.category,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textSecondary),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          row.location,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textSecondary),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 68,
+                        child: _StatusBadge(status: row.status),
+                      ),
+                    ],
+                  ),
+                ),
+                if (i < _kRecentSignups.length - 1)
+                  const Divider(height: 1, color: AppColors.divider),
+              ],
+            );
+          }),
+          const SizedBox(height: 4),
+        ],
       ),
     );
   }
 }
 
-// ── Action Tile ───────────────────────────────────────────────────────────────
+// ── Verification queue panel ──────────────────────────────────────────────────
 
-class _ActionTile extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final String title;
-  final String subtitle;
-  final String? badge;
-  final Color? badgeColor;
-  final VoidCallback onTap;
+class _VerificationQueuePanel extends StatelessWidget {
+  final List<AdminVendor> vendors;
+  final ValueChanged<String> onApprove;
+  final ValueChanged<String> onReject;
 
-  const _ActionTile({
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.title,
-    required this.subtitle,
-    this.badge,
-    this.badgeColor,
-    required this.onTap,
+  const _VerificationQueuePanel({
+    required this.vendors,
+    required this.onApprove,
+    required this.onReject,
   });
 
   @override
@@ -546,129 +574,171 @@ class _ActionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(8),
-            blurRadius: 10,
+            color: AppColors.cardShadow,
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
             child: Row(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: iconBg,
-                    borderRadius: BorderRadius.circular(13),
+                Text(
+                  'Verification queue',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.forestGreen,
+                    fontWeight: FontWeight.w700,
                   ),
-                  child: Icon(icon, color: iconColor, size: 22),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                const Spacer(),
+                Text(
+                  '29 pending',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.amber,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Items
+          ...vendors.asMap().entries.map((entry) {
+            final i = entry.key;
+            final v = entry.value;
+            return Column(
+              children: [
+                if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 12),
+                  child: Row(
                     children: [
-                      Text(
-                        title,
-                        style: AppTextStyles.titleMedium.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: _bgForCategory(v.category),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          _iconForCategory(v.category),
+                          size: 18,
+                          color: _colorForCategory(v.category),
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.textSecondary,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              v.name,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${v.category} · ${v.submitted}',
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => onApprove(v.id),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: const BoxDecoration(
+                            color: AppColors.adminGreenBg,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.check_rounded,
+                              size: 16, color: AppColors.adminGreen),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => onReject(v.id),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: const BoxDecoration(
+                            color: AppColors.adminRedBg,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close_rounded,
+                              size: 16, color: AppColors.error),
                         ),
                       ),
                     ],
                   ),
                 ),
-                if (badge != null) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: badgeColor,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      badge!,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                const Icon(Icons.chevron_right_rounded,
-                    size: 20, color: AppColors.textHint),
               ],
-            ),
-          ),
-        ),
+            );
+          }),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
 }
 
-// ── Health Row ────────────────────────────────────────────────────────────────
+// ── Status badge ──────────────────────────────────────────────────────────────
 
-class _HealthRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool good;
-
-  const _HealthRow(
-      {required this.label, required this.value, required this.good});
+class _StatusBadge extends StatelessWidget {
+  final String status;
+  const _StatusBadge({required this.status});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Flexible(
-          child: Text(
-            label,
-            style:
-                AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-          ),
+    final Color bg;
+    final Color fg;
+    final String label;
+
+    switch (status.toLowerCase()) {
+      case 'verified':
+        bg = AppColors.adminGreenBg;
+        fg = AppColors.adminGreen;
+        label = 'Verified';
+      case 'pending':
+        bg = AppColors.adminAmberBg;
+        fg = AppColors.adminAmber;
+        label = 'Pending';
+      case 'flagged':
+        bg = AppColors.adminRedBg;
+        fg = AppColors.error;
+        label = 'Flagged';
+      default:
+        bg = AppColors.adminNeutralBg;
+        fg = AppColors.textSecondary;
+        label = status;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: fg,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
         ),
-        const SizedBox(width: 12),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              value,
-              style: AppTextStyles.titleMedium.copyWith(
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: good ? AppColors.success : AppColors.error,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 }

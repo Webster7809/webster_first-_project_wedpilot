@@ -81,7 +81,7 @@ class _ReviewSubmissionScreenState extends ConsumerState<ReviewSubmissionScreen>
               hint: const Text('Choose a vendor you worked with'),
               decoration: InputDecoration(
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
               items: const [
                 DropdownMenuItem(value: 'v-001', child: Text('Blossom Photography')),

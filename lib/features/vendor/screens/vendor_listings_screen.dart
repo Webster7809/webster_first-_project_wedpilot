@@ -21,7 +21,7 @@ class _VendorListingsScreenState extends State<VendorListingsScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
-            backgroundColor: AppColors.cream,
+            backgroundColor: AppColors.forestGreen,
             elevation: 0,
             automaticallyImplyLeading: false,
             flexibleSpace: FlexibleSpaceBar(
@@ -40,7 +40,7 @@ class _VendorListingsScreenState extends State<VendorListingsScreen> {
                     const SizedBox(height: 4),
                     Text('Manage your portfolio',
                         style: AppTextStyles.displaySmall.copyWith(
-                          color: AppColors.forestGreen,
+                          color: Colors.white,
                           fontWeight: FontWeight.bold,
                         )),
                   ],
