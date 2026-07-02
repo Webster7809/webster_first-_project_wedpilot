@@ -1,6 +1,7 @@
+import '../core/utils/enum_utils.dart';
+
 enum InvitationStatus { draft, published, archived }
 enum AttendingStatus { yes, no, maybe }
-enum SendChannel { whatsapp, email, sms, link }
 
 class InvitationTemplate {
   final String id;
@@ -28,6 +29,15 @@ class InvitationTemplate {
         isPremium: json['is_premium'] as bool? ?? false,
         isActive: json['is_active'] as bool? ?? true,
       );
+
+  Map<String, dynamic> toJson() => {
+        'template_id': id,
+        'name': name,
+        'theme': theme,
+        'preview_url': previewUrl,
+        'is_premium': isPremium,
+        'is_active': isActive,
+      };
 }
 
 class Invitation {
@@ -66,11 +76,24 @@ class Invitation {
         shareToken: json['share_token'] as String,
         shareUrl: json['share_url'] as String?,
         thumbnailUrl: json['thumbnail_url'] as String?,
-        status: InvitationStatus.values.byName(
-            json['status'] as String? ?? 'draft'),
+        status: enumByName(InvitationStatus.values, json['status'] as String?, InvitationStatus.draft),
         viewCount: json['view_count'] as int? ?? 0,
         createdAt: DateTime.parse(json['created_at'] as String),
       );
+
+  Map<String, dynamic> toJson() => {
+        'invitation_id': id,
+        'couple_id': coupleId,
+        'template_id': templateId,
+        'title': title,
+        'custom_data': customData,
+        'share_token': shareToken,
+        'share_url': shareUrl,
+        'thumbnail_url': thumbnailUrl,
+        'status': status.name,
+        'view_count': viewCount,
+        'created_at': createdAt.toIso8601String(),
+      };
 }
 
 class RsvpResponse {
@@ -103,13 +126,26 @@ class RsvpResponse {
         invitationId: json['invitation_id'] as String,
         guestId: json['guest_id'] as String?,
         guestName: json['guest_name'] as String,
-        attending: AttendingStatus.values.byName(json['attending'] as String),
+        attending: enumByName(AttendingStatus.values, json['attending'] as String?, AttendingStatus.maybe),
         guestCount: json['guest_count'] as int? ?? 1,
         mealPreference: json['meal_preference'] as String?,
         dietaryNotes: json['dietary_notes'] as String?,
         message: json['message'] as String?,
         respondedAt: DateTime.parse(json['responded_at'] as String),
       );
+
+  Map<String, dynamic> toJson() => {
+        'rsvp_id': id,
+        'invitation_id': invitationId,
+        'guest_id': guestId,
+        'guest_name': guestName,
+        'attending': attending.name,
+        'guest_count': guestCount,
+        'meal_preference': mealPreference,
+        'dietary_notes': dietaryNotes,
+        'message': message,
+        'responded_at': respondedAt.toIso8601String(),
+      };
 }
 
 class Guest {
@@ -143,4 +179,15 @@ class Guest {
         relation: json['relation'] as String?,
         isInvited: json['is_invited'] as bool? ?? false,
       );
+
+  Map<String, dynamic> toJson() => {
+        'guest_id': id,
+        'couple_id': coupleId,
+        'name': name,
+        'phone': phone,
+        'email': email,
+        'whatsapp_number': whatsappNumber,
+        'relation': relation,
+        'is_invited': isInvited,
+      };
 }

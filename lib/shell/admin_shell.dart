@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_colors.dart';
+import '../widgets/shell_nav_item.dart';
 import '../providers/auth_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -61,7 +62,7 @@ class _MobileLayout extends StatelessWidget {
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: AppColors.forestGreen,
-          border: Border(top: BorderSide(color: Color(0xFF2A5C3F))),
+          border: Border(top: BorderSide(color: AppColors.vendorIndigo)),
         ),
         child: SafeArea(
           top: false,
@@ -69,10 +70,10 @@ class _MobileLayout extends StatelessWidget {
             height: 60,
             child: Row(
               children: [
-                _MNavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, label: 'Dashboard', index: 0, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex)),
-                _MNavItem(icon: Icons.people_outline, activeIcon: Icons.people_rounded, label: 'Users', index: 1, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex)),
-                _MNavItem(icon: Icons.verified_outlined, activeIcon: Icons.verified_rounded, label: 'Vendors', index: 2, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex)),
-                _MNavItem(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart_rounded, label: 'Analytics', index: 3, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex)),
+                ShellNavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, label: 'Dashboard', index: 0, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex), inactiveColor: Colors.white60, labelFontSize: 10),
+                ShellNavItem(icon: Icons.people_outline, activeIcon: Icons.people_rounded, label: 'Users', index: 1, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex), inactiveColor: Colors.white60, labelFontSize: 10),
+                ShellNavItem(icon: Icons.verified_outlined, activeIcon: Icons.verified_rounded, label: 'Vendors', index: 2, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex), inactiveColor: Colors.white60, labelFontSize: 10),
+                ShellNavItem(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart_rounded, label: 'Analytics', index: 3, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex), inactiveColor: Colors.white60, labelFontSize: 10),
               ],
             ),
           ),
@@ -82,35 +83,6 @@ class _MobileLayout extends StatelessWidget {
   }
 }
 
-class _MNavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final int index;
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-
-  const _MNavItem({required this.icon, required this.activeIcon, required this.label, required this.index, required this.currentIndex, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final active = currentIndex == index;
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => onTap(index),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(active ? activeIcon : icon, size: 22, color: active ? AppColors.amber : Colors.white60),
-            const SizedBox(height: 3),
-            Text(label, style: TextStyle(fontSize: 10, fontWeight: active ? FontWeight.w600 : FontWeight.normal, color: active ? AppColors.amber : Colors.white60)),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ── Sidebar ────────────────────────────────────────────────────────────────────
 
@@ -161,8 +133,7 @@ class _AdminSidebar extends StatelessWidget {
                 ]),
                 _SidebarSection(label: 'PEOPLE', children: [
                   _SidebarItem(icon: Icons.people_outline, label: 'Couples', index: 1, currentIndex: currentIndex, onTap: onBranch),
-                  _SidebarItem(icon: Icons.store_outlined, label: 'Vendors', index: 2, currentIndex: currentIndex, onTap: onBranch),
-                  _SidebarItem(icon: Icons.verified_outlined, label: 'Verifications', index: 2, currentIndex: currentIndex, onTap: onBranch),
+                  _SidebarItem(icon: Icons.verified_outlined, label: 'Vendors', index: 2, currentIndex: currentIndex, onTap: onBranch),
                 ]),
                 _SidebarSection(label: 'PLATFORM', children: [
                   _SidebarRouteItem(icon: Icons.flag_outlined, label: 'Reported listings', route: '/admin/moderation', context: context),

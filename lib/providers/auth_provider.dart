@@ -1,4 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import '../core/services/auth_service.dart';
+import '../core/services/couple_profile_service.dart';
+import '../core/services/token_service.dart';
 import '../models/user.dart';
 import '../models/couple_profile.dart';
 import '../models/vendor_profile.dart';
@@ -43,90 +47,43 @@ class AuthState {
       );
 }
 
-// Admin credentials — known only to the system administrator.
-const _kAdminEmail = 'admin@wedpilot.app';
-const _kAdminPassword = 'W3dP!l0t#Adm1n';
-
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier() : super(const AuthState());
+  AuthNotifier(this._authService) : super(const AuthState());
+
+  final AuthService _authService;
+
+  // Couple profiles are persisted server-side (see couple_profile_service.dart);
+  // this map is just a same-session cache to avoid redundant refetches, not the
+  // source of truth. Vendor profiles remain in-memory only — persisting them is
+  // a separate future phase.
+  final _coupleProfiles = <String, CoupleProfile>{};
+  final _vendorProfiles = <String, VendorProfile>{};
+
+  // Captured at register() time so a couple's partner name survives through to
+  // the onboarding wizard's first save, since no profile row exists yet to hold it.
+  String? _pendingPartnerName;
+
+  // In-memory copy of the current session's access token. flutter_secure_storage's
+  // web backend can throw OperationError when decrypting a previously-written
+  // value back (a browser WebCrypto interop issue, not specific to reloads), so
+  // authenticated calls made later in the same session use this instead of
+  // re-reading from secure storage — only cold-start restore needs that read.
+  String? _accessToken;
+
+  Box get _onboardingBox => Hive.box('app_settings');
+  bool hasOnboarded(String userId) => _onboardingBox.get('onboarded_$userId', defaultValue: false) as bool;
+  void markOnboarded(String userId) => _onboardingBox.put('onboarded_$userId', true);
 
   Future<void> login(String email, String password) async {
     state = state.copyWith(isLoading: true, error: null);
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    final normalised = email.toLowerCase().trim();
-
-    if (normalised.contains('admin')) {
-      if (normalised != _kAdminEmail || password != _kAdminPassword) {
-        state = state.copyWith(isLoading: false, error: 'Invalid credentials.');
-        return;
-      }
+    try {
+      final result = await _authService.login(email: email, password: password);
+      await _applyAuthResult(result);
+    } on AuthApiException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: 'Could not reach the server. Please try again.');
     }
-
-    UserRole role = UserRole.couple;
-    if (normalised.contains('vendor')) role = UserRole.vendor;
-    if (normalised == _kAdminEmail) role = UserRole.admin;
-
-    final user = User(
-      id: 'user-001',
-      email: email,
-      name: role == UserRole.vendor ? 'Mukuba Gardens' : 'Chanda',
-      role: role,
-      isVerified: true,
-      createdAt: DateTime.now(),
-    );
-
-    CoupleProfile? coupleProfile;
-    VendorProfile? vendorProfile;
-
-    if (role == UserRole.couple) {
-      coupleProfile = CoupleProfile(
-        id: 'profile-001',
-        userId: 'user-001',
-        weddingDate: DateTime(2026, 9, 12),
-        location: 'Ndola, Copperbelt',
-        guestCount: 150,
-        styleTags: ['White wedding', 'Flexible'],
-        totalBudget: 85000,
-        currency: 'ZMW',
-        partnerName: 'Mwila',
-      );
-    } else if (role == UserRole.vendor) {
-      vendorProfile = VendorProfile(
-        id: 'vendor-001',
-        userId: 'user-001',
-        businessName: 'Mukuba Gardens',
-        description:
-            'Spacious garden venue seating up to 300 guests, with backup generator, parking for 80 cars and an in-house decor team. Located 10 minutes from Ndola town centre.',
-        category: 'Venue',
-        location: 'Ndola, Copperbelt',
-        latitude: -12.9587,
-        longitude: 28.6366,
-        tier: VendorTier.premium,
-        verificationStatus: VerificationStatus.verified,
-        rating: 4.9,
-        reviewCount: 42,
-        compositeScore: 95.0,
-        services: [
-          VendorService(
-            id: 's-v01',
-            vendorId: 'vendor-001',
-            title: 'Open Air Garden Package',
-            description: 'Full venue rental up to 300 guests',
-            priceMin: 28000,
-            priceMax: 35000,
-            unit: 'event',
-          ),
-        ],
-      );
-    }
-
-    state = state.copyWith(
-      user: user,
-      coupleProfile: coupleProfile,
-      vendorProfile: vendorProfile,
-      isLoading: false,
-    );
   }
 
   Future<void> register(
@@ -138,58 +95,154 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? phone,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
-    await Future.delayed(const Duration(milliseconds: 800));
-    final user = User(
-      id: 'user-${DateTime.now().millisecondsSinceEpoch}',
-      email: email,
-      name: partner1Name,
-      role: role,
-      isVerified: false,
-      createdAt: DateTime.now(),
-    );
-    CoupleProfile? coupleProfile;
-    if (role == UserRole.couple && partner2Name != null) {
-      coupleProfile = CoupleProfile(
-        id: 'profile-${DateTime.now().millisecondsSinceEpoch}',
-        userId: user.id,
-        currency: 'ZMW',
-        partnerName: partner2Name,
+    _pendingPartnerName = partner2Name;
+    try {
+      final result = await _authService.register(
+        name: partner1Name,
+        email: email,
+        password: password,
+        role: role,
       );
+      await _applyAuthResult(result, forceOnboarding: true);
+    } on AuthApiException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: 'Could not reach the server. Please try again.');
     }
+  }
+
+  Future<void> _applyAuthResult(AuthResult result, {bool forceOnboarding = false}) async {
+    await tokenService.saveTokens(
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      accessExpiry: result.accessExpiry,
+      refreshExpiry: result.refreshExpiry,
+    );
+    _accessToken = result.accessToken;
+
+    final user = result.user;
+    CoupleProfile? coupleProfile;
+    VendorProfile? vendorProfile;
+    bool needsOnboarding;
+
+    if (user.role == UserRole.couple) {
+      coupleProfile = await _fetchCoupleProfileGracefully(result.accessToken);
+      if (coupleProfile != null) _coupleProfiles[user.id] = coupleProfile;
+      needsOnboarding = coupleProfile == null;
+    } else if (user.role == UserRole.vendor) {
+      vendorProfile = _vendorProfiles[user.id];
+      needsOnboarding = forceOnboarding || !hasOnboarded(user.id);
+    } else {
+      needsOnboarding = false;
+    }
+
     state = state.copyWith(
       user: user,
       coupleProfile: coupleProfile,
+      vendorProfile: vendorProfile,
       isLoading: false,
-      needsOnboarding: true,
+      needsOnboarding: needsOnboarding,
     );
   }
 
-  void updateCoupleProfile({
+  /// Fetches the couple's saved profile, treating any network/server failure
+  /// the same as "no profile yet" rather than blocking login/restore.
+  Future<CoupleProfile?> _fetchCoupleProfileGracefully(String accessToken) async {
+    try {
+      return await CoupleProfileService.instance.fetchProfile(accessToken);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Restores a session on app cold-start after the stored access token was
+  /// validated against the backend (see sessionRestoreProvider).
+  Future<void> restoreSession(User user, {required String accessToken}) async {
+    _accessToken = accessToken;
+    CoupleProfile? coupleProfile;
+    VendorProfile? vendorProfile;
+    bool needsOnboarding;
+
+    if (user.role == UserRole.couple) {
+      coupleProfile = await _fetchCoupleProfileGracefully(accessToken);
+      if (coupleProfile != null) _coupleProfiles[user.id] = coupleProfile;
+      needsOnboarding = coupleProfile == null;
+    } else if (user.role == UserRole.vendor) {
+      vendorProfile = _vendorProfiles[user.id];
+      needsOnboarding = !hasOnboarded(user.id);
+    } else {
+      needsOnboarding = false;
+    }
+
+    state = state.copyWith(
+      user: user,
+      coupleProfile: coupleProfile,
+      vendorProfile: vendorProfile,
+      needsOnboarding: needsOnboarding,
+    );
+  }
+
+  Future<void> updateCoupleProfile({
     required List<String> selectedItems,
     required double budget,
     required String weddingStyle,
     required String weddingClass,
     required int guestCount,
     required String location,
-  }) {
+    DateTime? weddingDate,
+  }) async {
     final profile = CoupleProfile(
-      id: state.coupleProfile?.id ?? 'profile-${DateTime.now().millisecondsSinceEpoch}',
+      id: state.coupleProfile?.id ?? '',
       userId: state.user?.id ?? '',
-      partnerName: state.coupleProfile?.partnerName,
+      partnerName: state.coupleProfile?.partnerName ?? _pendingPartnerName,
+      weddingDate: weddingDate ?? state.coupleProfile?.weddingDate,
       location: location.isNotEmpty ? location : null,
       guestCount: guestCount > 0 ? guestCount : null,
       styleTags: [weddingStyle, weddingClass, ...selectedItems],
       totalBudget: budget > 0 ? budget : null,
       currency: 'ZMW',
     );
-    state = state.copyWith(coupleProfile: profile, needsOnboarding: false);
+
+    final userId = state.user?.id;
+    if (userId == null || _accessToken == null) {
+      state = state.copyWith(coupleProfile: profile, needsOnboarding: false);
+      return;
+    }
+
+    try {
+      final saved = await CoupleProfileService.instance.saveProfile(_accessToken!, profile);
+      _coupleProfiles[userId] = saved;
+      state = state.copyWith(coupleProfile: saved, needsOnboarding: false);
+    } on CoupleProfileApiException catch (e) {
+      _coupleProfiles[userId] = profile;
+      state = state.copyWith(coupleProfile: profile, needsOnboarding: false, error: e.message);
+    } catch (e) {
+      // ignore: avoid_print
+      print('[updateCoupleProfile] failed to save, keeping local copy only: $e');
+      _coupleProfiles[userId] = profile;
+      state = state.copyWith(
+        coupleProfile: profile,
+        needsOnboarding: false,
+        error: 'Could not save your profile. Please try again.',
+      );
+    }
   }
 
   void completeVendorOnboarding() {
+    final userId = state.user?.id;
+    if (userId != null) markOnboarded(userId);
     state = state.copyWith(needsOnboarding: false);
   }
 
+  Future<void> forgotPassword(String email) async {
+    state = state.copyWith(isLoading: true, error: null);
+    await Future.delayed(const Duration(milliseconds: 800));
+    state = state.copyWith(isLoading: false);
+  }
+
   Future<void> logout() async {
+    await tokenService.clearTokens();
+    _accessToken = null;
     state = const AuthState();
   }
 
@@ -197,7 +250,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
-  (ref) => AuthNotifier(),
+  (ref) => AuthNotifier(AuthService.instance),
 );
 
 final currentUserProvider = Provider<User?>((ref) {

@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/checklist_item.dart';
 import '../../../providers/task_provider.dart';
+import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 class PlanningChecklistScreen extends ConsumerStatefulWidget {
@@ -506,16 +507,11 @@ class _EmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          ElevatedButton.icon(
+          WedButton(
+            label: 'Add Task',
             onPressed: onAdd,
-            icon: const Icon(Icons.add),
-            label: const Text('Add Task'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30)),
-            ),
+            icon: Icons.add,
+            borderRadius: 30,
           ),
         ],
       ),
@@ -711,23 +707,11 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             const SizedBox(height: 24),
 
             // Save button
-            SizedBox(
-              width: double.infinity,
+            WedButton(
+              label: isEdit ? 'Save Changes' : 'Add Task',
+              onPressed: _save,
               height: 50,
-              child: ElevatedButton(
-                onPressed: _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.secondary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                child: Text(
-                  isEdit ? 'Save Changes' : 'Add Task',
-                  style: AppTextStyles.titleMedium
-                      .copyWith(color: Colors.white, fontWeight: FontWeight.w600),
-                ),
-              ),
+              borderRadius: 14,
             ),
           ],
         ),

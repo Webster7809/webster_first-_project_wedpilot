@@ -13,7 +13,11 @@ class CoupleProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
     final profile = ref.watch(coupleProfileProvider);
-    final coupleName = auth.user?.name ?? 'Your Wedding';
+    final name1 = auth.user?.name;
+    final name2 = profile?.partnerName;
+    final coupleName = name1 == null
+        ? 'Your Wedding'
+        : (name2 != null && name2.isNotEmpty ? '$name1 & $name2' : name1);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -130,7 +134,7 @@ class _ProfileHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.forestGreen, Color(0xFF2A5C3F), Color(0xFF1B3A2D)],
+          colors: [AppColors.forestGreen, AppColors.coupleMagenta, AppColors.forestGreen],
           stops: [0.0, 0.55, 1.0],
         ),
       ),

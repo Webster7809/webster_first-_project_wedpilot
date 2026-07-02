@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 
-enum WedButtonVariant { primary, secondary, ghost, destructive }
+enum WedButtonVariant { primary, primaryDark, secondary, ghost, destructive }
 
 class WedButton extends StatelessWidget {
   final String label;
@@ -19,6 +19,7 @@ class WedButton extends StatelessWidget {
   final double maxWidth;
 
   final double height;
+  final double borderRadius;
 
   const WedButton({
     super.key,
@@ -30,6 +31,7 @@ class WedButton extends StatelessWidget {
     this.width,
     this.maxWidth = 480,
     this.height = 48,
+    this.borderRadius = 24,
   });
 
   @override
@@ -78,7 +80,18 @@ class WedButton extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.secondary,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(borderRadius)),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                ),
+                child: child,
+              ),
+            WedButtonVariant.primaryDark => ElevatedButton(
+                onPressed: isLoading ? null : onPressed,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.forestGreen,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(borderRadius)),
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                 ),
@@ -89,7 +102,7 @@ class WedButton extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.secondary,
                   side: const BorderSide(color: AppColors.secondary, width: 1.5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(borderRadius)),
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                 ),
                 child: child,
@@ -107,7 +120,7 @@ class WedButton extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.error,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(borderRadius)),
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                 ),
@@ -120,7 +133,10 @@ class WedButton extends StatelessWidget {
   }
 
   Color get _foreground => switch (variant) {
-        WedButtonVariant.primary || WedButtonVariant.destructive => Colors.white,
+        WedButtonVariant.primary ||
+        WedButtonVariant.primaryDark ||
+        WedButtonVariant.destructive =>
+          Colors.white,
         _ => AppColors.secondary,
       };
 }

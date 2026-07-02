@@ -74,3 +74,6 @@ coverage/
 # Secrets / env
 .env
 .env.*
+
+# Environment variables
+.env

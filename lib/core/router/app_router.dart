@@ -10,8 +10,6 @@ import '../../features/auth/screens/couple_planning_screen.dart';
 import '../../features/auth/screens/vendor_onboarding_screen.dart';
 import '../../features/couple/screens/couple_dashboard_screen.dart';
 import '../../features/couple/screens/couple_profile_screen.dart';
-import '../../features/couple/screens/budget_overview_screen.dart';
-import '../../features/couple/screens/budget_setup_wizard_screen.dart';
 import '../../features/couple/screens/expense_entry_screen.dart';
 import '../../features/couple/screens/vendor_discovery_screen.dart';
 import '../../features/couple/screens/vendor_profile_screen.dart';
@@ -47,6 +45,7 @@ import '../../providers/auth_provider.dart';
 import '../../shell/couple_shell.dart';
 import '../../shell/vendor_shell.dart';
 import '../../shell/admin_shell.dart';
+import 'app_routes.dart';
 
 class _RouterNotifier extends ChangeNotifier {
   _RouterNotifier(Ref ref) {
@@ -55,10 +54,10 @@ class _RouterNotifier extends ChangeNotifier {
 }
 
 String _homeForRole(AuthState auth) {
-  if (auth.isCouple) return '/couple/dashboard';
-  if (auth.isVendor) return '/vendor/dashboard';
-  if (auth.isAdmin) return '/admin/dashboard';
-  return '/login';
+  if (auth.isCouple) return AppRoutes.coupleDashboard;
+  if (auth.isVendor) return AppRoutes.vendorDashboard;
+  if (auth.isAdmin) return AppRoutes.adminDashboard;
+  return AppRoutes.login;
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -66,7 +65,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(notifier.dispose);
 
   return GoRouter(
-    initialLocation: '/register',
+    initialLocation: AppRoutes.register,
     debugLogDiagnostics: false,
     refreshListenable: notifier,
 
@@ -74,20 +73,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       final auth = ref.read(authProvider);
       final loc = state.matchedLocation;
 
-      const authScreens = {
-        '/login', '/register', '/forgot-password',
-        '/verify-email', '/couple-planning', '/vendor-onboarding',
-      };
-
-      final isAuthScreen = authScreens.contains(loc);
+      final isAuthScreen = AppRoutes.authScreens.contains(loc);
       final isPublicInvite = loc.startsWith('/i/');
 
       if (!auth.isAuthenticated && !isAuthScreen && !isPublicInvite) {
-        return '/login';
+        return AppRoutes.login;
       }
 
       if (auth.isAuthenticated && auth.needsOnboarding) {
-        final target = auth.isVendor ? '/vendor-onboarding' : '/couple-planning';
+        final target = auth.isVendor ? AppRoutes.vendorOnboarding : AppRoutes.couplePlanning;
         return loc == target ? null : target;
       }
 
@@ -95,9 +89,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         return _homeForRole(auth);
       }
       if (auth.isAuthenticated && !isAuthScreen && !isPublicInvite) {
-        if (loc.startsWith('/couple') && !auth.isCouple) return _homeForRole(auth);
-        if (loc.startsWith('/vendor') && !auth.isVendor) return _homeForRole(auth);
-        if (loc.startsWith('/admin') && !auth.isAdmin) return _homeForRole(auth);
+        if (loc.startsWith(AppRoutes.couplePrefix) && !auth.isCouple) return _homeForRole(auth);
+        if (loc.startsWith(AppRoutes.vendorPrefix) && !auth.isVendor) return _homeForRole(auth);
+        if (loc.startsWith(AppRoutes.adminPrefix) && !auth.isAdmin) return _homeForRole(auth);
       }
 
       return null;
@@ -105,61 +99,61 @@ final routerProvider = Provider<GoRouter>((ref) {
 
     routes: [
       // ── Pre-auth ──────────────────────────────────────────────────────────
-      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-      GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
-      GoRoute(path: '/forgot-password', builder: (_, _) => const ForgotPasswordScreen()),
-      GoRoute(path: '/verify-email', builder: (_, _) => const EmailVerifyScreen()),
-      GoRoute(path: '/couple-planning', builder: (_, _) => const CouplePlanningScreen()),
-      GoRoute(path: '/vendor-onboarding', builder: (_, _) => const VendorOnboardingScreen()),
+      GoRoute(path: AppRoutes.login, builder: (_, _) => const LoginScreen()),
+      GoRoute(path: AppRoutes.register, builder: (_, _) => const RegisterScreen()),
+      GoRoute(path: AppRoutes.forgotPassword, builder: (_, _) => const ForgotPasswordScreen()),
+      GoRoute(path: AppRoutes.verifyEmail, builder: (_, _) => const EmailVerifyScreen()),
+      GoRoute(path: AppRoutes.couplePlanning, builder: (_, _) => const CouplePlanningScreen()),
+      GoRoute(path: AppRoutes.vendorOnboarding, builder: (_, _) => const VendorOnboardingScreen()),
 
       // ── Public invitation (no auth, no shell) ─────────────────────────────
       GoRoute(
-        path: '/i/:shareToken',
+        path: AppRoutes.publicInvite,
         builder: (_, state) =>
-            PublicInvitationScreen(shareToken: state.pathParameters['shareToken']!),
+            PublicInvitationScreen(shareToken: state.pathParameters['shareToken'] ?? ''),
       ),
 
       // ── Shared full-screen pushes ─────────────────────────────────────────
-      GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
-      GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
-      GoRoute(path: '/help', builder: (_, _) => const HelpScreen()),
-      GoRoute(path: '/couple/reports', builder: (_, _) => const ReportsScreen()),
+      GoRoute(path: AppRoutes.notifications, builder: (_, _) => const NotificationsScreen()),
+      GoRoute(path: AppRoutes.settings, builder: (_, _) => const SettingsScreen()),
+      GoRoute(path: AppRoutes.help, builder: (_, _) => const HelpScreen()),
+      GoRoute(path: AppRoutes.coupleReports, builder: (_, _) => const ReportsScreen()),
 
       // ── Couple full-screen pushes ─────────────────────────────────────────
       GoRoute(
-        path: '/couple/vendors/:id',
+        path: AppRoutes.coupleVendorDetail,
         builder: (_, state) =>
-            VendorProfileScreen(vendorId: state.pathParameters['id']!),
+            VendorProfileScreen(vendorId: state.pathParameters['id'] ?? ''),
       ),
-      GoRoute(path: '/couple/budget/share', builder: (_, _) => const BudgetShareScreen()),
-      GoRoute(path: '/couple/budget/setup', builder: (_, _) => const BudgetSetupWizardScreen()),
-      GoRoute(path: '/couple/budget/expense/new', builder: (_, _) => const ExpenseEntryScreen()),
+      GoRoute(path: AppRoutes.coupleEditPlan, builder: (_, _) => const CouplePlanningScreen()),
+      GoRoute(path: AppRoutes.coupleBudgetShare, builder: (_, _) => const BudgetShareScreen()),
+      GoRoute(path: AppRoutes.coupleExpenseNew, builder: (_, _) => const ExpenseEntryScreen()),
       GoRoute(
-        path: '/couple/invitations/editor',
+        path: AppRoutes.coupleInvitationEditor,
         builder: (_, state) =>
             InvitationEditorScreen(invitationId: state.uri.queryParameters['id']),
       ),
-      GoRoute(path: '/couple/messages', builder: (_, _) => const CoupleMessagesScreen()),
+      GoRoute(path: AppRoutes.coupleMessages, builder: (_, _) => const CoupleMessagesScreen()),
       GoRoute(
-        path: '/couple/messages/:convoId',
-        builder: (_, state) => ChatScreen(convoId: state.pathParameters['convoId']!),
+        path: AppRoutes.coupleChat,
+        builder: (_, state) => ChatScreen(convoId: state.pathParameters['convoId'] ?? ''),
       ),
-      GoRoute(path: '/couple/checklist', builder: (_, _) => const PlanningChecklistScreen()),
-      GoRoute(path: '/couple/wishlist', builder: (_, _) => const WishlistScreen()),
-      GoRoute(path: '/couple/reviews/new', builder: (_, _) => const ReviewSubmissionScreen()),
+      GoRoute(path: AppRoutes.coupleChecklist, builder: (_, _) => const PlanningChecklistScreen()),
+      GoRoute(path: AppRoutes.coupleWishlist, builder: (_, _) => const WishlistScreen()),
+      GoRoute(path: AppRoutes.coupleReviewNew, builder: (_, _) => const ReviewSubmissionScreen()),
 
       // ── Vendor full-screen pushes ─────────────────────────────────────────
-      GoRoute(path: '/vendor/analytics', builder: (_, _) => const VendorAnalyticsScreen()),
-      GoRoute(path: '/vendor/messages', builder: (_, _) => const VendorMessagesScreen()),
+      GoRoute(path: AppRoutes.vendorAnalytics, builder: (_, _) => const VendorAnalyticsScreen()),
+      GoRoute(path: AppRoutes.vendorMessages, builder: (_, _) => const VendorMessagesScreen()),
       GoRoute(
-        path: '/vendor/messages/:convoId',
-        builder: (_, state) => ChatScreen(convoId: state.pathParameters['convoId']!),
+        path: AppRoutes.vendorChat,
+        builder: (_, state) => ChatScreen(convoId: state.pathParameters['convoId'] ?? ''),
       ),
-      GoRoute(path: '/vendor/availability', builder: (_, _) => const AvailabilityCalendarScreen()),
-      GoRoute(path: '/vendor/subscription', builder: (_, _) => const SubscriptionScreen()),
+      GoRoute(path: AppRoutes.vendorAvailability, builder: (_, _) => const AvailabilityCalendarScreen()),
+      GoRoute(path: AppRoutes.vendorSubscription, builder: (_, _) => const SubscriptionScreen()),
 
       // ── Admin full-screen pushes ──────────────────────────────────────────
-      GoRoute(path: '/admin/moderation', builder: (_, _) => const ContentModerationScreen()),
+      GoRoute(path: AppRoutes.adminModeration, builder: (_, _) => const ContentModerationScreen()),
 
       // ══════════════════════════════════════════════════════════════════════
       // COUPLE SHELL — 5 tabs: Home, Vendors, Budget, Invite, Profile
@@ -168,29 +162,29 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, shell) => CoupleShell(navigationShell: shell),
         branches: [
           StatefulShellBranch(routes: [
-            GoRoute(path: '/couple/dashboard', builder: (_, _) => const CoupleDashboardScreen()),
+            GoRoute(path: AppRoutes.coupleDashboard, builder: (_, _) => const CoupleDashboardScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/couple/vendors', builder: (_, _) => const VendorDiscoveryScreen()),
+            GoRoute(path: AppRoutes.coupleVendors, builder: (_, _) => const VendorDiscoveryScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/couple/budget', builder: (_, _) => const BudgetOverviewScreen()),
+            GoRoute(path: AppRoutes.coupleBudget, builder: (_, _) => const CouplePlanningScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
-              path: '/couple/invitations',
+              path: AppRoutes.coupleInvitations,
               builder: (_, _) => const InvitationGalleryScreen(),
               routes: [
                 GoRoute(
                   path: ':id/rsvp',
                   builder: (_, state) =>
-                      RsvpDashboardScreen(invitationId: state.pathParameters['id']!),
+                      RsvpDashboardScreen(invitationId: state.pathParameters['id'] ?? ''),
                 ),
               ],
             ),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/couple/profile', builder: (_, _) => const CoupleProfileScreen()),
+            GoRoute(path: AppRoutes.coupleProfile, builder: (_, _) => const CoupleProfileScreen()),
           ]),
         ],
       ),
@@ -202,19 +196,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, shell) => VendorShell(navigationShell: shell),
         branches: [
           StatefulShellBranch(routes: [
-            GoRoute(path: '/vendor/dashboard', builder: (_, _) => const VendorDashboardScreen()),
+            GoRoute(path: AppRoutes.vendorDashboard, builder: (_, _) => const VendorDashboardScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/vendor/listings', builder: (_, _) => const VendorListingsScreen()),
+            GoRoute(path: AppRoutes.vendorListings, builder: (_, _) => const VendorListingsScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/vendor/leads', builder: (_, _) => const LeadInboxScreen()),
+            GoRoute(path: AppRoutes.vendorLeads, builder: (_, _) => const LeadInboxScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/vendor/reviews', builder: (_, _) => const VendorReviewsScreen()),
+            GoRoute(path: AppRoutes.vendorReviews, builder: (_, _) => const VendorReviewsScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/vendor/account', builder: (_, _) => const VendorProfileManagementScreen()),
+            GoRoute(path: AppRoutes.vendorAccount, builder: (_, _) => const VendorProfileManagementScreen()),
           ]),
         ],
       ),
@@ -226,16 +220,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, shell) => AdminShell(navigationShell: shell),
         branches: [
           StatefulShellBranch(routes: [
-            GoRoute(path: '/admin/dashboard', builder: (_, _) => const AdminDashboardScreen()),
+            GoRoute(path: AppRoutes.adminDashboard, builder: (_, _) => const AdminDashboardScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/admin/users', builder: (_, _) => const UserManagementScreen()),
+            GoRoute(path: AppRoutes.adminUsers, builder: (_, _) => const UserManagementScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/admin/vendors', builder: (_, _) => const VendorVerificationScreen()),
+            GoRoute(path: AppRoutes.adminVendors, builder: (_, _) => const VendorVerificationScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/admin/analytics', builder: (_, _) => const PlatformAnalyticsScreen()),
+            GoRoute(path: AppRoutes.adminAnalytics, builder: (_, _) => const PlatformAnalyticsScreen()),
           ]),
         ],
       ),

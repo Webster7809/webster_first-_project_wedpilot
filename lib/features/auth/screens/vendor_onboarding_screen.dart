@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../widgets/dash_progress_bar.dart';
+import '../../../widgets/wed_button.dart';
+import '../../../widgets/wizard_widgets.dart';
 import '../../../providers/auth_provider.dart';
 
 class VendorOnboardingScreen extends ConsumerStatefulWidget {
@@ -27,6 +29,9 @@ class _VendorOnboardingScreenState
   // Step 1 — Portfolio
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+  final _picker = ImagePicker();
+  Uint8List? _coverPhotoBytes;
+  final List<Uint8List> _galleryBytes = [];
 
   // Step 2 — Contact
   final _phoneCtrl = TextEditingController();
@@ -79,6 +84,23 @@ class _VendorOnboardingScreenState
     }
   }
 
+  Future<void> _pickCoverPhoto() async {
+    final file = await _picker.pickImage(
+        source: ImageSource.gallery, imageQuality: 80);
+    if (file == null || !mounted) return;
+    final bytes = await file.readAsBytes();
+    setState(() => _coverPhotoBytes = bytes);
+  }
+
+  Future<void> _addGalleryPhoto() async {
+    if (_galleryBytes.length >= 6) return;
+    final file = await _picker.pickImage(
+        source: ImageSource.gallery, imageQuality: 80);
+    if (file == null || !mounted) return;
+    final bytes = await file.readAsBytes();
+    setState(() => _galleryBytes.add(bytes));
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -87,7 +109,7 @@ class _VendorOnboardingScreenState
         backgroundColor: AppColors.cream,
         body: Column(
           children: [
-            _VendorWizardHeader(
+            WizardHeader(
               step: _step,
               totalSteps: _totalSteps,
               stepLabel: _stepLabels[_step],
@@ -134,7 +156,7 @@ class _VendorOnboardingScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _VendorSectionLabel(icon: Icons.grid_view_outlined, label: 'Vendor category'),
+        WizardSectionLabel(icon: Icons.grid_view_outlined, label: 'Vendor category'),
         const SizedBox(height: 12),
         GridView.count(
           crossAxisCount: 2,
@@ -195,7 +217,7 @@ class _VendorOnboardingScreenState
           }).toList(),
         ),
         const SizedBox(height: 24),
-        _VendorSectionLabel(icon: Icons.location_on_outlined, label: 'Where are you based?'),
+        WizardSectionLabel(icon: Icons.location_on_outlined, label: 'Where are you based?'),
         const SizedBox(height: 10),
         TextField(
           controller: _locationCtrl,
@@ -203,9 +225,10 @@ class _VendorOnboardingScreenState
           decoration: _fieldDec('Ndola, Copperbelt'),
         ),
         const SizedBox(height: 32),
-        _VendorContinueButton(
-          onTap: _next,
+        WizardContinueButton(
+          onPressed: _next,
           label: 'Continue to portfolio',
+          showArrow: true,
         ),
       ],
     );
@@ -217,35 +240,60 @@ class _VendorOnboardingScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _VendorSectionLabel(icon: Icons.camera_alt_outlined, label: 'Portfolio photos'),
+        WizardSectionLabel(icon: Icons.camera_alt_outlined, label: 'Portfolio photos'),
         const SizedBox(height: 12),
         _DashedUploadArea(
-          onTap: () {},
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.upload_rounded, size: 32, color: AppColors.amber),
-              const SizedBox(height: 8),
-              Text(
-                'Upload cover photo',
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: AppColors.amber,
-                  fontWeight: FontWeight.w700,
+          onTap: _pickCoverPhoto,
+          child: _coverPhotoBytes != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(11),
+                  child: Image.memory(
+                    _coverPhotoBytes!,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.upload_rounded, size: 32, color: AppColors.amber),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Upload cover photo',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.amber,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'JPG or PNG, up to 10MB',
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'JPG or PNG, up to 10MB',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-              ),
-            ],
-          ),
         ),
         const SizedBox(height: 12),
+        // Gallery row
         Row(
           children: [
-            for (int i = 0; i < 3; i++) ...[
-              Expanded(
+            ..._galleryBytes.take(3).map((bytes) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.memory(bytes, fit: BoxFit.cover),
+                  ),
+                ),
+              ),
+            )),
+            // Fill remaining slots up to 3 with placeholders
+            ...List.generate(3 - _galleryBytes.take(3).length, (_) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
                 child: AspectRatio(
                   aspectRatio: 1,
                   child: Container(
@@ -258,25 +306,26 @@ class _VendorOnboardingScreenState
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-            ],
-            Expanded(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: GestureDetector(
-                  onTap: () {},
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.divider),
+            )),
+            // Add button (hidden once 6 picked)
+            if (_galleryBytes.length < 6)
+              Expanded(
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: GestureDetector(
+                    onTap: _addGalleryPhoto,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      child: const Icon(Icons.add_rounded,
+                          color: AppColors.textHint, size: 28),
                     ),
-                    child: const Icon(Icons.add_rounded,
-                        color: AppColors.textHint, size: 28),
                   ),
                 ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -285,7 +334,7 @@ class _VendorOnboardingScreenState
           style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: 24),
-        _VendorSectionLabel(icon: Icons.edit_outlined, label: 'Listing title'),
+        WizardSectionLabel(icon: Icons.edit_outlined, label: 'Listing title'),
         const SizedBox(height: 10),
         TextField(
           controller: _titleCtrl,
@@ -293,7 +342,7 @@ class _VendorOnboardingScreenState
           decoration: _fieldDec('Mukuba Gardens — Open Air Venue'),
         ),
         const SizedBox(height: 20),
-        _VendorSectionLabel(icon: Icons.grid_view_outlined, label: 'Description'),
+        WizardSectionLabel(icon: Icons.grid_view_outlined, label: 'Description'),
         const SizedBox(height: 10),
         TextField(
           controller: _descCtrl,
@@ -304,9 +353,10 @@ class _VendorOnboardingScreenState
           ),
         ),
         const SizedBox(height: 32),
-        _VendorContinueButton(
-          onTap: _next,
+        WizardContinueButton(
+          onPressed: _next,
           label: 'Continue to contact info',
+          showArrow: true,
         ),
       ],
     );
@@ -356,7 +406,7 @@ class _VendorOnboardingScreenState
           ),
         ),
         const SizedBox(height: 24),
-        _VendorSectionLabel(icon: Icons.phone_outlined, label: 'Phone number'),
+        WizardSectionLabel(icon: Icons.phone_outlined, label: 'Phone number'),
         const SizedBox(height: 10),
         _IconField(
           controller: _phoneCtrl,
@@ -365,7 +415,7 @@ class _VendorOnboardingScreenState
           inputType: TextInputType.phone,
         ),
         const SizedBox(height: 20),
-        _VendorSectionLabel(
+        WizardSectionLabel(
             icon: Icons.chat_bubble_outline_rounded, label: 'WhatsApp number'),
         const SizedBox(height: 10),
         _IconField(
@@ -375,7 +425,7 @@ class _VendorOnboardingScreenState
           inputType: TextInputType.phone,
         ),
         const SizedBox(height: 20),
-        _VendorSectionLabel(icon: Icons.email_outlined, label: 'Email address'),
+        WizardSectionLabel(icon: Icons.email_outlined, label: 'Email address'),
         const SizedBox(height: 10),
         _IconField(
           controller: _emailCtrl,
@@ -384,7 +434,7 @@ class _VendorOnboardingScreenState
           inputType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 20),
-        _VendorSectionLabel(
+        WizardSectionLabel(
             icon: Icons.location_on_outlined, label: 'Physical address'),
         const SizedBox(height: 10),
         _IconField(
@@ -394,7 +444,7 @@ class _VendorOnboardingScreenState
           inputType: TextInputType.streetAddress,
         ),
         const SizedBox(height: 20),
-        _VendorSectionLabel(
+        WizardSectionLabel(
           icon: Icons.language_outlined,
           label: 'Social links',
           suffix: '(optional)',
@@ -407,9 +457,10 @@ class _VendorOnboardingScreenState
           inputType: TextInputType.url,
         ),
         const SizedBox(height: 32),
-        _VendorContinueButton(
-          onTap: _next,
+        WizardContinueButton(
+          onPressed: _next,
           label: 'Submit for verification',
+          showArrow: true,
         ),
       ],
     );
@@ -459,26 +510,15 @@ class _VendorOnboardingScreenState
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
+                  WedButton(
+                    label: 'Go to dashboard',
+                    onPressed: () {
+                      ref.read(authProvider.notifier).completeVendorOnboarding();
+                      context.go('/vendor/dashboard');
+                    },
+                    variant: WedButtonVariant.primaryDark,
                     height: 52,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        ref.read(authProvider.notifier).completeVendorOnboarding();
-                        context.go('/vendor/dashboard');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.forestGreen,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(28)),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'Go to dashboard',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
-                    ),
+                    borderRadius: 28,
                   ),
                 ],
               ),
@@ -509,137 +549,6 @@ class _VendorOnboardingScreenState
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
       );
-}
-
-// ── Vendor wizard header ──────────────────────────────────────────────────────
-
-class _VendorWizardHeader extends StatelessWidget {
-  final int step;
-  final int totalSteps;
-  final String stepLabel;
-  final String stepTitle;
-  final VoidCallback? onBack;
-
-  const _VendorWizardHeader({
-    required this.step,
-    required this.totalSteps,
-    required this.stepLabel,
-    required this.stepTitle,
-    this.onBack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.forestGreen,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  if (onBack != null)
-                    GestureDetector(
-                      onTap: onBack,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(30),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.chevron_left_rounded,
-                            color: Colors.white, size: 22),
-                      ),
-                    )
-                  else
-                    const SizedBox(width: 36),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'STEP ${step + 1} OF $totalSteps',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                        letterSpacing: 1.2,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(width: 48),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                stepLabel,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.amber,
-                  letterSpacing: 1.4,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                stepTitle,
-                style: const TextStyle(
-                  fontFamily: 'Playfair Display',
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  height: 1.25,
-                ),
-              ),
-              const SizedBox(height: 16),
-              DashProgressBar(total: totalSteps, current: step),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Section label ─────────────────────────────────────────────────────────────
-
-class _VendorSectionLabel extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String? suffix;
-
-  const _VendorSectionLabel({
-    required this.icon,
-    required this.label,
-    this.suffix,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: AppColors.amber),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: AppTextStyles.titleMedium.copyWith(
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        if (suffix != null) ...[
-          const SizedBox(width: 6),
-          Text(
-            suffix!,
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-          ),
-        ],
-      ],
-    );
-  }
 }
 
 // ── Icon-prefix field ─────────────────────────────────────────────────────────
@@ -753,41 +662,4 @@ class _DashBorderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// ── Continue button ───────────────────────────────────────────────────────────
-
-class _VendorContinueButton extends StatelessWidget {
-  final VoidCallback onTap;
-  final String label;
-
-  const _VendorContinueButton({required this.onTap, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: ElevatedButton(
-        onPressed: onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.forestGreen,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-          elevation: 0,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward_rounded, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
 }

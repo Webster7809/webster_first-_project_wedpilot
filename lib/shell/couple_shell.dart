@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../core/inherited/shell_scaffold.dart';
 import '../core/theme/app_colors.dart';
+import '../widgets/shell_nav_item.dart';
 
 class CoupleShell extends StatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -32,7 +33,7 @@ class _CoupleShellState extends State<CoupleShell> {
   void _onTabSelected(int index) {
     widget.navigationShell.goBranch(
       index,
-      initialLocation: index == widget.navigationShell.currentIndex,
+      initialLocation: index != widget.navigationShell.currentIndex,
     );
   }
 }
@@ -56,11 +57,11 @@ class _CoupleNavBar extends StatelessWidget {
           height: 60,
           child: Row(
             children: [
-              _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home', index: 0, currentIndex: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.search_outlined, activeIcon: Icons.search_rounded, label: 'Vendors', index: 1, currentIndex: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.credit_card_outlined, activeIcon: Icons.credit_card_rounded, label: 'Budget', index: 2, currentIndex: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.mail_outline_rounded, activeIcon: Icons.mail_rounded, label: 'Invite', index: 3, currentIndex: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: 'Profile', index: 4, currentIndex: currentIndex, onTap: onTap),
+              ShellNavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home', index: 0, currentIndex: currentIndex, onTap: onTap),
+              ShellNavItem(icon: Icons.search_outlined, activeIcon: Icons.search_rounded, label: 'Vendors', index: 1, currentIndex: currentIndex, onTap: onTap),
+              ShellNavItem(icon: Icons.credit_card_outlined, activeIcon: Icons.credit_card_rounded, label: 'Budget', index: 2, currentIndex: currentIndex, onTap: onTap),
+              ShellNavItem(icon: Icons.mail_outline_rounded, activeIcon: Icons.mail_rounded, label: 'Invite', index: 3, currentIndex: currentIndex, onTap: onTap),
+              ShellNavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: 'Profile', index: 4, currentIndex: currentIndex, onTap: onTap),
             ],
           ),
         ),
@@ -69,50 +70,3 @@ class _CoupleNavBar extends StatelessWidget {
   }
 }
 
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final int index;
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.index,
-    required this.currentIndex,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isActive = currentIndex == index;
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => onTap(index),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              size: 22,
-              color: isActive ? AppColors.amber : AppColors.textSecondary,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                color: isActive ? AppColors.amber : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

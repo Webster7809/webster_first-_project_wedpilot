@@ -5,14 +5,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_dimensions.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/budget_provider.dart';
+import '../../../providers/invitation_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../providers/vendor_provider.dart';
-
-const _kTabletBreak = 600.0;
-const _kDesktopBreak = 1024.0;
-const _kMaxWidth = 900.0;
 
 class CoupleDashboardScreen extends ConsumerWidget {
   const CoupleDashboardScreen({super.key});
@@ -55,7 +54,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                   style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                 ),
                 Text(
-                  user?.name ?? 'Chanda & Mwila',
+                  _coupleDisplayName(user?.name, couple?.partnerName),
                   style: GoogleFonts.playfairDisplay(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -98,8 +97,8 @@ class CoupleDashboardScreen extends ConsumerWidget {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final screenWidth = MediaQuery.of(context).size.width;
-                  final isTablet = screenWidth >= _kTabletBreak;
-                  final isDesktop = screenWidth >= _kDesktopBreak;
+                  final isTablet = screenWidth >= AppDimensions.tabletMin;
+                  final isDesktop = screenWidth >= AppDimensions.desktopMin;
 
                   final content = Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,7 +109,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                         budget: budget,
                         isTablet: isTablet,
                         onBudgetDetails: () => context.go('/couple/budget'),
-                        onBudgetSetup: () => context.push('/couple/budget/setup'),
+                        onBudgetSetup: () => context.push('/couple/plan-setup'),
                       ),
                       const SizedBox(height: 24),
 
@@ -145,7 +144,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                   if (isDesktop) {
                     return Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: _kMaxWidth),
+                        constraints: const BoxConstraints(maxWidth: AppDimensions.contentMaxWidth),
                         child: content,
                       ),
                     );
@@ -165,9 +164,15 @@ class CoupleDashboardScreen extends ConsumerWidget {
   }
 }
 
+String _coupleDisplayName(String? name1, String? name2) {
+  if (name1 == null) return 'Your Wedding';
+  if (name2 == null || name2.isEmpty) return name1;
+  return '$name1 & $name2';
+}
+
 // ── Responsive stat card grid ──────────────────────────────────────────────────
 
-class _StatCardsGrid extends StatelessWidget {
+class _StatCardsGrid extends ConsumerWidget {
   final dynamic couple;
   final dynamic budget;
   final bool isTablet;
@@ -183,12 +188,16 @@ class _StatCardsGrid extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rsvpStats = ref.watch(rsvpStatsProvider);
     final countdown = _CountdownCard(couple: couple);
     final budgetCard = budget != null
         ? _BudgetOverviewCard(budget: budget, onDetails: onBudgetDetails)
         : _SetupBudgetPrompt(onTap: onBudgetSetup);
-    const rsvp = _RsvpCard(confirmed: 118, total: 150);
+    final rsvp = _RsvpCard(
+      confirmed: rsvpStats.attending,
+      total: rsvpStats.totalInvited,
+    );
 
     if (isTablet) {
       return Column(
@@ -348,16 +357,7 @@ class _BudgetOverviewCard extends StatelessWidget {
 
   const _BudgetOverviewCard({required this.budget, required this.onDetails});
 
-  static const _catColors = <String, Color>{
-    'Venue': Color(0xFFC9892B),
-    'Catering': Color(0xFFD4A017),
-    'Photography': Color(0xFF4A8B6F),
-    'Decor & flowers': AppColors.forestGreen,
-    'DJ & MC': Color(0xFF6B9E8A),
-    'Transport': Color(0xFF8BAE9E),
-    'Wedding attire': Color(0xFF7B8E7A),
-    'Cake & sweets': Color(0xFFB5916A),
-  };
+  static const _catColors = AppColors.budgetCategoryColors;
 
   @override
   Widget build(BuildContext context) {
@@ -374,15 +374,9 @@ class _BudgetOverviewCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.forestGreen.withAlpha(18),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: AppShadows.elevated,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,7 +425,7 @@ class _BudgetOverviewCard extends StatelessWidget {
               if (unallocated > 0 && total > 0)
                 _BarSegment(
                   fraction: unallocated / total,
-                  color: const Color(0xFFE0DDD6),
+                  color: AppColors.segmentedBarTrack,
                 ),
             ],
           ),
@@ -469,7 +463,7 @@ class _SegmentedBar extends StatelessWidget {
       return Container(
         height: 8,
         decoration: BoxDecoration(
-          color: const Color(0xFFE0DDD6),
+          color: AppColors.segmentedBarTrack,
           borderRadius: BorderRadius.circular(4),
         ),
       );
@@ -524,16 +518,10 @@ class _SetupBudgetPrompt extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: AppColors.amber.withAlpha(80)),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.forestGreen.withAlpha(15),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          boxShadow: AppShadows.card,
         ),
         child: Row(
           children: [
@@ -582,15 +570,9 @@ class _RsvpCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.forestGreen.withAlpha(18),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: AppShadows.elevated,
       ),
       child: Row(
         children: [
@@ -614,7 +596,7 @@ class _RsvpCard extends StatelessWidget {
                       ),
                       PieChartSectionData(
                         value: (total - confirmed).toDouble(),
-                        color: const Color(0xFFE0DDD6),
+                        color: AppColors.segmentedBarTrack,
                         radius: 11,
                         showTitle: false,
                       ),
@@ -678,16 +660,10 @@ class _ShortlistScroll extends StatelessWidget {
         child: Container(
           height: 120,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: AppColors.divider),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.forestGreen.withAlpha(12),
-                blurRadius: 12,
-                offset: const Offset(0, 3),
-              ),
-            ],
+            boxShadow: AppShadows.sm,
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -734,15 +710,9 @@ class _ShortlistCard extends StatelessWidget {
       child: Container(
         width: 120,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.forestGreen.withAlpha(18),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
+          boxShadow: AppShadows.sm,
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -806,15 +776,9 @@ class _ChecklistPreview extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.forestGreen.withAlpha(15),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          boxShadow: AppShadows.card,
         ),
         child: Column(
           children: [

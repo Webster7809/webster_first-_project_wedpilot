@@ -1,9 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/vendor_own_provider.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 class VendorProfileManagementScreen extends ConsumerStatefulWidget {
@@ -19,16 +22,14 @@ class _VendorProfileManagementScreenState
   late final TextEditingController _descCtrl;
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _websiteCtrl;
-  bool _saving = false;
-  bool _notificationsEnabled = true;
 
   @override
   void initState() {
     super.initState();
-    _descCtrl = TextEditingController(
-        text: 'Spacious garden venue seating up to 300 guests');
-    _phoneCtrl = TextEditingController(text: '+260 97 712 3456');
-    _websiteCtrl = TextEditingController(text: 'www.mukubagardens.zm');
+    final profile = ref.read(vendorOwnProvider).profile;
+    _descCtrl = TextEditingController(text: profile?.description ?? '');
+    _phoneCtrl = TextEditingController(text: profile?.phone ?? '');
+    _websiteCtrl = TextEditingController(text: profile?.website ?? '');
   }
 
   @override
@@ -41,10 +42,14 @@ class _VendorProfileManagementScreenState
 
   @override
   Widget build(BuildContext context) {
-    final vendor = ref.watch(vendorProfileProvider);
-    final businessName = vendor?.businessName ?? 'Mukuba Gardens';
-    final category = vendor?.category ?? 'Outdoor venue';
-    final location = vendor?.location ?? 'Ndola, Copperbelt';
+    final ownState = ref.watch(vendorOwnProvider);
+    final vendor = ownState.profile ?? ref.watch(vendorProfileProvider);
+    final businessName = vendor?.businessName ?? 'My Business';
+    final category = vendor?.category ?? 'Venue';
+    final location = vendor?.location ?? '';
+    final logoUrl = vendor?.logoUrl;
+    final isSaving = ownState.isSaving;
+    final notificationsEnabled = ownState.notificationsEnabled;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -119,15 +124,59 @@ class _VendorProfileManagementScreenState
                   ),
                   child: Row(
                     children: [
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: AppColors.amber,
-                          borderRadius: BorderRadius.circular(16),
+                      GestureDetector(
+                        onTap: () async {
+                          final file = await ImagePicker().pickImage(
+                            source: ImageSource.gallery,
+                            imageQuality: 80,
+                          );
+                          if (file == null || !mounted) return;
+                          await ref
+                              .read(vendorOwnProvider.notifier)
+                              .saveProfile(logoUrl: file.path);
+                        },
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: logoUrl != null
+                                  ? (logoUrl.startsWith('http')
+                                      ? Image.network(logoUrl,
+                                          width: 60,
+                                          height: 60,
+                                          fit: BoxFit.cover)
+                                      : Image.file(File(logoUrl),
+                                          width: 60,
+                                          height: 60,
+                                          fit: BoxFit.cover))
+                                  : Container(
+                                      width: 60,
+                                      height: 60,
+                                      color: AppColors.amber,
+                                      child: const Icon(
+                                          Icons.storefront_rounded,
+                                          color: Colors.white,
+                                          size: 28),
+                                    ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: AppColors.forestGreen,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: Colors.white, width: 1.5),
+                                ),
+                                child: const Icon(Icons.edit,
+                                    size: 11, color: Colors.white),
+                              ),
+                            ),
+                          ],
                         ),
-                        child: const Icon(Icons.storefront_rounded,
-                            color: Colors.white, size: 28),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -214,18 +263,26 @@ class _VendorProfileManagementScreenState
                   width: double.infinity,
                   height: 46,
                   child: ElevatedButton(
-                    onPressed: _saving
+                    onPressed: isSaving
                         ? null
                         : () async {
-                            setState(() => _saving = true);
-                            await Future.delayed(
-                                const Duration(milliseconds: 700));
-                            if (mounted && context.mounted) {
-                              setState(() => _saving = false);
-                              showWedSnackBar(context,
-                                  'Profile updated successfully!',
-                                  type: SnackType.success);
-                            }
+                            await ref
+                                .read(vendorOwnProvider.notifier)
+                                .saveProfile(
+                                  description: _descCtrl.text.trim().isEmpty
+                                      ? null
+                                      : _descCtrl.text.trim(),
+                                  phone: _phoneCtrl.text.trim().isEmpty
+                                      ? null
+                                      : _phoneCtrl.text.trim(),
+                                  website: _websiteCtrl.text.trim().isEmpty
+                                      ? null
+                                      : _websiteCtrl.text.trim(),
+                                );
+                            if (!context.mounted) return;
+                            showWedSnackBar(context,
+                                'Profile updated successfully!',
+                                type: SnackType.success);
                           },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.amber,
@@ -234,7 +291,7 @@ class _VendorProfileManagementScreenState
                           borderRadius: BorderRadius.circular(24)),
                       elevation: 0,
                     ),
-                    child: _saving
+                    child: isSaving
                         ? const SizedBox(
                             width: 20,
                             height: 20,
@@ -255,9 +312,9 @@ class _VendorProfileManagementScreenState
                 _ToggleRow(
                   icon: Icons.notifications_outlined,
                   label: 'New inquiry notifications',
-                  value: _notificationsEnabled,
+                  value: notificationsEnabled,
                   onChanged: (v) =>
-                      setState(() => _notificationsEnabled = v),
+                      ref.read(vendorOwnProvider.notifier).updateNotifications(v),
                 ),
                 const SizedBox(height: 10),
                 _MenuRow(

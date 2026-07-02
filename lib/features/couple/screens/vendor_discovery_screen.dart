@@ -7,16 +7,8 @@ import '../../../models/vendor_profile.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/loading_shimmer.dart';
-
-// Category budget allocations (derived from couple profile budget)
-const _kCategoryBudgets = {
-  'Venue': 32000,
-  'Catering': 28000,
-  'Decor & flowers': 14500,
-  'Photography': 12000,
-  'DJ & MC': 5000,
-  'Transport': 3500,
-};
+import '../../../core/utils/format_utils.dart';
+import '../../../core/constants/app_constants.dart';
 
 const _kAllCategories = [
   'Venue',
@@ -47,6 +39,12 @@ class _VendorDiscoveryScreenState
     final coupleProfile = ref.watch(coupleProfileProvider);
     final city = coupleProfile?.location?.split(',').first.trim() ?? 'your city';
     final vendorAsync = ref.watch(vendorListProvider(_selectedCategory));
+    final totalBudget = coupleProfile?.totalBudget ?? 0.0;
+    final catBudgets = Map.fromEntries(
+      AppConstants.defaultBudgetAllocation.entries.map(
+        (e) => MapEntry(e.key, (totalBudget * e.value).round()),
+      ),
+    );
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -110,7 +108,7 @@ class _VendorDiscoveryScreenState
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '12 vendors matched to your wedding',
+                                    '${vendorAsync.valueOrNull?.length ?? 0} vendors matched to your wedding',
                                     style: AppTextStyles.titleMedium.copyWith(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w700,
@@ -146,7 +144,7 @@ class _VendorDiscoveryScreenState
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: _kAllCategories.map((cat) {
-                      final budget = _kCategoryBudgets[cat];
+                      final budget = catBudgets[cat];
                       final isSelected = _selectedCategory == cat;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
@@ -187,7 +185,7 @@ class _VendorDiscoveryScreenState
                                 if (budget != null) ...[
                                   const SizedBox(height: 2),
                                   Text(
-                                    'ZMW ${_fmt(budget)}',
+                                    fmtCurrency(budget),
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: isSelected
@@ -364,10 +362,6 @@ class _VendorDiscoveryScreenState
     };
   }
 
-  String _fmt(int n) {
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(0)},000';
-    return n.toString();
-  }
 }
 
 // ── Vendor match card ─────────────────────────────────────────────────────────
@@ -384,7 +378,7 @@ class _VendorMatchCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final priceMin = vendor.priceMin > 0
-        ? 'ZMW ${_fmt(vendor.priceMin.round())} – ${_fmt(vendor.priceMax.round())}'
+        ? '${fmtCurrency(vendor.priceMin.round())} – ${fmtAmount(vendor.priceMax.round())}'
         : null;
 
     return Container(
@@ -578,14 +572,6 @@ class _VendorMatchCard extends ConsumerWidget {
     );
   }
 
-  String _fmt(int n) {
-    if (n >= 1000) {
-      final thousands = n ~/ 1000;
-      final rem = n % 1000;
-      return rem == 0 ? '$thousands,000' : '$thousands,${rem.toString().padLeft(3, '0')}';
-    }
-    return n.toString();
-  }
 }
 
 // ── Tag chip ──────────────────────────────────────────────────────────────────

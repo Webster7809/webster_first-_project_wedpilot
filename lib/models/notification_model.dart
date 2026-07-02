@@ -33,4 +33,16 @@ class NotificationModel {
         isRead: json['is_read'] as bool? ?? false,
         sentAt: DateTime.parse(json['sent_at'] as String),
       );
+
+  Map<String, dynamic> toJson() => {
+        'notif_id': id,
+        'user_id': userId,
+        'type': type,
+        'title': title,
+        'body': body,
+        'entity_id': entityId,
+        'entity_type': entityType,
+        'is_read': isRead,
+        'sent_at': sentAt.toIso8601String(),
+      };
 }

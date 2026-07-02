@@ -19,6 +19,17 @@ class ChecklistItem {
     this.linkedVendorName,
   });
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'couple_id': coupleId,
+        'phase': phase,
+        'task': task,
+        'is_completed': isCompleted,
+        'due_date': dueDate?.toIso8601String(),
+        'linked_vendor_id': linkedVendorId,
+        'linked_vendor_name': linkedVendorName,
+      };
+
   ChecklistItem copyWith({
     String? task,
     String? phase,

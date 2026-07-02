@@ -6,6 +6,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_text_field.dart';
 import '../../../widgets/wed_snack_bar.dart';
+import '../../../providers/vendor_provider.dart';
 
 class ReviewSubmissionScreen extends ConsumerStatefulWidget {
   const ReviewSubmissionScreen({super.key});
@@ -47,6 +48,12 @@ class _ReviewSubmissionScreenState extends ConsumerState<ReviewSubmissionScreen>
 
   @override
   Widget build(BuildContext context) {
+    final wishlistedIds = ref.watch(wishlistProvider);
+    final allVendors = ref.watch(allVendorsProvider);
+    final vendorOptions = wishlistedIds.isEmpty
+        ? allVendors
+        : allVendors.where((v) => wishlistedIds.contains(v.id)).toList();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Write a Review')),
@@ -83,11 +90,12 @@ class _ReviewSubmissionScreenState extends ConsumerState<ReviewSubmissionScreen>
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
-              items: const [
-                DropdownMenuItem(value: 'v-001', child: Text('Blossom Photography')),
-                DropdownMenuItem(value: 'v-003', child: Text('The Garden Venue')),
-                DropdownMenuItem(value: 'v-004', child: Text('Culinary Bliss Catering')),
-              ],
+              items: vendorOptions
+                  .map((v) => DropdownMenuItem(
+                        value: v.id,
+                        child: Text(v.businessName),
+                      ))
+                  .toList(),
               onChanged: (v) => setState(() => _selectedVendorId = v),
             ),
             const SizedBox(height: 20),

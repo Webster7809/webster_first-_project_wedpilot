@@ -1,103 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-// ── Models ────────────────────────────────────────────────────────────────────
-
-class AdminVendor {
-  final String id;
-  final String name;
-  final String category;
-  final String submitted;
-  final int docs;
-  final String email;
-  final String phone;
-  final String location;
-
-  const AdminVendor({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.submitted,
-    required this.docs,
-    required this.email,
-    required this.phone,
-    required this.location,
-  });
-}
-
-class AdminUser {
-  final String id;
-  final String name;
-  final String email;
-  final String role;
-  final String status;
-  final String joined;
-
-  const AdminUser({
-    required this.id,
-    required this.name,
-    required this.email,
-    required this.role,
-    required this.status,
-    required this.joined,
-  });
-
-  bool get isSuspended => status == 'suspended';
-
-  AdminUser copyWith({String? status}) => AdminUser(
-        id: id,
-        name: name,
-        email: email,
-        role: role,
-        status: status ?? this.status,
-        joined: joined,
-      );
-}
-
-class FlaggedReview {
-  final String id;
-  final String vendor;
-  final int rating;
-  final String text;
-  final String flagReason;
-
-  const FlaggedReview({
-    required this.id,
-    required this.vendor,
-    required this.rating,
-    required this.text,
-    required this.flagReason,
-  });
-}
-
-class FlaggedImage {
-  final String id;
-  final String vendor;
-  final String category;
-  final String flagReason;
-
-  const FlaggedImage({
-    required this.id,
-    required this.vendor,
-    required this.category,
-    required this.flagReason,
-  });
-}
-
-class FlaggedMessage {
-  final String id;
-  final String sender;
-  final String recipient;
-  final String excerpt;
-  final String flagReason;
-
-  const FlaggedMessage({
-    required this.id,
-    required this.sender,
-    required this.recipient,
-    required this.excerpt,
-    required this.flagReason,
-  });
-}
+import '../models/admin_models.dart';
+export '../models/admin_models.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -107,6 +10,8 @@ class AdminState {
   final List<FlaggedReview> flaggedReviews;
   final List<FlaggedImage> flaggedImages;
   final List<FlaggedMessage> flaggedMessages;
+  final int approvedCount;
+  final int invitationsSentThisWeek;
 
   const AdminState({
     required this.pendingVendors,
@@ -114,10 +19,18 @@ class AdminState {
     required this.flaggedReviews,
     required this.flaggedImages,
     required this.flaggedMessages,
+    this.approvedCount = 47,
+    this.invitationsSentThisWeek = 312,
   });
 
   int get totalFlaggedItems =>
       flaggedReviews.length + flaggedImages.length + flaggedMessages.length;
+
+  int get verificationRate {
+    final total = approvedCount + pendingVendors.length;
+    if (total == 0) return 100;
+    return ((approvedCount / total) * 100).round();
+  }
 
   AdminState copyWith({
     List<AdminVendor>? pendingVendors,
@@ -125,6 +38,8 @@ class AdminState {
     List<FlaggedReview>? flaggedReviews,
     List<FlaggedImage>? flaggedImages,
     List<FlaggedMessage>? flaggedMessages,
+    int? approvedCount,
+    int? invitationsSentThisWeek,
   }) =>
       AdminState(
         pendingVendors: pendingVendors ?? this.pendingVendors,
@@ -132,6 +47,9 @@ class AdminState {
         flaggedReviews: flaggedReviews ?? this.flaggedReviews,
         flaggedImages: flaggedImages ?? this.flaggedImages,
         flaggedMessages: flaggedMessages ?? this.flaggedMessages,
+        approvedCount: approvedCount ?? this.approvedCount,
+        invitationsSentThisWeek:
+            invitationsSentThisWeek ?? this.invitationsSentThisWeek,
       );
 }
 
@@ -142,6 +60,7 @@ class AdminNotifier extends StateNotifier<AdminState> {
 
   void approveVendor(String id) => state = state.copyWith(
         pendingVendors: state.pendingVendors.where((v) => v.id != id).toList(),
+        approvedCount: state.approvedCount + 1,
       );
 
   void rejectVendor(String id) => state = state.copyWith(
@@ -160,35 +79,23 @@ class AdminNotifier extends StateNotifier<AdminState> {
         users: state.users.where((u) => u.id != id).toList(),
       );
 
-  void approveReview(String id) => state = state.copyWith(
-        flaggedReviews:
-            state.flaggedReviews.where((r) => r.id != id).toList(),
+  void _removeFlaggedReview(String id) => state = state.copyWith(
+        flaggedReviews: state.flaggedReviews.where((r) => r.id != id).toList(),
       );
+  void approveReview(String id) => _removeFlaggedReview(id);
+  void rejectReview(String id) => _removeFlaggedReview(id);
 
-  void rejectReview(String id) => state = state.copyWith(
-        flaggedReviews:
-            state.flaggedReviews.where((r) => r.id != id).toList(),
+  void _removeFlaggedImage(String id) => state = state.copyWith(
+        flaggedImages: state.flaggedImages.where((img) => img.id != id).toList(),
       );
+  void approveImage(String id) => _removeFlaggedImage(id);
+  void rejectImage(String id) => _removeFlaggedImage(id);
 
-  void approveImage(String id) => state = state.copyWith(
-        flaggedImages:
-            state.flaggedImages.where((img) => img.id != id).toList(),
+  void _removeFlaggedMessage(String id) => state = state.copyWith(
+        flaggedMessages: state.flaggedMessages.where((m) => m.id != id).toList(),
       );
-
-  void rejectImage(String id) => state = state.copyWith(
-        flaggedImages:
-            state.flaggedImages.where((img) => img.id != id).toList(),
-      );
-
-  void approveMessage(String id) => state = state.copyWith(
-        flaggedMessages:
-            state.flaggedMessages.where((m) => m.id != id).toList(),
-      );
-
-  void rejectMessage(String id) => state = state.copyWith(
-        flaggedMessages:
-            state.flaggedMessages.where((m) => m.id != id).toList(),
-      );
+  void approveMessage(String id) => _removeFlaggedMessage(id);
+  void rejectMessage(String id) => _removeFlaggedMessage(id);
 }
 
 final adminProvider =

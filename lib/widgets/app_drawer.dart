@@ -29,7 +29,7 @@ class AppDrawer extends ConsumerWidget {
             padding: EdgeInsets.zero,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFFE91E63), Color(0xFFF06292)],
+                colors: [AppColors.adminPink, AppColors.adminPinkLight],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),

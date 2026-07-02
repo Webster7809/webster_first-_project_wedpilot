@@ -48,4 +48,18 @@ class CoupleProfile {
         partnerName: json['partner_name'] as String?,
         photoUrl: json['photo_url'] as String?,
       );
+
+  Map<String, dynamic> toJson() => {
+        'profile_id': id,
+        'user_id': userId,
+        'partner_user_id': partnerUserId,
+        'wedding_date': weddingDate?.toIso8601String(),
+        'location': location,
+        'guest_count': guestCount,
+        'style_tags': styleTags,
+        'total_budget': totalBudget,
+        'currency': currency,
+        'partner_name': partnerName,
+        'photo_url': photoUrl,
+      };
 }

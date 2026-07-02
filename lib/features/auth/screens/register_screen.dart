@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../models/user.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_text_field.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -156,15 +159,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                       // ── Form card ─────────────────────────────────────────
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withAlpha(45),
-                              blurRadius: 28,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
+                          boxShadow: AppShadows.xl,
                         ),
                         padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
                         child: Form(
@@ -205,14 +202,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               // ── Name field(s) ──────────────────────────────
                               if (_role == UserRole.couple) ...[
                                 if (isPhone) ...[
-                                  _RegField(
+                                  WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
                                     hint: 'Partner 1',
                                     controller: _partner1Ctrl,
                                     validator: _required,
                                     prefixIcon: Icons.person_outline,
                                   ),
                                   const SizedBox(height: 20),
-                                  _RegField(
+                                  WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
                                     hint: 'Partner 2',
                                     controller: _partner2Ctrl,
                                     validator: _required,
@@ -224,7 +221,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                         CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
-                                        child: _RegField(
+                                        child: WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
                                           hint: 'Partner 1',
                                           controller: _partner1Ctrl,
                                           validator: _required,
@@ -244,7 +241,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                         ),
                                       ),
                                       Expanded(
-                                        child: _RegField(
+                                        child: WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
                                           hint: 'Partner 2',
                                           controller: _partner2Ctrl,
                                           validator: _required,
@@ -255,7 +252,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                   ),
                                 ],
                               ] else ...[
-                                _RegField(
+                                WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
                                   hint: 'Business name',
                                   controller: _businessNameCtrl,
                                   validator: _required,
@@ -264,7 +261,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               ],
                               const SizedBox(height: 20),
 
-                              _RegField(
+                              WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
                                 hint: 'Phone number',
                                 controller: _phoneCtrl,
                                 keyboardType: TextInputType.phone,
@@ -273,7 +270,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               ),
                               const SizedBox(height: 20),
 
-                              _RegField(
+                              WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
                                 hint: 'Email address',
                                 controller: _emailCtrl,
                                 keyboardType: TextInputType.emailAddress,
@@ -286,7 +283,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               ),
                               const SizedBox(height: 20),
 
-                              _RegField(
+                              WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
                                 hint: 'Password',
                                 controller: _passCtrl,
                                 isPassword: true,
@@ -300,39 +297,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               const SizedBox(height: 28),
 
                               // ── CTA button ─────────────────────────────────
-                              SizedBox(
-                                width: double.infinity,
+                              WedButton(
+                                label: _role == UserRole.couple
+                                    ? 'Create our account'
+                                    : 'Create account',
+                                onPressed: _submit,
+                                variant: WedButtonVariant.primaryDark,
+                                isLoading: auth.isLoading,
                                 height: 56,
-                                child: ElevatedButton(
-                                  onPressed: auth.isLoading ? null : _submit,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.forestGreen,
-                                    foregroundColor: Colors.white,
-                                    disabledBackgroundColor:
-                                        AppColors.forestGreen.withAlpha(100),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    elevation: 0,
-                                  ),
-                                  child: auth.isLoading
-                                      ? const SizedBox(
-                                          width: 22,
-                                          height: 22,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white),
-                                        )
-                                      : Text(
-                                          _role == UserRole.couple
-                                              ? 'Create our account'
-                                              : 'Create account',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                ),
+                                borderRadius: 16,
                               ),
                               const SizedBox(height: 16),
 
@@ -415,85 +388,3 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 }
 
 // ── Text field ────────────────────────────────────────────────────────────────
-
-class _RegField extends StatefulWidget {
-  final String hint;
-  final TextEditingController controller;
-  final String? Function(String?)? validator;
-  final TextInputType? keyboardType;
-  final bool isPassword;
-  final IconData? prefixIcon;
-
-  const _RegField({
-    required this.hint,
-    required this.controller,
-    this.validator,
-    this.keyboardType,
-    this.isPassword = false,
-    this.prefixIcon,
-  });
-
-  @override
-  State<_RegField> createState() => _RegFieldState();
-}
-
-class _RegFieldState extends State<_RegField> {
-  bool _obscure = true;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: widget.controller,
-      keyboardType: widget.keyboardType,
-      obscureText: widget.isPassword && _obscure,
-      validator: widget.validator,
-      style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 15),
-      decoration: InputDecoration(
-        hintText: widget.hint,
-        hintStyle: GoogleFonts.inter(color: AppColors.textHint, fontSize: 14),
-        filled: true,
-        fillColor: const Color(0xFFF7F7F7),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-        prefixIcon: widget.prefixIcon != null
-            ? Icon(widget.prefixIcon, color: AppColors.textHint, size: 20)
-            : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide:
-              const BorderSide(color: AppColors.forestGreen, width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.error),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
-        ),
-        errorStyle:
-            GoogleFonts.inter(color: AppColors.error, fontSize: 11),
-        suffixIcon: widget.isPassword
-            ? IconButton(
-                icon: Icon(
-                  _obscure
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  color: AppColors.textHint,
-                  size: 20,
-                ),
-                onPressed: () => setState(() => _obscure = !_obscure),
-              )
-            : null,
-      ),
-    );
-  }
-}

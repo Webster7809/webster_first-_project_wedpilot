@@ -164,13 +164,6 @@ class AppTheme {
       );
 
   static ThemeData get dark {
-    const darkBg = Color(0xFF111318);
-    const darkSurface = Color(0xFF1C1F26);
-    const darkSurfaceVariant = Color(0xFF252830);
-    const darkText = Color(0xFFEAEAEA);
-    const darkTextSecondary = Color(0xFF9E9E9E);
-    const darkDivider = Color(0xFF2C2E35);
-
     return ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
@@ -178,24 +171,24 @@ class AppTheme {
         brightness: Brightness.dark,
         primary: AppColors.secondary,
         tertiary: AppColors.tertiary,
-        surface: darkSurface,
+        surface: AppColors.darkSurface,
         error: const Color(0xFFEF5350),
         onPrimary: Colors.white,
-        onSurface: darkText,
+        onSurface: AppColors.darkText,
       ),
-      scaffoldBackgroundColor: darkBg,
-      textTheme: _buildTextTheme(darkText, darkTextSecondary),
+      scaffoldBackgroundColor: AppColors.darkBackground,
+      textTheme: _buildTextTheme(AppColors.darkText, AppColors.darkTextSecondary),
       appBarTheme: AppBarTheme(
-        backgroundColor: darkSurface,
-        foregroundColor: darkText,
+        backgroundColor: AppColors.darkSurface,
+        foregroundColor: AppColors.darkText,
         elevation: 0,
         centerTitle: true,
         titleTextStyle: GoogleFonts.playfairDisplay(
           fontSize: 20,
           fontWeight: FontWeight.w600,
-          color: darkText,
+          color: AppColors.darkText,
         ),
-        iconTheme: const IconThemeData(color: darkText),
+        iconTheme: const IconThemeData(color: AppColors.darkText),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -224,15 +217,15 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: darkSurfaceVariant,
+        fillColor: AppColors.darkSurfaceVariant,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: darkDivider),
+          borderSide: const BorderSide(color: AppColors.darkDivider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: darkDivider),
+          borderSide: const BorderSide(color: AppColors.darkDivider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -247,33 +240,33 @@ class AppTheme {
           borderSide: const BorderSide(color: Color(0xFFEF5350), width: 2),
         ),
         hintStyle: GoogleFonts.inter(color: const Color(0xFF5E6068), fontSize: 14),
-        labelStyle: GoogleFonts.inter(color: darkTextSecondary, fontSize: 14),
+        labelStyle: GoogleFonts.inter(color: AppColors.darkTextSecondary, fontSize: 14),
         floatingLabelStyle: GoogleFonts.inter(color: AppColors.secondary, fontSize: 12),
       ),
       cardTheme: CardThemeData(
-        color: darkSurface,
+        color: AppColors.darkSurface,
         elevation: 0,
         shadowColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: darkDivider),
+          side: const BorderSide(color: AppColors.darkDivider),
         ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.secondary.withAlpha(38),
         selectedColor: AppColors.secondary,
-        labelStyle: GoogleFonts.inter(fontSize: 13, color: darkText),
+        labelStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.darkText),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: darkSurface,
+        backgroundColor: AppColors.darkSurface,
         indicatorColor: AppColors.secondary.withAlpha(51),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondary);
           }
-          return GoogleFonts.inter(fontSize: 11, color: darkTextSecondary);
+          return GoogleFonts.inter(fontSize: 11, color: AppColors.darkTextSecondary);
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -283,20 +276,20 @@ class AppTheme {
         }),
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: darkSurface,
+        backgroundColor: AppColors.darkSurface,
         selectedItemColor: AppColors.secondary,
-        unselectedItemColor: darkTextSecondary,
+        unselectedItemColor: AppColors.darkTextSecondary,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
       ),
       dividerTheme: const DividerThemeData(
-        color: darkDivider,
+        color: AppColors.darkDivider,
         thickness: 1,
         space: 1,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: darkSurfaceVariant,
-        contentTextStyle: GoogleFonts.inter(color: darkText),
+        backgroundColor: AppColors.darkSurfaceVariant,
+        contentTextStyle: GoogleFonts.inter(color: AppColors.darkText),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -306,7 +299,7 @@ class AppTheme {
       ),
       tabBarTheme: TabBarThemeData(
         labelColor: AppColors.secondary,
-        unselectedLabelColor: darkTextSecondary,
+        unselectedLabelColor: AppColors.darkTextSecondary,
         indicatorColor: AppColors.secondary,
         labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
         unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.normal, fontSize: 14),

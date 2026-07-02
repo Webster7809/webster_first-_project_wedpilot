@@ -1,33 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/router/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_dimensions.dart';
 import '../../../providers/admin_provider.dart';
-
-// ── Display-only data for "Recent vendor signups" panel ───────────────────────
-
-class _SignupRow {
-  final String name;
-  final String category;
-  final String location;
-  final String status;
-  final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
-  const _SignupRow(this.name, this.category, this.location, this.status,
-      this.icon, this.iconBg, this.iconColor);
-}
-
-const _kRecentSignups = [
-  _SignupRow('Mukuba Gardens', 'Venue', 'Ndola', 'verified',
-      Icons.apartment_outlined, Color(0xFFE4F3EC), AppColors.adminGreen),
-  _SignupRow('Copperbelt Catering', 'Catering', 'Kitwe', 'pending',
-      Icons.restaurant_outlined, Color(0xFFFEF0E7), AppColors.adminAmber),
-  _SignupRow('Lumwana Decor', 'Decor & flowers', 'Ndola', 'verified',
-      Icons.local_florist_outlined, Color(0xFFFCE4EC), AppColors.adminPink),
-  _SignupRow('Zambezi Sounds DJ', 'DJ & MC', 'Lusaka', 'flagged',
-      Icons.music_note_outlined, Color(0xFFE8EAF6), AppColors.adminIndigo),
-];
+import '../../../widgets/wed_snack_bar.dart';
 
 // ── Category helpers ──────────────────────────────────────────────────────────
 
@@ -90,6 +70,15 @@ class AdminDashboardScreen extends ConsumerStatefulWidget {
 
 class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(
+      () => setState(() => _searchQuery = _searchController.text.toLowerCase()),
+    );
+  }
 
   @override
   void dispose() {
@@ -97,10 +86,21 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     super.dispose();
   }
 
+  List<AdminVendor> _filtered(List<AdminVendor> vendors) {
+    if (_searchQuery.isEmpty) return vendors;
+    return vendors
+        .where((v) =>
+            v.name.toLowerCase().contains(_searchQuery) ||
+            v.category.toLowerCase().contains(_searchQuery) ||
+            v.location.toLowerCase().contains(_searchQuery))
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final adminState = ref.watch(adminProvider);
-    final isWide = MediaQuery.sizeOf(context).width >= 600;
+    final isWide = MediaQuery.sizeOf(context).width >= AppDimensions.tabletMin;
+    final filteredVendors = _filtered(adminState.pendingVendors);
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -128,13 +128,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 style: AppTextStyles.bodySmall
                     .copyWith(color: AppColors.textPrimary),
                 decoration: InputDecoration(
-                  hintText: 'Search couples, vendors...',
+                  hintText: 'Search vendors...',
                   hintStyle: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.textHint),
                   prefixIcon: const Icon(Icons.search_rounded,
                       color: AppColors.textHint, size: 18),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: Theme.of(context).colorScheme.surface,
                   isDense: true,
                   contentPadding: EdgeInsets.zero,
                   border: OutlineInputBorder(
@@ -158,12 +158,12 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             IconButton(
               icon: const Icon(Icons.search_rounded,
                   color: AppColors.textPrimary, size: 22),
-              onPressed: () {},
+              onPressed: () => _showMobileSearch(context),
             ),
           IconButton(
             icon: const Icon(Icons.notifications_outlined,
                 color: AppColors.textPrimary, size: 22),
-            onPressed: () {},
+            onPressed: () => context.push(AppRoutes.notifications),
           ),
           Padding(
             padding: const EdgeInsets.only(right: 20),
@@ -171,7 +171,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
               width: 34,
               height: 34,
               decoration: const BoxDecoration(
-                color: Color(0xFF2A9D8F),
+                color: AppColors.teal,
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
@@ -192,37 +192,57 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // KPI cards — 4 in a row on desktop, 2×2 on mobile
+            // ── Flagged content alert ────────────────────────────
+            if (adminState.totalFlaggedItems > 0) ...[
+              _FlaggedContentBanner(
+                count: adminState.totalFlaggedItems,
+                onReview: () => context.push(AppRoutes.adminModeration),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // ── KPI cards ────────────────────────────────────────
             LayoutBuilder(
               builder: (_, constraints) {
-                final wide = constraints.maxWidth >= 600;
+                final wide = constraints.maxWidth >= AppDimensions.tabletMin;
                 final cards = [
                   _KpiCard(
                     icon: Icons.people_alt_outlined,
                     iconBg: AppColors.adminGreenBg,
                     iconColor: AppColors.adminGreen,
-                    trend: '+12.4%',
+                    trend:
+                        '${adminState.users.where((u) => u.role == 'couple').length} total',
                     trendColor: AppColors.adminGreen,
-                    value: '2,418',
+                    value: adminState.users
+                        .where(
+                            (u) => u.role == 'couple' && !u.isSuspended)
+                        .length
+                        .toString(),
                     label: 'Active couples',
+                    onTap: () => context.go(AppRoutes.adminUsers),
                   ),
                   _KpiCard(
                     icon: Icons.list_alt_outlined,
                     iconBg: AppColors.adminIndigoBg,
                     iconColor: AppColors.adminIndigo,
-                    trend: '+8.1%',
+                    trend: '${adminState.pendingVendors.length} pending',
                     trendColor: AppColors.adminGreen,
-                    value: '643',
+                    value: adminState.users
+                        .where((u) => u.role == 'vendor')
+                        .length
+                        .toString(),
                     label: 'Registered vendors',
+                    onTap: () => context.go(AppRoutes.adminVendors),
                   ),
                   _KpiCard(
                     icon: Icons.verified_user_outlined,
                     iconBg: AppColors.adminAmberBg,
                     iconColor: AppColors.adminAmber,
-                    trend: '29 pending',
+                    trend: '${adminState.pendingVendors.length} pending',
                     trendColor: AppColors.amber,
-                    value: '94%',
+                    value: '${adminState.verificationRate}%',
                     label: 'Vendor verification rate',
+                    onTap: () => context.go(AppRoutes.adminVendors),
                   ),
                   _KpiCard(
                     icon: Icons.credit_card_outlined,
@@ -230,7 +250,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     iconColor: AppColors.adminBlue,
                     trend: 'this week',
                     trendColor: AppColors.adminBlue,
-                    value: '312',
+                    value: adminState.invitationsSentThisWeek.toString(),
                     label: 'Invitations sent',
                   ),
                 ];
@@ -250,7 +270,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   crossAxisCount: 2,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  childAspectRatio: 1.4,
+                  childAspectRatio: 0.9,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   children: cards,
@@ -260,17 +280,40 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
             const SizedBox(height: 24),
 
-            // Bottom panels — side by side on desktop, stacked on mobile
+            // ── Bottom panels ────────────────────────────────────
             LayoutBuilder(
               builder: (_, constraints) {
-                final wide = constraints.maxWidth >= 600;
-                final signups = const _RecentSignupsPanel();
+                final wide = constraints.maxWidth >= AppDimensions.tabletMin;
+                final signups = _RecentSignupsPanel(
+                  vendors: filteredVendors,
+                  onViewAll: () => context.go(AppRoutes.adminVendors),
+                );
                 final queue = _VerificationQueuePanel(
-                  vendors: adminState.pendingVendors,
-                  onApprove: (id) =>
-                      ref.read(adminProvider.notifier).approveVendor(id),
-                  onReject: (id) =>
-                      ref.read(adminProvider.notifier).rejectVendor(id),
+                  vendors: filteredVendors,
+                  onApprove: (id) {
+                    final vendor = adminState.pendingVendors
+                        .firstWhere((v) => v.id == id);
+                    ref.read(adminProvider.notifier).approveVendor(id);
+                    if (context.mounted) {
+                      showWedSnackBar(
+                        context,
+                        '${vendor.name} approved!',
+                        type: SnackType.success,
+                      );
+                    }
+                  },
+                  onReject: (id) {
+                    final vendor = adminState.pendingVendors
+                        .firstWhere((v) => v.id == id);
+                    ref.read(adminProvider.notifier).rejectVendor(id);
+                    if (context.mounted) {
+                      showWedSnackBar(
+                        context,
+                        '${vendor.name} rejected.',
+                        type: SnackType.error,
+                      );
+                    }
+                  },
                 );
 
                 if (wide) {
@@ -299,6 +342,97 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       ),
     );
   }
+
+  void _showMobileSearch(BuildContext context) {
+    showSearch(
+      context: context,
+      delegate: _VendorSearchDelegate(
+        vendors: ref.read(adminProvider).pendingVendors,
+        onSelect: (_) => context.go(AppRoutes.adminVendors),
+      ),
+    );
+  }
+}
+
+// ── Mobile search delegate ────────────────────────────────────────────────────
+
+class _VendorSearchDelegate extends SearchDelegate<String> {
+  final List<AdminVendor> vendors;
+  final ValueChanged<String> onSelect;
+
+  _VendorSearchDelegate({required this.vendors, required this.onSelect});
+
+  @override
+  String get searchFieldLabel => 'Search vendors...';
+
+  List<AdminVendor> get _results {
+    if (query.isEmpty) return vendors;
+    final q = query.toLowerCase();
+    return vendors
+        .where((v) =>
+            v.name.toLowerCase().contains(q) ||
+            v.category.toLowerCase().contains(q) ||
+            v.location.toLowerCase().contains(q))
+        .toList();
+  }
+
+  @override
+  List<Widget> buildActions(BuildContext context) => [
+        if (query.isNotEmpty)
+          IconButton(
+            icon: const Icon(Icons.clear),
+            onPressed: () => query = '',
+          ),
+      ];
+
+  @override
+  Widget buildLeading(BuildContext context) => IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () => close(context, ''),
+      );
+
+  @override
+  Widget buildResults(BuildContext context) => _buildList(context);
+
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildList(context);
+
+  Widget _buildList(BuildContext context) {
+    final results = _results;
+    if (results.isEmpty) {
+      return Center(
+        child: Text('No vendors found',
+            style: AppTextStyles.bodySmall
+                .copyWith(color: AppColors.textSecondary)),
+      );
+    }
+    return ListView.builder(
+      itemCount: results.length,
+      itemBuilder: (_, i) {
+        final v = results[i];
+        return ListTile(
+          leading: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _bgForCategory(v.category),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(_iconForCategory(v.category),
+                size: 18, color: _colorForCategory(v.category)),
+          ),
+          title: Text(v.name, style: AppTextStyles.bodySmall),
+          subtitle: Text('${v.category} · ${v.location}',
+              style: AppTextStyles.caption
+                  .copyWith(color: AppColors.textSecondary)),
+          onTap: () {
+            close(context, v.id);
+            onSelect(v.id);
+          },
+        );
+      },
+    );
+  }
 }
 
 // ── KPI card ──────────────────────────────────────────────────────────────────
@@ -311,6 +445,7 @@ class _KpiCard extends StatelessWidget {
   final Color trendColor;
   final String value;
   final String label;
+  final VoidCallback? onTap;
 
   const _KpiCard({
     required this.icon,
@@ -320,67 +455,113 @@ class _KpiCard extends StatelessWidget {
     required this.trendColor,
     required this.value,
     required this.label,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.cardShadow,
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: AppShadows.sm,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: iconBg,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 18),
+                ),
+                const Spacer(),
+                Text(
+                  trend,
+                  style: TextStyle(
+                    color: trendColor,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              value,
+              style: AppTextStyles.displaySmall.copyWith(
+                color: AppColors.forestGreen,
+                fontWeight: FontWeight.bold,
+                fontSize: 26,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+    );
+  }
+}
+
+// ── Flagged content banner ────────────────────────────────────────────────────
+
+class _FlaggedContentBanner extends StatelessWidget {
+  final int count;
+  final VoidCallback onReview;
+
+  const _FlaggedContentBanner({required this.count, required this.onReview});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.adminRedBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.error.withAlpha(60)),
+      ),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: iconBg,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: iconColor, size: 18),
+          const Icon(Icons.flag_rounded, color: AppColors.error, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$count flagged item${count == 1 ? '' : 's'} need${count == 1 ? 's' : ''} review',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.error,
+                fontWeight: FontWeight.w600,
               ),
-              const Spacer(),
-              Text(
-                trend,
-                style: TextStyle(
-                  color: trendColor,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            value,
-            style: AppTextStyles.displaySmall.copyWith(
-              color: AppColors.forestGreen,
-              fontWeight: FontWeight.bold,
-              fontSize: 26,
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textSecondary,
-              fontSize: 12,
+          GestureDetector(
+            onTap: onReview,
+            child: Text(
+              'Review now',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.error,
+                fontWeight: FontWeight.w700,
+                decoration: TextDecoration.underline,
+                decorationColor: AppColors.error,
+              ),
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -391,21 +572,21 @@ class _KpiCard extends StatelessWidget {
 // ── Recent signups panel ──────────────────────────────────────────────────────
 
 class _RecentSignupsPanel extends StatelessWidget {
-  const _RecentSignupsPanel();
+  final List<AdminVendor> vendors;
+  final VoidCallback onViewAll;
+
+  const _RecentSignupsPanel({
+    required this.vendors,
+    required this.onViewAll,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.cardShadow,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: AppShadows.sm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -424,7 +605,7 @@ class _RecentSignupsPanel extends StatelessWidget {
                 ),
                 const Spacer(),
                 GestureDetector(
-                  onTap: () {},
+                  onTap: onViewAll,
                   child: Text(
                     'View all',
                     style: AppTextStyles.bodySmall.copyWith(
@@ -477,75 +658,89 @@ class _RecentSignupsPanel extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, color: AppColors.divider),
-          // Data rows
-          ..._kRecentSignups.asMap().entries.map((entry) {
-            final i = entry.key;
-            final row = entry.value;
-            return Column(
-              children: [
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 5,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                color: row.iconBg,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child:
-                                  Icon(row.icon, size: 15, color: row.iconColor),
-                            ),
-                            const SizedBox(width: 10),
-                            Flexible(
-                              child: Text(
-                                row.name,
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          row.category,
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.textSecondary),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          row.location,
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.textSecondary),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      SizedBox(
-                        width: 68,
-                        child: _StatusBadge(status: row.status),
-                      ),
-                    ],
-                  ),
+          if (vendors.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'No recent signups',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textHint),
                 ),
-                if (i < _kRecentSignups.length - 1)
-                  const Divider(height: 1, color: AppColors.divider),
-              ],
-            );
-          }),
+              ),
+            )
+          else
+            ...vendors.asMap().entries.map((entry) {
+              final i = entry.key;
+              final v = entry.value;
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: _bgForCategory(v.category),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  _iconForCategory(v.category),
+                                  size: 15,
+                                  color: _colorForCategory(v.category),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Flexible(
+                                child: Text(
+                                  v.name,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            v.category,
+                            style: AppTextStyles.bodySmall
+                                .copyWith(color: AppColors.textSecondary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            v.location,
+                            style: AppTextStyles.bodySmall
+                                .copyWith(color: AppColors.textSecondary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(
+                          width: 68,
+                          child: _StatusBadge(status: 'pending'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (i < vendors.length - 1)
+                    const Divider(height: 1, color: AppColors.divider),
+                ],
+              );
+            }),
           const SizedBox(height: 4),
         ],
       ),
@@ -570,15 +765,9 @@ class _VerificationQueuePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.cardShadow,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: AppShadows.sm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -597,7 +786,7 @@ class _VerificationQueuePanel extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  '29 pending',
+                  '${vendors.length} pending',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.amber,
                     fontWeight: FontWeight.w600,
@@ -606,87 +795,112 @@ class _VerificationQueuePanel extends StatelessWidget {
               ],
             ),
           ),
-          // Items
-          ...vendors.asMap().entries.map((entry) {
-            final i = entry.key;
-            final v = entry.value;
-            return Column(
-              children: [
-                if (i > 0) const Divider(height: 1, color: AppColors.divider),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: _bgForCategory(v.category),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          _iconForCategory(v.category),
-                          size: 18,
-                          color: _colorForCategory(v.category),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              v.name,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${v.category} · ${v.submitted}',
-                              style: AppTextStyles.caption.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () => onApprove(v.id),
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: const BoxDecoration(
-                            color: AppColors.adminGreenBg,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.check_rounded,
-                              size: 16, color: AppColors.adminGreen),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () => onReject(v.id),
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: const BoxDecoration(
-                            color: AppColors.adminRedBg,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.close_rounded,
-                              size: 16, color: AppColors.error),
-                        ),
-                      ),
-                    ],
+          // Empty state
+          if (vendors.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.check_circle_rounded,
+                      size: 44, color: AppColors.adminGreen),
+                  const SizedBox(height: 10),
+                  Text('All caught up!',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.forestGreen,
+                      )),
+                  const SizedBox(height: 4),
+                  Text(
+                    'No vendors pending review.',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.textSecondary),
+                    textAlign: TextAlign.center,
                   ),
-                ),
-              ],
-            );
-          }),
+                ],
+              ),
+            )
+          else
+            ...vendors.asMap().entries.map((entry) {
+              final i = entry.key;
+              final v = entry.value;
+              return Column(
+                children: [
+                  if (i > 0)
+                    const Divider(height: 1, color: AppColors.divider),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: _bgForCategory(v.category),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _iconForCategory(v.category),
+                            size: 18,
+                            color: _colorForCategory(v.category),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                v.name,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${v.category} · ${v.submitted}',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => onApprove(v.id),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: const BoxDecoration(
+                              color: AppColors.adminGreenBg,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.check_rounded,
+                                size: 16, color: AppColors.adminGreen),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => onReject(v.id),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: const BoxDecoration(
+                              color: AppColors.adminRedBg,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.close_rounded,
+                                size: 16, color: AppColors.error),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }),
           const SizedBox(height: 8),
         ],
       ),

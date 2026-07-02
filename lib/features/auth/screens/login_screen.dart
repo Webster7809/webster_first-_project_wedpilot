@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_text_field.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -16,7 +18,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  bool _obscurePass = true;
 
   @override
   void dispose() {
@@ -62,8 +63,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   formKey: _formKey,
                   emailCtrl: _emailCtrl,
                   passCtrl: _passCtrl,
-                  obscurePass: _obscurePass,
-                  onToggleObscure: () => setState(() => _obscurePass = !_obscurePass),
                   onLogin: _login,
                   isLoading: authState.isLoading,
                 ),
@@ -197,8 +196,6 @@ class _FormCard extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController emailCtrl;
   final TextEditingController passCtrl;
-  final bool obscurePass;
-  final VoidCallback onToggleObscure;
   final VoidCallback onLogin;
   final bool isLoading;
 
@@ -206,8 +203,6 @@ class _FormCard extends StatelessWidget {
     required this.formKey,
     required this.emailCtrl,
     required this.passCtrl,
-    required this.obscurePass,
-    required this.onToggleObscure,
     required this.onLogin,
     required this.isLoading,
   });
@@ -239,7 +234,7 @@ class _FormCard extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            _LabeledField(
+            WedTextField(
               label: 'Email address',
               hint: 'you@email.com',
               controller: emailCtrl,
@@ -251,13 +246,11 @@ class _FormCard extends StatelessWidget {
               },
             ),
             const SizedBox(height: 20),
-            _LabeledField(
+            WedTextField(
               label: 'Password',
               hint: '••••••••',
               controller: passCtrl,
               isPassword: true,
-              obscure: obscurePass,
-              onToggleObscure: onToggleObscure,
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Required';
                 if (v.length < 6) return 'Min 6 characters';
@@ -282,66 +275,15 @@ class _FormCard extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            SizedBox(
-              width: double.infinity,
+            WedButton(
+              label: 'Sign In',
+              onPressed: onLogin,
+              variant: WedButtonVariant.primaryDark,
+              isLoading: isLoading,
               height: 52,
-              child: ElevatedButton(
-                onPressed: isLoading ? null : onLogin,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.forestGreen,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  elevation: 0,
-                ),
-                child: isLoading
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        'Sign In',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-              ),
+              borderRadius: 28,
             ),
             const SizedBox(height: 32),
-
-            // Demo accounts hint
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.amber.withAlpha(20),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.amber.withAlpha(50)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Demo accounts',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.amber,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const _DemoRow(role: 'Couple', email: 'chanda@example.com'),
-                  const _DemoRow(role: 'Vendor', email: 'vendor@example.com'),
-                  const _DemoRow(role: 'Admin', email: 'admin@wedpilot.app'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
 
             Center(
               child: GestureDetector(
@@ -368,128 +310,6 @@ class _FormCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ── Labeled text field ────────────────────────────────────────────────────────
-
-class _LabeledField extends StatelessWidget {
-  final String label;
-  final String hint;
-  final TextEditingController controller;
-  final String? Function(String?)? validator;
-  final TextInputType? keyboardType;
-  final bool isPassword;
-  final bool obscure;
-  final VoidCallback? onToggleObscure;
-
-  const _LabeledField({
-    required this.label,
-    required this.hint,
-    required this.controller,
-    this.validator,
-    this.keyboardType,
-    this.isPassword = false,
-    this.obscure = false,
-    this.onToggleObscure,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: AppColors.forestGreen,
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          keyboardType: keyboardType,
-          obscureText: isPassword && obscure,
-          validator: validator,
-          style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 15),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: GoogleFonts.inter(color: AppColors.textHint, fontSize: 14),
-            filled: true,
-            fillColor: AppColors.surface,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.divider),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.divider),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.error),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.error, width: 1.5),
-            ),
-            suffixIcon: isPassword
-                ? IconButton(
-                    icon: Icon(
-                      obscure
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                      color: AppColors.textSecondary,
-                      size: 20,
-                    ),
-                    onPressed: onToggleObscure,
-                  )
-                : null,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Demo row ──────────────────────────────────────────────────────────────────
-
-class _DemoRow extends StatelessWidget {
-  final String role;
-  final String email;
-  const _DemoRow({required this.role, required this.email});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 3),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 55,
-            child: Text(
-              role,
-              style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary),
-            ),
-          ),
-          Text(
-            email,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              color: AppColors.forestGreen,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
       ),
     );
   }

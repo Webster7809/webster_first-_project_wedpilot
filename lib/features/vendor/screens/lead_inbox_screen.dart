@@ -1,81 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../../../core/router/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../models/messaging.dart';
+import '../../../providers/vendor_own_provider.dart';
 
-class LeadInboxScreen extends StatefulWidget {
+class LeadInboxScreen extends ConsumerStatefulWidget {
   const LeadInboxScreen({super.key});
 
   @override
-  State<LeadInboxScreen> createState() => _LeadInboxScreenState();
+  ConsumerState<LeadInboxScreen> createState() => _LeadInboxScreenState();
 }
 
-class _LeadInboxScreenState extends State<LeadInboxScreen> {
+class _LeadInboxScreenState extends ConsumerState<LeadInboxScreen> {
   int _filterIndex = 0;
 
-  static const _filters = ['All (6)', 'Unread (2)', 'Booked'];
-
-  static final _leads = [
-    _Lead(
-      initials: 'CM',
-      name: 'Chanda & Mwila',
-      timeAgo: '10 min ago',
-      message: 'Hi, is the garden available 12 September?...',
-      guests: 180,
-      tier: 'Flexible tier',
-      status: _LeadStatus.unread,
-    ),
-    _Lead(
-      initials: 'BK',
-      name: 'Bwalya & Kunda',
-      timeAgo: '2 hr ago',
-      message: 'Good day, do you offer a discount for wee...',
-      guests: 220,
-      tier: 'High class',
-      status: _LeadStatus.unread,
-    ),
-    _Lead(
-      initials: 'NT',
-      name: 'Natasha & Temba',
-      timeAgo: 'Yesterday',
-      message: 'Thank you so much, we\'d like to confirm t...',
-      guests: null,
-      tier: null,
-      status: _LeadStatus.booked,
-    ),
-    _Lead(
-      initials: 'MP',
-      name: 'Mutale & Phiri',
-      timeAgo: '3 days ago',
-      message: 'Is parking available for around 60 vehicle...',
-      guests: 150,
-      tier: 'Flexible tier',
-      status: _LeadStatus.read,
-    ),
-    _Lead(
-      initials: 'RC',
-      name: 'Ruth & Chola',
-      timeAgo: '5 days ago',
-      message: 'We loved the venue photos! Could we sch...',
-      guests: 300,
-      tier: 'High class',
-      status: _LeadStatus.read,
-    ),
-  ];
-
-  List<_Lead> get _filtered {
-    if (_filterIndex == 1) return _leads.where((l) => l.status == _LeadStatus.unread).toList();
-    if (_filterIndex == 2) return _leads.where((l) => l.status == _LeadStatus.booked).toList();
-    return _leads;
+  List<Inquiry> _filtered(List<Inquiry> all) {
+    if (_filterIndex == 1) {
+      return all.where((i) => i.status == InquiryStatus.newInquiry).toList();
+    }
+    if (_filterIndex == 2) {
+      return all.where((i) => i.status == InquiryStatus.booked).toList();
+    }
+    return all;
   }
 
   @override
   Widget build(BuildContext context) {
+    final inquiries = ref.watch(vendorInquiriesProvider);
+    final unreadCount =
+        inquiries.where((i) => i.status == InquiryStatus.newInquiry).length;
+    final filtered = _filtered(inquiries);
+
+    final filters = [
+      'All (${inquiries.length})',
+      'Unread ($unreadCount)',
+      'Booked',
+    ];
+
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: CustomScrollView(
         slivers: [
-          // ── Header ──────────────────────────────────────────────────────────
+          // ── Header ────────────────────────────────────────────────────────
           SliverAppBar(
             pinned: true,
             floating: false,
@@ -93,7 +63,7 @@ class _LeadInboxScreenState extends State<LeadInboxScreen> {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       Text(
-                        '38 TOTAL INQUIRIES',
+                        '${inquiries.length} TOTAL INQUIRIES',
                         style: AppTextStyles.caption.copyWith(
                           color: AppColors.amber,
                           fontWeight: FontWeight.w700,
@@ -115,16 +85,17 @@ class _LeadInboxScreenState extends State<LeadInboxScreen> {
             ),
           ),
 
-          // ── Filter pills ─────────────────────────────────────────────────────
+          // ── Filter pills ──────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Container(
               color: AppColors.cream,
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Row(
-                children: List.generate(_filters.length, (i) {
+                children: List.generate(filters.length, (i) {
                   final active = i == _filterIndex;
                   return Padding(
-                    padding: EdgeInsets.only(right: i < _filters.length - 1 ? 8 : 0),
+                    padding: EdgeInsets.only(
+                        right: i < filters.length - 1 ? 8 : 0),
                     child: GestureDetector(
                       onTap: () => setState(() => _filterIndex = i),
                       child: AnimatedContainer(
@@ -144,7 +115,7 @@ class _LeadInboxScreenState extends State<LeadInboxScreen> {
                           ),
                         ),
                         child: Text(
-                          _filters[i],
+                          filters[i],
                           style: AppTextStyles.labelMedium.copyWith(
                             color: active
                                 ? Colors.white
@@ -160,15 +131,12 @@ class _LeadInboxScreenState extends State<LeadInboxScreen> {
             ),
           ),
 
-          // ── Lead list ────────────────────────────────────────────────────────
+          // ── Lead list ─────────────────────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 48),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, i) {
-                  final leads = _filtered;
-                  if (leads.isEmpty) {
-                    return Padding(
+            sliver: filtered.isEmpty
+                ? SliverToBoxAdapter(
+                    child: Padding(
                       padding: const EdgeInsets.only(top: 60),
                       child: Column(
                         children: [
@@ -180,19 +148,26 @@ class _LeadInboxScreenState extends State<LeadInboxScreen> {
                                   .copyWith(color: AppColors.textSecondary)),
                         ],
                       ),
-                    );
-                  }
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _LeadCard(
-                      lead: leads[i],
-                      onTap: () => context.push('/vendor/messages'),
                     ),
-                  );
-                },
-                childCount: _filtered.isEmpty ? 1 : _filtered.length,
-              ),
-            ),
+                  )
+                : SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _LeadCard(
+                          inquiry: filtered[i],
+                          onTap: () {
+                            ref
+                                .read(vendorOwnProvider.notifier)
+                                .markInquiryStatus(
+                                    filtered[i].id, InquiryStatus.viewed);
+                            context.push(AppRoutes.vendorMessages);
+                          },
+                        ),
+                      ),
+                      childCount: filtered.length,
+                    ),
+                  ),
           ),
         ],
       ),
@@ -200,42 +175,38 @@ class _LeadInboxScreenState extends State<LeadInboxScreen> {
   }
 }
 
-// ── Data ───────────────────────────────────────────────────────────────────────
-
-enum _LeadStatus { unread, read, booked }
-
-class _Lead {
-  final String initials;
-  final String name;
-  final String timeAgo;
-  final String message;
-  final int? guests;
-  final String? tier;
-  final _LeadStatus status;
-
-  const _Lead({
-    required this.initials,
-    required this.name,
-    required this.timeAgo,
-    required this.message,
-    required this.guests,
-    required this.tier,
-    required this.status,
-  });
-}
-
-// ── Lead card ──────────────────────────────────────────────────────────────────
+// ── Lead card ─────────────────────────────────────────────────────────────────
 
 class _LeadCard extends StatelessWidget {
-  final _Lead lead;
+  final Inquiry inquiry;
   final VoidCallback onTap;
 
-  const _LeadCard({required this.lead, required this.onTap});
+  const _LeadCard({required this.inquiry, required this.onTap});
+
+  String _initials(String? name) {
+    if (name == null || name.isEmpty) return '?';
+    final parts = name.split(RegExp(r'[\s&]+'));
+    return parts
+        .where((p) => p.isNotEmpty)
+        .take(2)
+        .map((p) => p[0].toUpperCase())
+        .join();
+  }
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    return DateFormat('MMM d').format(dt);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isUnread = lead.status == _LeadStatus.unread;
-    final isBooked = lead.status == _LeadStatus.booked;
+    final isUnread = inquiry.status == InquiryStatus.newInquiry;
+    final isBooked = inquiry.status == InquiryStatus.booked;
+    final name = inquiry.coupleName ?? 'Unknown couple';
 
     return GestureDetector(
       onTap: onTap,
@@ -260,17 +231,16 @@ class _LeadCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                // Avatar
                 Container(
                   width: 44,
                   height: 44,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: AppColors.cream,
                     shape: BoxShape.circle,
                   ),
                   child: Center(
                     child: Text(
-                      lead.initials,
+                      _initials(name),
                       style: AppTextStyles.labelLarge.copyWith(
                         color: AppColors.amber,
                         fontWeight: FontWeight.w700,
@@ -283,13 +253,13 @@ class _LeadCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(lead.name,
-                          style: AppTextStyles.titleMedium.copyWith(
-                              color: AppColors.forestGreen)),
+                      Text(name,
+                          style: AppTextStyles.titleMedium
+                              .copyWith(color: AppColors.forestGreen)),
                       Text(
-                        lead.message,
-                        style: AppTextStyles.caption.copyWith(
-                            color: AppColors.textSecondary),
+                        inquiry.message,
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.textSecondary),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -300,7 +270,7 @@ class _LeadCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(lead.timeAgo,
+                    Text(_timeAgo(inquiry.createdAt),
                         style: AppTextStyles.caption
                             .copyWith(color: AppColors.textSecondary)),
                     if (isUnread) ...[
@@ -319,21 +289,24 @@ class _LeadCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-
-            // Tag chips
             Wrap(
               spacing: 6,
               children: [
                 if (isBooked)
                   _Chip(label: 'Booked', color: AppColors.success)
                 else ...[
-                  if (lead.guests != null)
+                  if (inquiry.weddingDate != null)
                     _Chip(
-                      label: '${lead.guests} guests',
+                      label: DateFormat('MMM d, y')
+                          .format(inquiry.weddingDate!),
                       color: AppColors.forestGreen,
                     ),
-                  if (lead.tier != null)
-                    _Chip(label: lead.tier!, color: AppColors.textSecondary),
+                  if (inquiry.budgetRangeMin != null)
+                    _Chip(
+                      label:
+                          'ZMW ${inquiry.budgetRangeMin!.toStringAsFixed(0)}–${inquiry.budgetRangeMax?.toStringAsFixed(0) ?? '?'}',
+                      color: AppColors.textSecondary,
+                    ),
                 ],
               ],
             ),

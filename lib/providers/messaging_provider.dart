@@ -6,6 +6,13 @@ final conversationsProvider = FutureProvider<List<Conversation>>((ref) async {
   return _mockConversations;
 });
 
+final vendorConversationsProvider =
+    Provider.family<AsyncValue<List<Conversation>>, String>((ref, vendorId) {
+  return ref.watch(conversationsProvider).whenData(
+        (list) => list.where((c) => c.vendorId == vendorId).toList(),
+      );
+});
+
 final messagesProvider = FutureProvider.family<List<Message>, String>(
   (ref, convoId) async {
     await Future.delayed(const Duration(milliseconds: 300));
@@ -51,6 +58,27 @@ final _mockConversations = [
     vendorName: 'The Garden Venue',
     lastMessageText: 'Your date is available! Shall we schedule a tour?',
     lastMessageAt: DateTime.now().subtract(const Duration(days: 1)),
+    unreadCount: 0,
+  ),
+  // Vendor-side conversations (vendorId matches logged-in vendor 'vendor-001')
+  Conversation(
+    id: 'convo-v01',
+    coupleId: 'profile-002',
+    vendorId: 'vendor-001',
+    coupleName: 'Chanda & Mutale',
+    vendorName: 'Mukuba Gardens',
+    lastMessageText: 'Hi! We love your garden venue and would like to inquire about our wedding.',
+    lastMessageAt: DateTime.now().subtract(const Duration(hours: 2)),
+    unreadCount: 1,
+  ),
+  Conversation(
+    id: 'convo-v02',
+    coupleId: 'profile-003',
+    vendorId: 'vendor-001',
+    coupleName: 'Nkemba & Lweendo',
+    vendorName: 'Mukuba Gardens',
+    lastMessageText: 'Thank you for the quick reply! We will confirm the date by end of week.',
+    lastMessageAt: DateTime.now().subtract(const Duration(hours: 8)),
     unreadCount: 0,
   ),
 ];

@@ -1,3 +1,5 @@
+import '../core/utils/enum_utils.dart';
+
 enum UserRole { couple, vendor, admin }
 
 class User {
@@ -24,7 +26,7 @@ class User {
         email: json['email'] as String,
         name: json['name'] as String?,
         avatarUrl: json['avatar_url'] as String?,
-        role: UserRole.values.byName(json['role'] as String),
+        role: enumByName(UserRole.values, json['role'] as String?, UserRole.couple),
         isVerified: json['is_verified'] as bool,
         createdAt: DateTime.parse(json['created_at'] as String),
       );

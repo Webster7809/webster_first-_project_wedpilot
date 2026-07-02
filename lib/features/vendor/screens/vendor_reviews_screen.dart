@@ -1,68 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../models/review.dart';
+import '../../../providers/vendor_own_provider.dart';
 
-class VendorReviewsScreen extends StatelessWidget {
+class VendorReviewsScreen extends ConsumerWidget {
   const VendorReviewsScreen({super.key});
 
-  static final _reviews = [
-    _Review(
-      name: 'Chanda & Mwila',
-      date: '18 May 2026',
-      rating: 5,
-      text:
-          'Mukuba Gardens was absolutely breathtaking. The staff were professional and the setup was beyond our expectations. Highly recommend!',
-      isVerified: true,
-    ),
-    _Review(
-      name: 'Natasha & Temba',
-      date: '3 April 2026',
-      rating: 5,
-      text:
-          'We could not have chosen a better venue. Every detail was handled with care and the team made our special day truly unforgettable.',
-      isVerified: true,
-    ),
-    _Review(
-      name: 'Bwalya & Kunda',
-      date: '12 February 2026',
-      rating: 4,
-      text:
-          'Beautiful venue with great outdoor space. The catering coordination was seamless. Parking could be a little more organised but overall fantastic.',
-      isVerified: true,
-    ),
-    _Review(
-      name: 'Mutale & Phiri',
-      date: '28 January 2026',
-      rating: 5,
-      text:
-          'Exceeded every expectation. The green garden backdrop made our photos stunning. The team is responsive, friendly, and incredibly helpful.',
-      isVerified: false,
-    ),
-    _Review(
-      name: 'Ruth & Chola',
-      date: '5 January 2026',
-      rating: 4,
-      text:
-          'Lovely venue and great value. The lighting at night was magical. We\'d definitely recommend Mukuba Gardens to anyone planning their wedding.',
-      isVerified: true,
-    ),
-  ];
-
-  static double get _average =>
-      _reviews.fold(0.0, (s, r) => s + r.rating) / _reviews.length;
-
-  static Map<int, int> get _breakdown {
-    final m = <int, int>{5: 0, 4: 0, 3: 0, 2: 0, 1: 0};
-    for (final r in _reviews) {
-      m[r.rating] = (m[r.rating] ?? 0) + 1;
-    }
-    return m;
-  }
-
   @override
-  Widget build(BuildContext context) {
-    final avg = _average;
-    final breakdown = _breakdown;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reviews = ref.watch(vendorReviewsProvider);
+    final approved =
+        reviews.where((r) => r.status == ReviewStatus.approved).toList();
+
+    final avg = reviews.isEmpty
+        ? 0.0
+        : reviews.fold(0.0, (s, r) => s + r.rating) / reviews.length;
+
+    final breakdown = <int, int>{5: 0, 4: 0, 3: 0, 2: 0, 1: 0};
+    for (final r in reviews) {
+      breakdown[r.rating] = (breakdown[r.rating] ?? 0) + 1;
+    }
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -85,7 +45,7 @@ class VendorReviewsScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       Text(
-                        '${_reviews.length} VERIFIED REVIEWS',
+                        '${approved.length} VERIFIED REVIEWS',
                         style: AppTextStyles.caption.copyWith(
                           color: AppColors.amber,
                           fontWeight: FontWeight.w700,
@@ -111,21 +71,17 @@ class VendorReviewsScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 48),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-
-                // ── Ratings summary card ─────────────────────────────────
                 _RatingSummaryCard(
                   average: avg,
-                  total: _reviews.length,
+                  total: reviews.length,
                   breakdown: breakdown,
                 ),
                 const SizedBox(height: 24),
-
-                // ── Review cards ─────────────────────────────────────────
                 Text('All reviews',
                     style: AppTextStyles.headlineSmall
                         .copyWith(color: AppColors.forestGreen)),
                 const SizedBox(height: 12),
-                ..._reviews.map((r) => Padding(
+                ...reviews.map((r) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: _ReviewCard(review: r),
                     )),
@@ -138,7 +94,7 @@ class VendorReviewsScreen extends StatelessWidget {
   }
 }
 
-// ── Rating summary card ────────────────────────────────────────────────────────
+// ── Rating summary card ───────────────────────────────────────────────────────
 
 class _RatingSummaryCard extends StatelessWidget {
   final double average;
@@ -169,7 +125,6 @@ class _RatingSummaryCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Big average number
           Column(
             children: [
               Text(
@@ -190,7 +145,6 @@ class _RatingSummaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(width: 20),
-          // Breakdown bars
           Expanded(
             child: Column(
               children: [5, 4, 3, 2, 1].map((star) {
@@ -260,30 +214,20 @@ class _StarRow extends StatelessWidget {
   }
 }
 
-// ── Review card ────────────────────────────────────────────────────────────────
-
-class _Review {
-  final String name;
-  final String date;
-  final int rating;
-  final String text;
-  final bool isVerified;
-
-  const _Review({
-    required this.name,
-    required this.date,
-    required this.rating,
-    required this.text,
-    required this.isVerified,
-  });
-}
+// ── Review card ───────────────────────────────────────────────────────────────
 
 class _ReviewCard extends StatelessWidget {
-  final _Review review;
+  final Review review;
   const _ReviewCard({required this.review});
 
   @override
   Widget build(BuildContext context) {
+    final isVerified = review.status == ReviewStatus.approved;
+    final name = review.coupleName ?? 'Anonymous';
+    final dateStr = review.publishedAt != null
+        ? DateFormat('d MMM y').format(review.publishedAt!)
+        : DateFormat('d MMM y').format(review.createdAt);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -300,7 +244,6 @@ class _ReviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Avatar + name + date
           Row(
             children: [
               Container(
@@ -312,10 +255,9 @@ class _ReviewCard extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    review.name.substring(0, 1),
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
                     style: AppTextStyles.titleMedium.copyWith(
-                        color: AppColors.amber,
-                        fontWeight: FontWeight.w700),
+                        color: AppColors.amber, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -326,10 +268,13 @@ class _ReviewCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(review.name,
-                            style: AppTextStyles.titleMedium
-                                .copyWith(color: AppColors.forestGreen)),
-                        if (review.isVerified) ...[
+                        Flexible(
+                          child: Text(name,
+                              style: AppTextStyles.titleMedium
+                                  .copyWith(color: AppColors.forestGreen),
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        if (isVerified) ...[
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -342,8 +287,7 @@ class _ReviewCard extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const Icon(Icons.verified_rounded,
-                                    size: 10,
-                                    color: AppColors.forestGreen),
+                                    size: 10, color: AppColors.forestGreen),
                                 const SizedBox(width: 3),
                                 Text(
                                   'Verified booking',
@@ -359,7 +303,7 @@ class _ReviewCard extends StatelessWidget {
                         ],
                       ],
                     ),
-                    Text(review.date,
+                    Text(dateStr,
                         style: AppTextStyles.caption
                             .copyWith(color: AppColors.textSecondary)),
                   ],
@@ -368,12 +312,10 @@ class _ReviewCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          // Stars
           _StarRow(rating: review.rating),
           const SizedBox(height: 8),
-          // Review text
           Text(
-            review.text,
+            review.body,
             style: AppTextStyles.bodySmall.copyWith(
               color: AppColors.textPrimary,
               height: 1.5,

@@ -1,3 +1,5 @@
+import '../core/utils/enum_utils.dart';
+
 enum InquiryStatus { newInquiry, viewed, responded, quoted, booked, declined }
 
 class Inquiry {
@@ -35,11 +37,7 @@ class Inquiry {
         vendorId: json['vendor_id'] as String,
         coupleName: json['couple_name'] as String?,
         vendorName: json['vendor_name'] as String?,
-        status: InquiryStatus.values.byName(
-          (json['status'] as String? ?? 'newInquiry')
-              .replaceAll(' ', '')
-              .toLowerCase(),
-        ),
+        status: enumByName(InquiryStatus.values, json['status'] as String?, InquiryStatus.newInquiry),
         budgetRangeMin: (json['budget_range_min'] as num?)?.toDouble(),
         budgetRangeMax: (json['budget_range_max'] as num?)?.toDouble(),
         weddingDate: json['wedding_date'] != null
@@ -51,6 +49,21 @@ class Inquiry {
             : null,
         createdAt: DateTime.parse(json['created_at'] as String),
       );
+
+  Map<String, dynamic> toJson() => {
+        'inquiry_id': id,
+        'couple_id': coupleId,
+        'vendor_id': vendorId,
+        'couple_name': coupleName,
+        'vendor_name': vendorName,
+        'status': status.name,
+        'budget_range_min': budgetRangeMin,
+        'budget_range_max': budgetRangeMax,
+        'wedding_date': weddingDate?.toIso8601String(),
+        'message': message,
+        'responded_at': respondedAt?.toIso8601String(),
+        'created_at': createdAt.toIso8601String(),
+      };
 }
 
 class Conversation {
@@ -95,6 +108,20 @@ class Conversation {
         unreadCount: json['unread_count'] as int? ?? 0,
         isArchived: json['is_archived'] as bool? ?? false,
       );
+
+  Map<String, dynamic> toJson() => {
+        'convo_id': id,
+        'couple_id': coupleId,
+        'vendor_id': vendorId,
+        'couple_name': coupleName,
+        'couple_avatar_url': coupleAvatarUrl,
+        'vendor_name': vendorName,
+        'vendor_avatar_url': vendorAvatarUrl,
+        'last_message_text': lastMessageText,
+        'last_message_at': lastMessageAt?.toIso8601String(),
+        'unread_count': unreadCount,
+        'is_archived': isArchived,
+      };
 }
 
 class Message {
@@ -134,4 +161,16 @@ class Message {
         isRead: json['is_read'] as bool? ?? false,
         sentAt: DateTime.parse(json['sent_at'] as String),
       );
+
+  Map<String, dynamic> toJson() => {
+        'message_id': id,
+        'convo_id': convoId,
+        'sender_id': senderId,
+        'sender_name': senderName,
+        'sender_avatar_url': senderAvatarUrl,
+        'content': content,
+        'type': type,
+        'is_read': isRead,
+        'sent_at': sentAt.toIso8601String(),
+      };
 }

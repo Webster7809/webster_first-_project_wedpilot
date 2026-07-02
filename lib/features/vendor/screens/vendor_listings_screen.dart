@@ -1,204 +1,386 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../models/vendor_profile.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../providers/vendor_own_provider.dart';
+import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_text_field.dart';
 
-class VendorListingsScreen extends StatefulWidget {
+class VendorListingsScreen extends ConsumerStatefulWidget {
   const VendorListingsScreen({super.key});
 
   @override
-  State<VendorListingsScreen> createState() => _VendorListingsScreenState();
+  ConsumerState<VendorListingsScreen> createState() =>
+      _VendorListingsScreenState();
 }
 
-class _VendorListingsScreenState extends State<VendorListingsScreen> {
-  int _filterIndex = 0;
-  final _filters = ['All (4)', 'Live (3)', 'In review (1)'];
+class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickAndAddImage() async {
+    final vendorId = ref.read(vendorProfileProvider)?.id ?? '';
+    final picker = ImagePicker();
+    final XFile? file = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 85,
+    );
+    if (file == null || !mounted) return;
+    final media = ref.read(vendorMediaProvider);
+    ref.read(vendorOwnProvider.notifier).addMedia(VendorMedia(
+          id: const Uuid().v4(),
+          vendorId: vendorId,
+          type: 'image',
+          url: file.path,
+          sortOrder: media.length,
+          isFeatured: media.isEmpty,
+        ));
+  }
+
+  void _showAddServiceSheet({VendorService? existing}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ServiceFormSheet(existing: existing),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final services = ref.watch(vendorServicesProvider);
+    final media = ref.watch(vendorMediaProvider);
+    final isServicesTab = _tabController.index == 0;
+
     return Scaffold(
       backgroundColor: AppColors.cream,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: AppColors.forestGreen,
-            elevation: 0,
-            automaticallyImplyLeading: false,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('YOUR LISTINGS',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.amber,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.4,
-                        )),
-                    const SizedBox(height: 4),
-                    Text('Manage your portfolio',
-                        style: AppTextStyles.displaySmall.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        )),
+      appBar: AppBar(
+        backgroundColor: AppColors.forestGreen,
+        automaticallyImplyLeading: false,
+        title: Text('My Listings',
+            style: AppTextStyles.headlineMedium
+                .copyWith(color: Colors.white)),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppColors.amber,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white.withAlpha(153),
+          labelStyle: AppTextStyles.labelLarge,
+          tabs: [
+            Tab(text: 'Services (${services.length})'),
+            Tab(text: 'Portfolio (${media.length})'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _ServicesTab(onAddService: _showAddServiceSheet),
+          _PortfolioTab(
+            onDeleteMedia: (id) async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Remove photo'),
+                  content:
+                      const Text('Remove this photo from your portfolio?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: Text('Remove',
+                          style: TextStyle(color: AppColors.error)),
+                    ),
                   ],
                 ),
-              ),
-            ),
-            expandedHeight: 100,
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: FloatingActionButton.small(
-                  backgroundColor: AppColors.amber,
-                  elevation: 0,
-                  onPressed: () {},
-                  child: const Icon(Icons.add, color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // Stats
-                Row(
-                  children: [
-                    _StatBox(value: '3', label: 'LIVE\nLISTINGS'),
-                    const SizedBox(width: 12),
-                    _StatBox(value: '412', label: 'TOTAL\nVIEWS'),
-                    const SizedBox(width: 12),
-                    _StatBox(value: '38', label: 'INQUIRIES'),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Filter chips
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: List.generate(_filters.length, (i) {
-                      final active = _filterIndex == i;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: GestureDetector(
-                          onTap: () => setState(() => _filterIndex = i),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: active ? AppColors.forestGreen : AppColors.surface,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: active ? AppColors.forestGreen : AppColors.divider),
-                            ),
-                            child: Text(
-                              _filters[i],
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-                                color: active ? Colors.white : AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Listing cards
-                _ListingCard(
-                  title: 'Open Air Garden Package',
-                  category: 'Venue',
-                  priceRange: 'ZMW 28,000–35,000',
-                  views: 286,
-                  rating: 4.9,
-                  status: 'Live',
-                  statusColor: AppColors.verified,
-                  iconBg: AppColors.amber.withAlpha(30),
-                ),
-                const SizedBox(height: 10),
-                _ListingCard(
-                  title: 'Indoor Hall, Full Decor',
-                  category: 'Venue',
-                  priceRange: 'ZMW 22,000–30,000',
-                  views: 98,
-                  rating: 4.7,
-                  status: 'Live',
-                  statusColor: AppColors.verified,
-                  iconBg: const Color(0xFFE8F5EE),
-                ),
-                const SizedBox(height: 10),
-                _ListingCard(
-                  title: 'Premium Marquee Setup',
-                  category: 'Venue',
-                  priceRange: 'ZMW 40,000–55,000',
-                  views: null,
-                  rating: null,
-                  status: 'In review',
-                  statusColor: AppColors.warning,
-                  pendingNote: 'Pending admin approval',
-                  iconBg: AppColors.amber.withAlpha(20),
-                ),
-                const SizedBox(height: 10),
-                _ListingCard(
-                  title: 'Weekday Discount Package',
-                  category: 'Venue',
-                  priceRange: 'Not published',
-                  views: null,
-                  rating: null,
-                  status: 'Draft',
-                  statusColor: AppColors.textSecondary,
-                  pendingNote: 'Finish setup to publish',
-                  iconBg: AppColors.creamDark,
-                  isDraft: true,
-                ),
-              ]),
-            ),
+              );
+              if (confirmed == true) {
+                ref.read(vendorOwnProvider.notifier).deleteMedia(id);
+              }
+            },
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppColors.amber,
+        foregroundColor: Colors.white,
+        onPressed:
+            isServicesTab ? () => _showAddServiceSheet() : _pickAndAddImage,
+        child: Icon(isServicesTab
+            ? Icons.add_rounded
+            : Icons.add_photo_alternate_outlined),
       ),
     );
   }
 }
 
-class _StatBox extends StatelessWidget {
-  final String value;
-  final String label;
-  const _StatBox({required this.value, required this.label});
+// ── Services tab ──────────────────────────────────────────────────────────────
+
+class _ServicesTab extends ConsumerWidget {
+  final void Function({VendorService? existing}) onAddService;
+
+  const _ServicesTab({required this.onAddService});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final services = ref.watch(vendorServicesProvider);
+
+    if (services.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.storefront_outlined,
+                  size: 64, color: AppColors.forestGreen.withAlpha(80)),
+              const SizedBox(height: 16),
+              Text('No services yet',
+                  style: AppTextStyles.headlineSmall
+                      .copyWith(color: AppColors.forestGreen)),
+              const SizedBox(height: 8),
+              Text(
+                'Tap + to add your first service package.',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      itemCount: services.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final service = services[index];
+        return _ServiceCard(
+          service: service,
+          onEdit: () => onAddService(existing: service),
+          onToggleActive: () => ref
+              .read(vendorOwnProvider.notifier)
+              .toggleServiceActive(service.id),
+          onDelete: () async {
+            final confirmed = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Delete service'),
+                content: Text(
+                    'Remove "${service.title}" from your listings?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: Text('Delete',
+                        style: TextStyle(color: AppColors.error)),
+                  ),
+                ],
+              ),
+            );
+            if (confirmed == true) {
+              ref.read(vendorOwnProvider.notifier).deleteService(service.id);
+            }
+          },
+        );
+      },
+    );
+  }
+}
+
+// ── Portfolio tab ─────────────────────────────────────────────────────────────
+
+class _PortfolioTab extends ConsumerWidget {
+  final void Function(String id) onDeleteMedia;
+
+  const _PortfolioTab({required this.onDeleteMedia});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final media = ref.watch(vendorMediaProvider);
+
+    if (media.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.photo_library_outlined,
+                  size: 64, color: AppColors.forestGreen.withAlpha(80)),
+              const SizedBox(height: 16),
+              Text('No portfolio photos',
+                  style: AppTextStyles.headlineSmall
+                      .copyWith(color: AppColors.forestGreen)),
+              const SizedBox(height: 8),
+              Text(
+                'Upload photos of your work to attract couples.',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+        childAspectRatio: 1,
+      ),
+      itemCount: media.length,
+      itemBuilder: (context, index) {
+        final item = media[index];
+        return _PortfolioTile(
+          item: item,
+          onDelete: () => onDeleteMedia(item.id),
+          onToggleFeatured: () => ref
+              .read(vendorOwnProvider.notifier)
+              .toggleFeaturedMedia(item.id),
+        );
+      },
+    );
+  }
+}
+
+// ── Service card ──────────────────────────────────────────────────────────────
+
+class _ServiceCard extends StatelessWidget {
+  final VendorService service;
+  final VoidCallback onEdit;
+  final VoidCallback onToggleActive;
+  final VoidCallback onDelete;
+
+  const _ServiceCard({
+    required this.service,
+    required this.onEdit,
+    required this.onToggleActive,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Column(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.forestGreen.withAlpha(12),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+        child: Row(
           children: [
-            Text(value,
-                style: const TextStyle(
-                  fontFamily: 'Playfair Display',
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.forestGreen,
-                )),
-            const SizedBox(height: 4),
-            Text(label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
-                  letterSpacing: 0.5,
-                )),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.forestGreen.withAlpha(15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.design_services_outlined,
+                  size: 22, color: AppColors.forestGreen),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(service.title,
+                      style: AppTextStyles.bodySmall
+                          .copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 3),
+                  Text(
+                    'ZMW ${service.priceMin.toStringAsFixed(0)} – ${service.priceMax.toStringAsFixed(0)} / ${service.unit}',
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: service.isActive
+                          ? AppColors.success.withAlpha(20)
+                          : AppColors.textHint.withAlpha(40),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      service.isActive ? 'Active' : 'Draft',
+                      style: AppTextStyles.caption.copyWith(
+                        color: service.isActive
+                            ? AppColors.success
+                            : AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert_rounded,
+                  color: AppColors.textSecondary),
+              onSelected: (value) {
+                if (value == 'edit') onEdit();
+                if (value == 'toggle') onToggleActive();
+                if (value == 'delete') onDelete();
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(
+                  value: 'toggle',
+                  child: Text(
+                      service.isActive ? 'Set as draft' : 'Set as active'),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text('Delete',
+                      style: TextStyle(color: AppColors.error)),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -206,125 +388,291 @@ class _StatBox extends StatelessWidget {
   }
 }
 
-class _ListingCard extends StatelessWidget {
-  final String title;
-  final String category;
-  final String priceRange;
-  final int? views;
-  final double? rating;
-  final String status;
-  final Color statusColor;
-  final String? pendingNote;
-  final Color iconBg;
-  final bool isDraft;
+// ── Portfolio tile ────────────────────────────────────────────────────────────
 
-  const _ListingCard({
-    required this.title,
-    required this.category,
-    required this.priceRange,
-    required this.views,
-    required this.rating,
-    required this.status,
-    required this.statusColor,
-    this.pendingNote,
-    required this.iconBg,
-    this.isDraft = false,
+class _PortfolioTile extends StatelessWidget {
+  final VendorMedia item;
+  final VoidCallback onDelete;
+  final VoidCallback onToggleFeatured;
+
+  const _PortfolioTile({
+    required this.item,
+    required this.onDelete,
+    required this.onToggleFeatured,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.grid_view_rounded,
-              color: isDraft ? AppColors.textHint : AppColors.amber,
-              size: 26,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(title,
-                          style: AppTextStyles.titleMedium.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: isDraft ? AppColors.textSecondary : AppColors.textPrimary,
-                          )),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withAlpha(20),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(status,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: statusColor,
-                          )),
-                    ),
-                  ],
+    final isNetwork = kIsWeb ||
+        item.url.startsWith('http') ||
+        item.url.startsWith('blob:');
+
+    return GestureDetector(
+      onLongPress: onDelete,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            isNetwork
+                ? Image.network(item.url,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                          color: AppColors.creamDark,
+                          child: const Icon(Icons.broken_image_outlined,
+                              color: AppColors.textHint),
+                        ))
+                : Image.file(File(item.url),
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                          color: AppColors.creamDark,
+                          child: const Icon(Icons.broken_image_outlined,
+                              color: AppColors.textHint),
+                        )),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: onToggleFeatured,
+                child: Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: item.isFeatured
+                        ? AppColors.amber
+                        : Colors.black.withAlpha(80),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    item.isFeatured
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
                 ),
-                const SizedBox(height: 3),
-                Text('$category · $priceRange',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
-                if (pendingNote != null) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        isDraft ? Icons.edit_outlined : Icons.info_outline,
-                        size: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(pendingNote!,
-                          style: AppTextStyles.caption.copyWith(
-                            color: AppColors.textSecondary,
-                            fontSize: 11,
-                          )),
-                    ],
-                  ),
-                ],
-                if (views != null && rating != null) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.visibility_outlined, size: 12, color: AppColors.textSecondary),
-                      const SizedBox(width: 4),
-                      Text('$views views',
-                          style: AppTextStyles.caption.copyWith(fontSize: 11)),
-                      const SizedBox(width: 10),
-                      const Icon(Icons.star_rounded, size: 12, color: AppColors.amber),
-                      const SizedBox(width: 3),
-                      Text('$rating rating',
-                          style: AppTextStyles.caption.copyWith(fontSize: 11)),
-                    ],
-                  ),
-                ],
-              ],
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Service form sheet ────────────────────────────────────────────────────────
+
+class _ServiceFormSheet extends ConsumerStatefulWidget {
+  final VendorService? existing;
+
+  const _ServiceFormSheet({this.existing});
+
+  @override
+  ConsumerState<_ServiceFormSheet> createState() => _ServiceFormSheetState();
+}
+
+class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _descCtrl;
+  late final TextEditingController _priceMinCtrl;
+  late final TextEditingController _priceMaxCtrl;
+  late String _unit;
+  String? _priceError;
+
+  static const _units = ['event', 'hour', 'person', 'package', 'day'];
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.existing;
+    _titleCtrl = TextEditingController(text: s?.title ?? '');
+    _descCtrl = TextEditingController(text: s?.description ?? '');
+    _priceMinCtrl = TextEditingController(
+        text: s != null ? s.priceMin.toStringAsFixed(0) : '');
+    _priceMaxCtrl = TextEditingController(
+        text: s != null ? s.priceMax.toStringAsFixed(0) : '');
+    _unit = s?.unit ?? 'event';
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    _priceMinCtrl.dispose();
+    _priceMaxCtrl.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final min = double.tryParse(_priceMinCtrl.text.trim()) ?? 0;
+    final max = double.tryParse(_priceMaxCtrl.text.trim()) ?? 0;
+
+    if (min > max) {
+      setState(() => _priceError = 'Min price must not exceed max price');
+      return;
+    }
+    setState(() => _priceError = null);
+
+    final vendorId = ref.read(vendorProfileProvider)?.id ?? '';
+    final notifier = ref.read(vendorOwnProvider.notifier);
+
+    if (widget.existing != null) {
+      notifier.updateService(widget.existing!.copyWith(
+        title: _titleCtrl.text.trim(),
+        description:
+            _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+        priceMin: min,
+        priceMax: max,
+        unit: _unit,
+      ));
+    } else {
+      notifier.addService(VendorService(
+        id: const Uuid().v4(),
+        vendorId: vendorId,
+        title: _titleCtrl.text.trim(),
+        description:
+            _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+        priceMin: min,
+        priceMax: max,
+        unit: _unit,
+      ));
+    }
+
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.existing != null;
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                isEdit ? 'Edit service' : 'New service',
+                style: AppTextStyles.headlineMedium
+                    .copyWith(color: AppColors.forestGreen),
+              ),
+              const SizedBox(height: 20),
+              WedTextField(
+                label: 'Service title',
+                hint: 'e.g. Open Air Garden Package',
+                controller: _titleCtrl,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Title is required'
+                    : null,
+              ),
+              const SizedBox(height: 14),
+              WedTextField(
+                label: 'Description (optional)',
+                hint: 'Describe what\'s included…',
+                controller: _descCtrl,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: WedTextField(
+                      label: 'Min price (ZMW)',
+                      hint: '0',
+                      controller: _priceMinCtrl,
+                      keyboardType: TextInputType.number,
+                      validator: (v) =>
+                          (v == null ||
+                                  v.trim().isEmpty ||
+                                  double.tryParse(v.trim()) == null)
+                              ? 'Required'
+                              : null,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: WedTextField(
+                      label: 'Max price (ZMW)',
+                      hint: '0',
+                      controller: _priceMaxCtrl,
+                      keyboardType: TextInputType.number,
+                      validator: (v) =>
+                          (v == null ||
+                                  v.trim().isEmpty ||
+                                  double.tryParse(v.trim()) == null)
+                              ? 'Required'
+                              : null,
+                    ),
+                  ),
+                ],
+              ),
+              if (_priceError != null) ...[
+                const SizedBox(height: 4),
+                Text(_priceError!,
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.error)),
+              ],
+              const SizedBox(height: 16),
+              Text('Priced per',
+                  style: AppTextStyles.labelMedium
+                      .copyWith(color: AppColors.textSecondary)),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _units.map((unit) {
+                    final selected = _unit == unit;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(unit),
+                        selected: selected,
+                        onSelected: (_) => setState(() => _unit = unit),
+                        selectedColor: AppColors.forestGreen,
+                        labelStyle: AppTextStyles.labelMedium.copyWith(
+                          color:
+                              selected ? Colors.white : AppColors.textPrimary,
+                        ),
+                        side: BorderSide(
+                          color: selected
+                              ? AppColors.forestGreen
+                              : AppColors.divider,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 24),
+              WedButton(
+                label: isEdit ? 'Save changes' : 'Add service',
+                onPressed: _save,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

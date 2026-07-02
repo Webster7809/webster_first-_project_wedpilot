@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../widgets/loading_shimmer.dart';
+import '../../../core/utils/format_utils.dart';
 
 class VendorProfileScreen extends ConsumerWidget {
   final String vendorId;
@@ -77,13 +79,12 @@ class _VendorProfileBody extends ConsumerStatefulWidget {
 }
 
 class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
-  bool _isWishlisted = false;
-
   @override
   Widget build(BuildContext context) {
     final vendor = widget.vendor;
+    final isWishlisted = ref.watch(wishlistProvider).contains(vendor.id);
     final priceStr = vendor.priceMin > 0
-        ? 'ZMW ${_fmt(vendor.priceMin.round())} – ${_fmt(vendor.priceMax.round())}'
+        ? '${fmtCurrency(vendor.priceMin.round())} – ${fmtAmount(vendor.priceMax.round())}'
         : null;
 
     return Scaffold(
@@ -150,12 +151,13 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                         ),
                         const SizedBox(width: 8),
                         _OverlayButton(
-                          icon: _isWishlisted
+                          icon: isWishlisted
                               ? Icons.favorite_rounded
                               : Icons.favorite_border_rounded,
-                          onTap: () =>
-                              setState(() => _isWishlisted = !_isWishlisted),
-                          iconColor: _isWishlisted
+                          onTap: () => ref
+                              .read(wishlistProvider.notifier)
+                              .toggle(vendor.id),
+                          iconColor: isWishlisted
                               ? AppColors.error
                               : Colors.white,
                         ),
@@ -341,7 +343,91 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Contact details
+                    if (vendor.phone != null || vendor.website != null) ...[
+                      Text('Contact',
+                          style: AppTextStyles.headlineSmall.copyWith(
+                              color: AppColors.forestGreen,
+                              fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 10),
+                      if (vendor.phone != null)
+                        GestureDetector(
+                          onTap: () =>
+                              launchUrl(Uri.parse('tel:${vendor.phone}')),
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.forestGreen.withAlpha(15),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.call_outlined,
+                                      color: AppColors.forestGreen, size: 18),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    vendor.phone!,
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      color: AppColors.forestGreen,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right_rounded,
+                                    color: AppColors.textSecondary, size: 18),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (vendor.website != null)
+                        GestureDetector(
+                          onTap: () {
+                            final url = vendor.website!.startsWith('http')
+                                ? vendor.website!
+                                : 'https://${vendor.website!}';
+                            launchUrl(Uri.parse(url));
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.info.withAlpha(15),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.language_outlined,
+                                      color: AppColors.info, size: 18),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    vendor.website!,
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      color: AppColors.info,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right_rounded,
+                                    color: AppColors.textSecondary, size: 18),
+                              ],
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 14),
                     ],
 
                     // Photos grid
@@ -418,7 +504,18 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
           children: [
             Expanded(
               child: ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  if (vendor.phone != null) {
+                    launchUrl(Uri.parse('tel:${vendor.phone}'));
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No phone number available'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.amber,
                   foregroundColor: Colors.white,
@@ -454,16 +551,6 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
     );
   }
 
-  String _fmt(int n) {
-    if (n >= 1000) {
-      final thousands = n ~/ 1000;
-      final rem = n % 1000;
-      return rem == 0
-          ? '$thousands,000'
-          : '$thousands,${rem.toString().padLeft(3, '0')}';
-    }
-    return n.toString();
-  }
 }
 
 // ── Overlay circle button ─────────────────────────────────────────────────────

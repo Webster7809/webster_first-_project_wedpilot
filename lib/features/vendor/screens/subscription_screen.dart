@@ -1,39 +1,55 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../models/vendor_profile.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
-class SubscriptionScreen extends StatelessWidget {
+class SubscriptionScreen extends ConsumerWidget {
   const SubscriptionScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final vendor = ref.watch(vendorProfileProvider);
+    final currentTier = vendor?.tier ?? VendorTier.free;
+    final tierName = _tierDisplayName(currentTier);
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Subscription')),
+      backgroundColor: AppColors.cream,
+      appBar: AppBar(
+        backgroundColor: AppColors.forestGreen,
+        title: Text('Subscription',
+            style: AppTextStyles.headlineMedium.copyWith(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Current plan
+          // ── Current plan banner ───────────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.info.withAlpha(20),
+              color: AppColors.forestGreen.withAlpha(15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.info.withAlpha(77)),
+              border: Border.all(
+                  color: AppColors.forestGreen.withAlpha(60)),
             ),
             child: Row(
               children: [
-                const Text('📋', style: TextStyle(fontSize: 28)),
+                const Icon(Icons.workspace_premium_outlined,
+                    size: 28, color: AppColors.amber),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Current Plan: Pro', style: AppTextStyles.headlineSmall),
-                      Text('Renews Dec 1, 2026 · ZMW 490/month',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                      Text('Current Plan: $tierName',
+                          style: AppTextStyles.headlineSmall),
+                      Text('Manage your plan below',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
@@ -41,48 +57,85 @@ class SubscriptionScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-
           Text('Available Plans', style: AppTextStyles.headlineSmall),
           const SizedBox(height: 12),
 
+          // ── Free ─────────────────────────────────────────────────────────
           _PlanCard(
             name: 'Free',
             price: 'ZMW 0',
             period: '/month',
-            features: const ['Limited profile visibility', '5 portfolio images', 'Basic lead inbox', 'Standard support'],
-            isCurrent: false,
+            features: const [
+              'Limited profile visibility',
+              '5 portfolio images',
+              'Basic lead inbox',
+              'Standard support',
+            ],
+            isCurrent: currentTier == VendorTier.free,
             isPremium: false,
-            onSelect: () {},
+            onSelect: () => showWedSnackBar(context,
+                'Upgrade to Free — payment integration coming soon',
+                type: SnackType.info),
           ),
           const SizedBox(height: 12),
+
+          // ── Pro ───────────────────────────────────────────────────────────
           _PlanCard(
             name: 'Pro',
             price: 'ZMW 490',
             period: '/month',
-            features: const ['Full profile visibility', '50 images + 5 videos', 'AI match algorithm', 'Analytics dashboard', 'Priority support'],
-            isCurrent: true,
+            features: const [
+              'Full profile visibility',
+              '50 images + 5 videos',
+              'AI match algorithm',
+              'Analytics dashboard',
+              'Priority support',
+            ],
+            isCurrent: currentTier == VendorTier.pro,
             isPremium: false,
-            onSelect: () {},
+            onSelect: () => showWedSnackBar(context,
+                'Upgrade to Pro — payment integration coming soon',
+                type: SnackType.info),
           ),
           const SizedBox(height: 12),
+
+          // ── Premium ───────────────────────────────────────────────────────
           _PlanCard(
             name: 'Premium',
             price: 'ZMW 990',
             period: '/month',
-            features: const ['Priority placement in search', 'Unlimited portfolio', 'Featured badge', 'Advanced analytics', 'Dedicated account manager'],
-            isCurrent: false,
+            features: const [
+              'Priority placement in search',
+              'Unlimited portfolio',
+              'Featured badge',
+              'Advanced analytics',
+              'Dedicated account manager',
+            ],
+            isCurrent: currentTier == VendorTier.premium,
             isPremium: true,
-            onSelect: () => showWedSnackBar(context, 'Redirecting to Stripe...', type: SnackType.info),
+            onSelect: () => showWedSnackBar(context,
+                'Upgrade to Premium — payment integration coming soon',
+                type: SnackType.info),
           ),
           const SizedBox(height: 24),
           TextButton(
-            onPressed: () {},
-            child: Text('View billing history', style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary)),
+            onPressed: () => showWedSnackBar(
+                context, 'Billing history coming soon',
+                type: SnackType.info),
+            child: Text('View billing history',
+                style: AppTextStyles.labelMedium
+                    .copyWith(color: AppColors.amber)),
           ),
         ],
       ),
     );
   }
+
+  String _tierDisplayName(VendorTier tier) => switch (tier) {
+        VendorTier.free => 'Free',
+        VendorTier.pro => 'Pro',
+        VendorTier.premium => 'Premium',
+      };
 }
 
 class _PlanCard extends StatelessWidget {
@@ -109,10 +162,12 @@ class _PlanCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isCurrent ? AppColors.secondary : (isPremium ? AppColors.goldPremium : AppColors.divider),
+          color: isCurrent
+              ? AppColors.forestGreen
+              : (isPremium ? AppColors.goldPremium : AppColors.divider),
           width: isCurrent || isPremium ? 2 : 1,
         ),
       ),
@@ -124,18 +179,24 @@ class _PlanCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(isPremium ? '⭐ ' : '', style: const TextStyle(fontSize: 18)),
+                  if (isPremium)
+                    const Icon(Icons.star_rounded,
+                        size: 18, color: AppColors.amber),
+                  if (isPremium) const SizedBox(width: 4),
                   Text(name, style: AppTextStyles.headlineSmall),
                   if (isCurrent) ...[
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.secondary.withAlpha(31),
+                        color: AppColors.forestGreen.withAlpha(20),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text('Current',
-                          style: AppTextStyles.caption.copyWith(color: AppColors.secondary, fontWeight: FontWeight.w600)),
+                          style: AppTextStyles.caption.copyWith(
+                              color: AppColors.forestGreen,
+                              fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ],
@@ -143,8 +204,13 @@ class _PlanCard extends StatelessWidget {
               RichText(
                 text: TextSpan(
                   children: [
-                    TextSpan(text: price, style: AppTextStyles.displaySmall.copyWith(color: AppColors.secondary)),
-                    TextSpan(text: period, style: AppTextStyles.caption),
+                    TextSpan(
+                        text: price,
+                        style: AppTextStyles.displaySmall
+                            .copyWith(color: AppColors.forestGreen)),
+                    TextSpan(
+                        text: period,
+                        style: AppTextStyles.caption),
                   ],
                 ),
               ),
@@ -155,7 +221,8 @@ class _PlanCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Row(
                   children: [
-                    const Icon(Icons.check_circle, size: 16, color: AppColors.success),
+                    const Icon(Icons.check_circle,
+                        size: 16, color: AppColors.success),
                     const SizedBox(width: 8),
                     Text(f, style: AppTextStyles.bodySmall),
                   ],
@@ -167,7 +234,9 @@ class _PlanCard extends StatelessWidget {
               label: 'Upgrade to $name',
               onPressed: onSelect,
               height: 44,
-              variant: isPremium ? WedButtonVariant.primary : WedButtonVariant.secondary,
+              variant: isPremium
+                  ? WedButtonVariant.primary
+                  : WedButtonVariant.secondary,
             ),
           ],
         ],

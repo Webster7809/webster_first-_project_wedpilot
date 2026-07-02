@@ -9,15 +9,15 @@ class AppColors {
   static const cream = Color(0xFFF5EFE6);           // Warm cream — scaffold background
   static const creamDark = Color(0xFFEAE2D8);      // Slightly deeper cream
 
-  // ── Semantic aliases (kept for backward compatibility) ──────────────────────
+  // ── Semantic aliases ────────────────────────────────────────────────────────
   static const primary = forestGreen;
-  static const secondary = amber;
+  static const secondary = amber;       // alias for amber
   static const tertiary = Color(0xFF2A7B5B);
-  static const accent = amber;
+  static const accent = amber;          // alias for amber
   static const background = cream;
   static const surface = Color(0xFFFFFFFF);
   static const neutralDark = Color(0xFF374151);
-  static const roseGoldPremium = amber;
+  static const roseGoldPremium = amber; // alias for amber
 
   // ── Text ────────────────────────────────────────────────────────────────────
   static const textPrimary = Color(0xFF1A1A1A);
@@ -45,28 +45,51 @@ class AppColors {
   static const flaggedBg = Color(0xFFFEECEC);
 
   // ── Budget chart segments ───────────────────────────────────────────────────
-  static const budgetVenue = amber;
   static const budgetCatering = Color(0xFFF4C561);
   static const budgetDecor = forestGreen;
   static const budgetUnallocated = Color(0xFFDDD6CB);
   static const budgetGreen = Color(0xFF2A7B5B);
   static const budgetAmber = Color(0xFFF4C561);
   static const budgetRed = Color(0xFFD44242);
-  static const goldPremium = amber;
+  static const goldPremium = amber;     // alias for amber
+
+  static const budgetCategoryColors = <String, Color>{
+    'Venue': Color(0xFFC9892B),
+    'Catering': Color(0xFFD4A017),
+    'Photography': Color(0xFF4A8B6F),
+    'Decor & flowers': forestGreen,
+    'DJ & MC': Color(0xFF6B9E8A),
+    'Transport': Color(0xFF8BAE9E),
+    'Wedding attire': Color(0xFF7B8E7A),
+    'Cake & sweets': Color(0xFFB5916A),
+  };
 
   // ── Structural ───────────────────────────────────────────────────────────────
   static const divider = Color(0xFFDDD6CB);
   static const cardShadow = Color(0x14000000);
   static const shimmerBase = Color(0xFFE8E0D5);
   static const shimmerHighlight = Color(0xFFF5EFE6);
+  static const progressTrack = Color(0xFFEEEBE4);     // progress bar background
+  static const segmentedBarTrack = Color(0xFFE0DDD6); // dashboard segmented bar
 
-  // ── Role color aliases (backward compat) ────────────────────────────────────
-  static const couplePurple = forestGreen;
+  // ── Role color aliases ───────────────────────────────────────────────────────
   static const coupleMagenta = Color(0xFF2A5C3F);
-  static const vendorNavy = forestGreen;
   static const vendorIndigo = Color(0xFF2A5C3F);
   static const vendorGreen = Color(0xFF2A7B5B);
   static const vendorGreenMid = Color(0xFF3D9B72);
+
+  // ── Dark theme ──────────────────────────────────────────────────────────────
+  static const darkBackground = Color(0xFF111318);
+  static const darkSurface = Color(0xFF1C1F26);
+  static const darkSurfaceVariant = Color(0xFF252830);
+  static const darkText = Color(0xFFEAEAEA);
+  static const darkTextSecondary = Color(0xFF9E9E9E);
+  static const darkDivider = Color(0xFF2C2E35);
+
+  // ── Misc UI ─────────────────────────────────────────────────────────────────
+  static const teal = Color(0xFF2A9D8F);
+  static const adminPinkLight = Color(0xFFF06292);
+  static const inputFillAlt = Color(0xFFF7F7F7);
 
   // ── Admin panel ─────────────────────────────────────────────────────────────
   static const adminPage = Color(0xFFF5EFE6);

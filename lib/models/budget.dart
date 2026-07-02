@@ -52,6 +52,18 @@ class Budget {
             .toList(),
         createdAt: DateTime.parse(json['created_at'] as String),
       );
+
+  Map<String, dynamic> toJson() => {
+        'budget_id': id,
+        'couple_id': coupleId,
+        'total_amount': totalAmount,
+        'currency': currency,
+        'is_ai_generated': isAiGenerated,
+        'categories': categories.map((c) => c.toJson()).toList(),
+        'custom_items': customItems.map((c) => c.toJson()).toList(),
+        'expenses': expenses.map((e) => e.toJson()).toList(),
+        'created_at': createdAt.toIso8601String(),
+      };
 }
 
 class BudgetCustomItem {
@@ -70,6 +82,12 @@ class BudgetCustomItem {
         name: json['name'] as String,
         amount: (json['amount'] as num).toDouble(),
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'amount': amount,
+      };
 }
 
 class BudgetCategory {
@@ -106,6 +124,16 @@ class BudgetCategory {
         spentAmount: (json['spent_amount'] as num? ?? 0).toDouble(),
         aiJustification: json['ai_justification'] as String?,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'budget_id': budgetId,
+        'category_name': categoryName,
+        'category_icon': categoryIcon,
+        'allocated_amount': allocatedAmount,
+        'spent_amount': spentAmount,
+        'ai_justification': aiJustification,
+      };
 }
 
 class Expense {
@@ -145,4 +173,17 @@ class Expense {
         status: json['status'] as String? ?? 'pending',
         createdAt: DateTime.parse(json['created_at'] as String),
       );
+
+  Map<String, dynamic> toJson() => {
+        'expense_id': id,
+        'budget_id': budgetId,
+        'category_name': categoryName,
+        'vendor_id': vendorId,
+        'vendor_name': vendorName,
+        'amount': amount,
+        'description': description,
+        'receipt_url': receiptUrl,
+        'status': status,
+        'created_at': createdAt.toIso8601String(),
+      };
 }

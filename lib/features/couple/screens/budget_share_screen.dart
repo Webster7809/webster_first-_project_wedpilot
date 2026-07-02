@@ -1,13 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../models/budget.dart';
+import '../../../providers/budget_provider.dart';
+import '../../../core/utils/format_utils.dart';
 
-class BudgetShareScreen extends StatelessWidget {
+class BudgetShareScreen extends ConsumerWidget {
   const BudgetShareScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final budgetState = ref.watch(budgetProvider);
+    final budget = budgetState.budget;
+
+    if (budget == null) {
+      return Scaffold(
+        backgroundColor: AppColors.cream,
+        appBar: AppBar(
+          backgroundColor: AppColors.forestGreen,
+          leading: IconButton(
+            icon: const Icon(Icons.chevron_left_rounded,
+                color: Colors.white, size: 28),
+            onPressed: () => context.pop(),
+          ),
+          title: const Text('Budget Summary',
+              style: TextStyle(color: Colors.white)),
+        ),
+        body: const Center(
+          child: Text('No budget set up yet.',
+              style: TextStyle(color: AppColors.textSecondary)),
+        ),
+      );
+    }
+
+    final categories = budget.categories;
+    final bookedCount = categories.where((c) => c.spentAmount > 0).length;
+    final pendingCount = categories.length - bookedCount;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -78,7 +108,7 @@ class BudgetShareScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'AI-aligned across 4 vendor categories',
+                              'AI-aligned across ${categories.length} vendor categories',
                               style: AppTextStyles.titleMedium.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
@@ -86,7 +116,7 @@ class BudgetShareScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Matched to your Flexible tier · budget optimised for your guest count and location.',
+                              'Matched to your ${budget.isAiGenerated ? 'AI-generated' : 'custom'} plan · budget optimised for your guest count and location.',
                               style: AppTextStyles.bodySmall.copyWith(
                                 color: Colors.white.withAlpha(178),
                                 height: 1.5,
@@ -121,7 +151,7 @@ class BudgetShareScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'ZMW 61,200',
+                              fmtCurrency(budget.totalAllocated),
                               style: AppTextStyles.displaySmall.copyWith(
                                 color: AppColors.forestGreen,
                                 fontWeight: FontWeight.bold,
@@ -130,7 +160,7 @@ class BudgetShareScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'allocated of ZMW 85,000 budget',
+                              'allocated of ${fmtCurrency(budget.totalAmount)} budget',
                               style: AppTextStyles.bodySmall.copyWith(
                                 color: AppColors.textSecondary,
                               ),
@@ -139,11 +169,13 @@ class BudgetShareScreen extends StatelessWidget {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(4),
                               child: LinearProgressIndicator(
-                                value: 0.72,
+                                value: budget.spendingPercentage
+                                    .clamp(0.0, 1.0),
                                 minHeight: 6,
                                 backgroundColor: AppColors.creamDark,
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                    AppColors.amber),
+                                valueColor:
+                                    const AlwaysStoppedAnimation<Color>(
+                                        AppColors.amber),
                               ),
                             ),
                           ],
@@ -154,7 +186,7 @@ class BudgetShareScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            '72%',
+                            fmtPercent(budget.spendingPercentage * 100),
                             style: AppTextStyles.headlineMedium.copyWith(
                               color: AppColors.amber,
                               fontWeight: FontWeight.bold,
@@ -176,11 +208,11 @@ class BudgetShareScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // Vendor breakdown header
+                // Category breakdown header
                 Row(
                   children: [
                     Text(
-                      'Vendor breakdown',
+                      'Category breakdown',
                       style: AppTextStyles.titleMedium.copyWith(
                         color: AppColors.forestGreen,
                         fontWeight: FontWeight.w700,
@@ -188,7 +220,7 @@ class BudgetShareScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '3 booked · 1 pending',
+                      '$bookedCount spending · $pendingCount pending',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -197,7 +229,7 @@ class BudgetShareScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
 
-                ..._kVendors.map((v) => _VendorBreakdownCard(vendor: v)),
+                ...categories.map((cat) => _CategoryBreakdownCard(cat: cat)),
               ]),
             ),
           ),
@@ -226,7 +258,8 @@ class BudgetShareScreen extends StatelessWidget {
                 icon: const Icon(Icons.share_outlined, size: 18),
                 label: const Text('Share'),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.divider, width: 1.5),
+                  side:
+                      const BorderSide(color: AppColors.divider, width: 1.5),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -241,8 +274,8 @@ class BudgetShareScreen extends StatelessWidget {
                 icon: const Icon(Icons.picture_as_pdf_outlined,
                     size: 18, color: Colors.white),
                 label: const Text('Export as PDF',
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w700)),
+                    style:
+                        TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.amber,
                   foregroundColor: Colors.white,
@@ -260,61 +293,18 @@ class BudgetShareScreen extends StatelessWidget {
   }
 }
 
-// ── Vendor breakdown card ──────────────────────────────────────────────────────
+// ── Category breakdown card ────────────────────────────────────────────────────
 
-class _VendorItem {
-  final String category;
-  final String name;
-  final String address;
-  final String amount;
-  final bool booked;
-
-  const _VendorItem({
-    required this.category,
-    required this.name,
-    required this.address,
-    required this.amount,
-    required this.booked,
-  });
-}
-
-const _kVendors = [
-  _VendorItem(
-    category: 'Venue',
-    name: 'The Garden Venue',
-    address: 'Ibex Hill, Lusaka',
-    amount: 'ZMW 28,000',
-    booked: true,
-  ),
-  _VendorItem(
-    category: 'Catering',
-    name: 'Royal Caterers Ltd',
-    address: 'Cairo Road, Lusaka',
-    amount: 'ZMW 18,500',
-    booked: true,
-  ),
-  _VendorItem(
-    category: 'Photography',
-    name: 'Blossom Photography',
-    address: 'Kabulonga, Lusaka',
-    amount: 'ZMW 9,700',
-    booked: true,
-  ),
-  _VendorItem(
-    category: 'Decor',
-    name: 'Petal Dreams Floristry',
-    address: 'Woodlands, Lusaka',
-    amount: 'ZMW 5,000',
-    booked: false,
-  ),
-];
-
-class _VendorBreakdownCard extends StatelessWidget {
-  final _VendorItem vendor;
-  const _VendorBreakdownCard({required this.vendor});
+class _CategoryBreakdownCard extends StatelessWidget {
+  final BudgetCategory cat;
+  const _CategoryBreakdownCard({required this.cat});
 
   @override
   Widget build(BuildContext context) {
+    final color = AppColors.budgetCategoryColors[cat.categoryName] ??
+        AppColors.forestGreen;
+    final isActive = cat.spentAmount > 0;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -328,110 +318,58 @@ class _VendorBreakdownCard extends StatelessWidget {
               offset: Offset(0, 2)),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.amber.withAlpha(20),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  vendor.category,
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.amber,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                vendor.amount,
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: AppColors.forestGreen,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            vendor.name,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w700,
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withAlpha(26),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Center(
+              child:
+                  Text(cat.categoryIcon, style: const TextStyle(fontSize: 20)),
             ),
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              const Icon(Icons.location_on_outlined,
-                  size: 14, color: AppColors.textSecondary),
-              const SizedBox(width: 4),
-              Text(
-                vendor.address,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary),
-              ),
-            ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(cat.categoryName,
+                    style: AppTextStyles.titleMedium
+                        .copyWith(color: AppColors.forestGreen)),
+                Text(
+                  isActive
+                      ? 'Spent ${fmtCurrency(cat.spentAmount)} of ${fmtCurrency(cat.allocatedAmount)}'
+                      : 'Allocated ${fmtCurrency(cat.allocatedAmount)}',
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _ContactButton(
-                icon: Icons.phone_outlined,
-                label: 'Call',
-                onTap: () {},
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? AppColors.successBg
+                  : AppColors.creamDark,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              isActive ? 'Active' : 'Pending',
+              style: AppTextStyles.caption.copyWith(
+                color: isActive
+                    ? AppColors.budgetGreen
+                    : AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
               ),
-              const SizedBox(width: 8),
-              _ContactButton(
-                icon: Icons.chat_outlined,
-                label: 'WhatsApp',
-                onTap: () {},
-              ),
-              const SizedBox(width: 8),
-              _ContactButton(
-                icon: Icons.email_outlined,
-                label: 'Email',
-                onTap: () {},
-              ),
-            ],
+            ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ContactButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _ContactButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 14),
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: AppColors.divider),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20)),
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          foregroundColor: AppColors.textSecondary,
-        ),
       ),
     );
   }
