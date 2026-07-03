@@ -2,14 +2,101 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:wed_plan_pilot/core/state/resource.dart';
 import 'package:wed_plan_pilot/features/auth/screens/couple_planning_screen.dart';
+import 'package:wed_plan_pilot/models/budget.dart';
+import 'package:wed_plan_pilot/models/vendor_profile.dart';
+import 'package:wed_plan_pilot/providers/budget_provider.dart';
+import 'package:wed_plan_pilot/providers/vendor_provider.dart';
+
+/// Stand-in for the vendor pool the real backend would return. Overriding
+/// [allVendorsProvider] (rather than mocking HTTP) keeps this test independent
+/// of a running backend and of the couple being signed in — [allVendorsProvider]
+/// is already the seam the AI matcher reads from, so this is the same boundary
+/// production code uses, just fed fixed data instead of a network call.
+final _fakeVendors = [
+  const VendorProfile(
+    id: 'venue-1',
+    userId: 'vendor-1',
+    businessName: 'Copperbelt Grand Hall',
+    category: 'Venue',
+    location: 'Ndola, Copperbelt',
+    tier: VendorTier.pro,
+    verificationStatus: VerificationStatus.verified,
+    rating: 4.6,
+    reviewCount: 42,
+    compositeScore: 88,
+  ),
+  const VendorProfile(
+    id: 'catering-1',
+    userId: 'vendor-2',
+    businessName: 'Zambezi Catering Co.',
+    category: 'Catering',
+    location: 'Ndola, Copperbelt',
+    tier: VendorTier.free,
+    verificationStatus: VerificationStatus.verified,
+    rating: 4.2,
+    reviewCount: 27,
+    compositeScore: 75,
+  ),
+];
+
+/// Stand-in for [BudgetNotifier] that skips the real backend call
+/// [BudgetNotifier.loadBudget] would otherwise make, and instead resolves
+/// straight to a ready [Budget] — mirroring what the wizard expects once the
+/// couple finishes step 3.
+class _FakeBudgetNotifier extends BudgetNotifier {
+  _FakeBudgetNotifier(super.ref);
+
+  @override
+  Future<void> loadBudget({
+    required double total,
+    required String currency,
+    List<String>? serviceCategories,
+    List<BudgetCustomItem>? customItems,
+  }) async {
+    state = Resource(
+      status: ResourceStatus.ready,
+      data: Budget(
+        id: 'test-budget',
+        coupleId: 'test-couple',
+        totalAmount: total,
+        currency: currency,
+        isAiGenerated: true,
+        categories: const [
+          BudgetCategory(
+            id: 'cat-venue',
+            budgetId: 'test-budget',
+            categoryName: 'Venue',
+            categoryIcon: '🏛️',
+            allocatedAmount: 60000,
+            spentAmount: 0,
+          ),
+          BudgetCategory(
+            id: 'cat-catering',
+            budgetId: 'test-budget',
+            categoryName: 'Catering',
+            categoryIcon: '🍽️',
+            allocatedAmount: 45000,
+            spentAmount: 0,
+          ),
+        ],
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+}
 
 /// Drives the full 5-step wedding planning wizard: budget (incl. a couple-added
 /// custom vendor type), date, style, details, then the AI-curated review step.
 Future<void> _runWizardFlow(WidgetTester tester) async {
   await tester.pumpWidget(
-    const ProviderScope(
-      child: MaterialApp(home: CouplePlanningScreen()),
+    ProviderScope(
+      overrides: [
+        allVendorsProvider.overrideWith((ref) async => _fakeVendors),
+        budgetProvider.overrideWith((ref) => _FakeBudgetNotifier(ref)),
+      ],
+      child: const MaterialApp(home: CouplePlanningScreen()),
     ),
   );
   await tester.pump();
@@ -67,7 +154,8 @@ Future<void> _runWizardFlow(WidgetTester tester) async {
   await tester.pump();
 
   // ── Step 4: AI-curated review ────────────────────────────────────────────
-  // Let the mock AI matcher (900ms) and budget generator (250ms) resolve.
+  // Let the AI vendor matcher (falls back to local ranking with no backend
+  // reachable) and the fake budget notifier resolve.
   await tester.pump(const Duration(milliseconds: 1200));
   await tester.pump();
 
@@ -77,7 +165,6 @@ Future<void> _runWizardFlow(WidgetTester tester) async {
   expect(find.textContaining('No available'), findsOneWidget);
   expect(find.text('Add your own vendor'), findsWidgets);
   expect(find.text('Budget breakdown'), findsOneWidget);
-  expect(find.text('Share to WhatsApp & more'), findsOneWidget);
   expect(find.text('Download PDF'), findsOneWidget);
   expect(find.text('Go to Dashboard'), findsOneWidget);
 

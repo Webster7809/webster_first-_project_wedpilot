@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/vendor_profile.dart';
@@ -19,7 +20,11 @@ const _kAllCategories = [
   'Transport',
 ];
 
-const _kFilters = ['All', 'Under 30k', '200+ capacity', 'Verified'];
+// 'Under 30k' and 'Verified' map to real fields (price, verification_status).
+// A capacity filter isn't offered — vendor capacity isn't tracked anywhere
+// in the schema, and a filter chip that silently does nothing is worse than
+// not having it.
+const _kFilters = ['All', 'Under 30k', 'Verified'];
 
 class VendorDiscoveryScreen extends ConsumerStatefulWidget {
   const VendorDiscoveryScreen({super.key});
@@ -36,6 +41,9 @@ class _VendorDiscoveryScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (ref.read(wishlistProvider.notifier).status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(wishlistProvider.notifier).loadWishlist());
+    }
     final coupleProfile = ref.watch(coupleProfileProvider);
     final city = coupleProfile?.location?.split(',').first.trim() ?? 'your city';
     final vendorAsync = ref.watch(vendorListProvider(_selectedCategory));
@@ -57,15 +65,6 @@ class _VendorDiscoveryScreenState
             expandedHeight: 160,
             automaticallyImplyLeading: false,
             elevation: 0,
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: IconButton(
-                  icon: const Icon(Icons.tune_rounded, color: Colors.white),
-                  onPressed: () {},
-                ),
-              ),
-            ],
             flexibleSpace: FlexibleSpaceBar(
               background: SafeArea(
                 bottom: false,
@@ -261,7 +260,7 @@ class _VendorDiscoveryScreenState
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
               child: vendorAsync.when(
                 data: (vendors) => Text(
-                  '${vendors.length} ${_selectedCategory.toLowerCase()} vendors'
+                  '${_applyFilter(vendors).length} ${_selectedCategory.toLowerCase()} vendors'
                   ' match your Flexible tier in $city',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.textSecondary,
@@ -304,51 +303,46 @@ class _VendorDiscoveryScreenState
                 ),
               ),
             ),
-            data: (vendors) => vendors.isEmpty
-                ? SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(48),
-                        child: Column(
-                          children: [
-                            const Icon(Icons.search_off_rounded,
-                                size: 48, color: AppColors.textHint),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No $_selectedCategory vendors in $city yet',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                  color: AppColors.textSecondary),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )
-                : SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (_, i) => Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: _VendorMatchCard(
-                            vendor: vendors[i],
-                            matchPercent: _matchPercent(vendors[i], i),
+            data: (allVendors) {
+              final vendors = _applyFilter(allVendors);
+              return vendors.isEmpty
+                  ? SliverToBoxAdapter(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(48),
+                          child: Column(
+                            children: [
+                              const Icon(Icons.search_off_rounded,
+                                  size: 48, color: AppColors.textHint),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No $_selectedCategory vendors in $city yet',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                    color: AppColors.textSecondary),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
                         ),
-                        childCount: vendors.length,
                       ),
-                    ),
-                  ),
+                    )
+                  : SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (_, i) => Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: _VendorMatchCard(vendor: vendors[i]),
+                          ),
+                          childCount: vendors.length,
+                        ),
+                      ),
+                    );
+            },
           ),
         ],
       ),
     );
-  }
-
-  int _matchPercent(VendorProfile v, int rank) {
-    final base = (v.compositeScore * 0.7 + (v.rating ?? 0) * 6).round();
-    return (base - rank * 3).clamp(70, 99);
   }
 
   String _filterLabel(int i) {
@@ -356,24 +350,26 @@ class _VendorDiscoveryScreenState
     return switch (i) {
       0 => 'All ${cat}s',
       1 => 'Under 30k',
-      2 => '200+ capacity',
-      3 => 'Verified',
+      2 => 'Verified',
       _ => _kFilters[i],
     };
   }
 
+  List<VendorProfile> _applyFilter(List<VendorProfile> vendors) {
+    return switch (_filterIndex) {
+      1 => vendors.where((v) => v.priceMin > 0 && v.priceMin < 30000).toList(),
+      2 => vendors.where((v) => v.isVerified).toList(),
+      _ => vendors,
+    };
+  }
 }
 
 // ── Vendor match card ─────────────────────────────────────────────────────────
 
 class _VendorMatchCard extends ConsumerWidget {
   final VendorProfile vendor;
-  final int matchPercent;
 
-  const _VendorMatchCard({
-    required this.vendor,
-    required this.matchPercent,
-  });
+  const _VendorMatchCard({required this.vendor});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -411,34 +407,35 @@ class _VendorMatchCard extends ConsumerWidget {
                       size: 44, color: AppColors.amber),
                 ),
               ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: AppColors.forestGreen,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.check_rounded,
-                          color: Colors.white, size: 12),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$matchPercent% match',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+              if (vendor.isVerified)
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.forestGreen,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.verified_rounded,
+                            color: Colors.white, size: 12),
+                        SizedBox(width: 4),
+                        Text(
+                          'Verified',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
 
@@ -494,7 +491,6 @@ class _VendorMatchCard extends ConsumerWidget {
                   spacing: 6,
                   runSpacing: 4,
                   children: [
-                    _TagChip(label: 'Up to 300 guests', icon: Icons.people_outline_rounded),
                     if (vendor.isVerified)
                       _TagChip(
                         label: 'Verified',
@@ -519,51 +515,57 @@ class _VendorMatchCard extends ConsumerWidget {
 
                 const SizedBox(height: 12),
                 // Action row
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.favorite_border_rounded,
-                          color: AppColors.textSecondary, size: 22),
-                      onPressed: () {},
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () =>
-                            context.push('/couple/vendors/${vendor.id}'),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppColors.divider),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          foregroundColor: AppColors.textPrimary,
+                Builder(builder: (context) {
+                  final isWishlisted = ref.watch(wishlistProvider).contains(vendor.id);
+                  return Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          isWishlisted ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                          color: isWishlisted ? AppColors.error : AppColors.textSecondary,
+                          size: 22,
                         ),
-                        child: const Text('View profile',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 13)),
+                        onPressed: () => ref.read(wishlistProvider.notifier).toggle(vendor.id),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.amber,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          elevation: 0,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () =>
+                              context.push('/couple/vendors/${vendor.id}'),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.divider),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            foregroundColor: AppColors.textPrimary,
+                          ),
+                          child: const Text('View profile',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13)),
                         ),
-                        child: const Text('Shortlist',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 13)),
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => ref.read(wishlistProvider.notifier).toggle(vendor.id),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.amber,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            elevation: 0,
+                          ),
+                          child: Text(isWishlisted ? 'Shortlisted' : 'Shortlist',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13)),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
               ],
             ),
           ),

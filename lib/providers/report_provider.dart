@@ -58,10 +58,10 @@ class ReportNotifier extends StateNotifier<ReportState> {
   void generateAll() {
     state = state.copyWith(isGenerating: true);
 
-    final budget = _ref.read(budgetProvider).budget;
+    final budget = _ref.read(budgetProvider).data;
     final guestRsvp = _ref.read(guestRsvpProvider);
-    final tasks = _ref.read(taskProvider);
-    final vendors = _ref.read(allVendorsProvider);
+    final tasks = _ref.read(taskProvider).data ?? [];
+    final vendors = _ref.read(allVendorsProvider).valueOrNull ?? [];
 
     final budgetReport =
         budget != null ? ReportService.generateBudgetReport(budget) : null;
@@ -89,7 +89,7 @@ class ReportNotifier extends StateNotifier<ReportState> {
   }
 
   void generateBudgetReport() {
-    final budget = _ref.read(budgetProvider).budget;
+    final budget = _ref.read(budgetProvider).data;
     if (budget == null) return;
     state = state.copyWith(
       budgetReport: ReportService.generateBudgetReport(budget),
@@ -109,8 +109,8 @@ class ReportNotifier extends StateNotifier<ReportState> {
   }
 
   void generateVendorReport() {
-    final vendors = _ref.read(allVendorsProvider);
-    final budget = _ref.read(budgetProvider).budget;
+    final vendors = _ref.read(allVendorsProvider).valueOrNull ?? [];
+    final budget = _ref.read(budgetProvider).data;
     state = state.copyWith(
       vendorReport: ReportService.generateVendorReport(vendors, budget?.totalAmount),
       generatedAt: DateTime.now(),
@@ -118,7 +118,7 @@ class ReportNotifier extends StateNotifier<ReportState> {
   }
 
   void generateTaskReport() {
-    final tasks = _ref.read(taskProvider);
+    final tasks = _ref.read(taskProvider).data ?? [];
     state = state.copyWith(
       taskReport: ReportService.generateTaskReport(tasks),
       generatedAt: DateTime.now(),

@@ -6,8 +6,10 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wizard_widgets.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/vendor_own_provider.dart';
 
 class VendorOnboardingScreen extends ConsumerStatefulWidget {
   const VendorOnboardingScreen({super.key});
@@ -21,10 +23,12 @@ class _VendorOnboardingScreenState
     extends ConsumerState<VendorOnboardingScreen> {
   int _step = 0;
   static const int _totalSteps = 4;
+  bool _isSubmitting = false;
 
   // Step 0 — Category & location
   String? _selectedCategory;
   final _locationCtrl = TextEditingController();
+  final _customCategoryCtrl = TextEditingController();
 
   // Step 1 — Portfolio
   final _titleCtrl = TextEditingController();
@@ -65,9 +69,53 @@ class _VendorOnboardingScreenState
     ('Cake & sweets', Icons.cake_outlined),
   ];
 
+  // True when a vendor with an existing profile reopened this wizard from
+  // their dashboard to update their listing, rather than a brand-new signup.
+  // Drives prefill (so resubmitting doesn't null out existing fields — the
+  // save endpoint is an upsert that writes every field it's sent) and the
+  // confirmation copy.
+  bool _isEditMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final profile = ref.read(authProvider).vendorProfile;
+    if (profile == null) return;
+    _isEditMode = true;
+    _selectedCategory = profile.category;
+    _locationCtrl.text = profile.location ?? '';
+    _titleCtrl.text = profile.businessName;
+    _descCtrl.text = profile.description ?? '';
+    _phoneCtrl.text = profile.phone ?? '';
+    _whatsappCtrl.text = profile.whatsapp ?? '';
+    _emailCtrl.text = profile.contactEmail ?? '';
+    _addressCtrl.text = profile.address ?? '';
+    _instagramCtrl.text = profile.instagramHandle ?? '';
+  }
+
+  bool get _isCustomCategorySelected =>
+      _selectedCategory != null &&
+      !_categories.any((c) => c.$1.toLowerCase() == _selectedCategory!.toLowerCase());
+
+  void _addCustomCategory() {
+    final raw = _customCategoryCtrl.text.trim();
+    if (raw.isEmpty) return;
+    final match = _categories.firstWhere(
+      (c) => c.$1.toLowerCase() == raw.toLowerCase(),
+      orElse: () => ('', Icons.category_outlined),
+    );
+    setState(() {
+      _selectedCategory = match.$1.isNotEmpty ? match.$1 : raw;
+      _customCategoryCtrl.clear();
+    });
+  }
+
+  void _clearCustomCategory() => setState(() => _selectedCategory = null);
+
   @override
   void dispose() {
     _locationCtrl.dispose();
+    _customCategoryCtrl.dispose();
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _phoneCtrl.dispose();
@@ -82,6 +130,68 @@ class _VendorOnboardingScreenState
     if (_step < _totalSteps - 1) {
       setState(() => _step++);
     }
+  }
+
+  Future<void> _submit() async {
+    if (_selectedCategory == null || _selectedCategory!.isEmpty) {
+      showWedSnackBar(context, 'Select a vendor category to continue.', type: SnackType.error);
+      setState(() => _step = 0);
+      return;
+    }
+    final businessName = _titleCtrl.text.trim();
+    if (businessName.isEmpty) {
+      showWedSnackBar(context, 'Add a listing title to continue.', type: SnackType.error);
+      setState(() => _step = 1);
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    final notifier = ref.read(vendorOwnProvider.notifier);
+    final error = await notifier.createProfile(
+      businessName: businessName,
+      category: _selectedCategory!,
+      description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+      location: _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+      whatsapp: _whatsappCtrl.text.trim().isEmpty ? null : _whatsappCtrl.text.trim(),
+      contactEmail: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+      address: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
+      instagramHandle: _instagramCtrl.text.trim().isEmpty ? null : _instagramCtrl.text.trim(),
+    );
+
+    if (!mounted) return;
+    if (error != null) {
+      setState(() => _isSubmitting = false);
+      showWedSnackBar(context, error, type: SnackType.error);
+      return;
+    }
+
+    // Upload photos. A partial failure here shouldn't block the flow — the
+    // vendor can add the rest from their dashboard afterwards.
+    final photos = <(Uint8List, bool)>[
+      if (_coverPhotoBytes != null) (_coverPhotoBytes!, true),
+      for (final bytes in _galleryBytes) (bytes, false),
+    ];
+    var uploaded = 0;
+    for (final (bytes, isFeatured) in photos) {
+      final uploadError = await notifier.addMedia(
+        bytes,
+        'photo_$uploaded.jpg',
+        isFeatured: isFeatured,
+      );
+      if (uploadError == null) uploaded++;
+    }
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    if (photos.isNotEmpty && uploaded < photos.length) {
+      showWedSnackBar(
+        context,
+        '$uploaded of ${photos.length} photos uploaded — add the rest from your dashboard.',
+        type: SnackType.info,
+      );
+    }
+    _next();
   }
 
   Future<void> _pickCoverPhoto() async {
@@ -100,6 +210,11 @@ class _VendorOnboardingScreenState
     final bytes = await file.readAsBytes();
     setState(() => _galleryBytes.add(bytes));
   }
+
+  void _removeCoverPhoto() => setState(() => _coverPhotoBytes = null);
+
+  void _removeGalleryPhoto(int index) =>
+      setState(() => _galleryBytes.removeAt(index));
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +331,91 @@ class _VendorOnboardingScreenState
             );
           }).toList(),
         ),
+        const SizedBox(height: 12),
+        if (_isCustomCategorySelected) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.forestGreen.withAlpha(20),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.forestGreen, width: 1.5),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.check_circle_rounded, size: 14, color: AppColors.forestGreen),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    _selectedCategory!,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.forestGreen,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: _clearCustomCategory,
+                  child: const Icon(Icons.close_rounded, size: 14, color: AppColors.forestGreen),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _customCategoryCtrl,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _addCustomCategory(),
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Add another vendor type, e.g. Hair & Makeup',
+                  hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+                  filled: true,
+                  fillColor: AppColors.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.divider),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.divider),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _addCustomCategory,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.forestGreen,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.add_rounded, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          "Don't see your category? Add your own — you can only pick one.",
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+        ),
         const SizedBox(height: 24),
         WizardSectionLabel(icon: Icons.location_on_outlined, label: 'Where are you based?'),
         const SizedBox(height: 10),
@@ -245,14 +445,24 @@ class _VendorOnboardingScreenState
         _DashedUploadArea(
           onTap: _pickCoverPhoto,
           child: _coverPhotoBytes != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(11),
-                  child: Image.memory(
-                    _coverPhotoBytes!,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                  ),
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(11),
+                      child: Image.memory(
+                        _coverPhotoBytes!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                      ),
+                    ),
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: _RemovePhotoButton(onTap: _removeCoverPhoto),
+                    ),
+                  ],
                 )
               : Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -278,14 +488,27 @@ class _VendorOnboardingScreenState
         // Gallery row
         Row(
           children: [
-            ..._galleryBytes.take(3).map((bytes) => Expanded(
+            ...List.generate(_galleryBytes.take(3).length, (i) => Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: AspectRatio(
                   aspectRatio: 1,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.memory(bytes, fit: BoxFit.cover),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.memory(_galleryBytes[i], fit: BoxFit.cover),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: _RemovePhotoButton(
+                          onTap: () => _removeGalleryPhoto(i),
+                          size: 18,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -458,9 +681,10 @@ class _VendorOnboardingScreenState
         ),
         const SizedBox(height: 32),
         WizardContinueButton(
-          onPressed: _next,
+          onPressed: _submit,
           label: 'Submit for verification',
           showArrow: true,
+          isLoading: _isSubmitting,
         ),
       ],
     );
@@ -494,7 +718,7 @@ class _VendorOnboardingScreenState
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Submitted!',
+                    _isEditMode ? 'Updated!' : 'Submitted!',
                     style: AppTextStyles.displaySmall.copyWith(
                       color: AppColors.forestGreen,
                       fontWeight: FontWeight.bold,
@@ -502,7 +726,9 @@ class _VendorOnboardingScreenState
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Your listing is now under review. Our team will verify your details and notify you within 24 hours.',
+                    _isEditMode
+                        ? 'Your listing has been updated with the new details.'
+                        : 'Your listing is now under review. Our team will verify your details and notify you within 24 hours.',
                     style: AppTextStyles.bodyMedium.copyWith(
                       color: AppColors.textSecondary,
                       height: 1.6,
@@ -600,6 +826,29 @@ class _IconField extends StatelessWidget {
 }
 
 // ── Dashed upload area ────────────────────────────────────────────────────────
+
+class _RemovePhotoButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final double size;
+
+  const _RemovePhotoButton({required this.onTap, this.size = 22});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: AppColors.forestGreen.withAlpha(200),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(Icons.close_rounded, size: size * 0.65, color: AppColors.textOnPrimary),
+      ),
+    );
+  }
+}
 
 class _DashedUploadArea extends StatelessWidget {
   final VoidCallback onTap;

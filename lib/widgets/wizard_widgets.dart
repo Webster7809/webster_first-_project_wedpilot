@@ -142,12 +142,14 @@ class WizardContinueButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
   final bool showArrow;
+  final bool isLoading;
 
   const WizardContinueButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.showArrow = false,
+    this.isLoading = false,
   });
 
   @override
@@ -156,7 +158,7 @@ class WizardContinueButton extends StatelessWidget {
       width: double.infinity,
       height: 52,
       child: ElevatedButton(
-        onPressed: onPressed,
+        onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.forestGreen,
           foregroundColor: Colors.white,
@@ -165,7 +167,13 @@ class WizardContinueButton extends StatelessWidget {
           ),
           elevation: 0,
         ),
-        child: Row(
+        child: isLoading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+            : Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Flexible(

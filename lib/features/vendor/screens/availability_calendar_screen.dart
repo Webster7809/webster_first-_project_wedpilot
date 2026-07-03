@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/vendor_own_provider.dart';
@@ -21,6 +22,9 @@ class _AvailabilityCalendarScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (ref.watch(vendorOwnProvider).status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(vendorOwnProvider.notifier).loadOwnVendorData());
+    }
     final blockedDates = ref.watch(vendorBlockedDatesProvider);
 
     bool isBlocked(DateTime day) {
@@ -41,13 +45,18 @@ class _AvailabilityCalendarScreenState
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
           child: WedButton(
             label: 'Save Availability',
-            onPressed: () {
-              ref.read(vendorOwnProvider.notifier).persistBlockedDates();
-              showWedSnackBar(
-                context,
-                '${blockedDates.length} dates saved',
-                type: SnackType.success,
-              );
+            onPressed: () async {
+              final error = await ref.read(vendorOwnProvider.notifier).persistBlockedDates();
+              if (!context.mounted) return;
+              if (error != null) {
+                showWedSnackBar(context, error, type: SnackType.error);
+              } else {
+                showWedSnackBar(
+                  context,
+                  '${blockedDates.length} dates saved',
+                  type: SnackType.success,
+                );
+              }
             },
           ),
         ),

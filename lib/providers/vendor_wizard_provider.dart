@@ -67,7 +67,7 @@ final weddingPlanPdfBytesProvider = FutureProvider<Uint8List>((ref) async {
   final couple = ref.watch(coupleProfileProvider);
   final vendors = ref.watch(finalChosenVendorsProvider);
   final aiMatches = ref.watch(aiRecommendedVendorsProvider).valueOrNull ?? [];
-  final budget = ref.watch(budgetProvider).budget;
+  final budget = ref.watch(budgetProvider).data;
 
   final reasoningByVendorId = <String, String>{
     for (final m in aiMatches)

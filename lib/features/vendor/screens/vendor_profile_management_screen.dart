@@ -1,8 +1,9 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
@@ -26,7 +27,7 @@ class _VendorProfileManagementScreenState
   @override
   void initState() {
     super.initState();
-    final profile = ref.read(vendorOwnProvider).profile;
+    final profile = ref.read(vendorOwnProvider).data?.profile;
     _descCtrl = TextEditingController(text: profile?.description ?? '');
     _phoneCtrl = TextEditingController(text: profile?.phone ?? '');
     _websiteCtrl = TextEditingController(text: profile?.website ?? '');
@@ -42,14 +43,18 @@ class _VendorProfileManagementScreenState
 
   @override
   Widget build(BuildContext context) {
-    final ownState = ref.watch(vendorOwnProvider);
-    final vendor = ownState.profile ?? ref.watch(vendorProfileProvider);
+    final ownResource = ref.watch(vendorOwnProvider);
+    if (ownResource.status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(vendorOwnProvider.notifier).loadOwnVendorData());
+    }
+    final ownState = ownResource.data;
+    final vendor = ownState?.profile ?? ref.watch(vendorProfileProvider);
     final businessName = vendor?.businessName ?? 'My Business';
     final category = vendor?.category ?? 'Venue';
     final location = vendor?.location ?? '';
     final logoUrl = vendor?.logoUrl;
-    final isSaving = ownState.isSaving;
-    final notificationsEnabled = ownState.notificationsEnabled;
+    final isSaving = ownState?.isSaving ?? false;
+    final notificationsEnabled = ownState?.notificationsEnabled ?? true;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -131,24 +136,27 @@ class _VendorProfileManagementScreenState
                             imageQuality: 80,
                           );
                           if (file == null || !mounted) return;
-                          await ref
+                          final bytes = await file.readAsBytes();
+                          if (!context.mounted) return;
+                          final error = await ref
                               .read(vendorOwnProvider.notifier)
-                              .saveProfile(logoUrl: file.path);
+                              .uploadLogo(bytes, file.name);
+                          if (!context.mounted) return;
+                          if (error != null) {
+                            showWedSnackBar(context, error, type: SnackType.error);
+                          }
                         },
                         child: Stack(
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(16),
                               child: logoUrl != null
-                                  ? (logoUrl.startsWith('http')
-                                      ? Image.network(logoUrl,
-                                          width: 60,
-                                          height: 60,
-                                          fit: BoxFit.cover)
-                                      : Image.file(File(logoUrl),
-                                          width: 60,
-                                          height: 60,
-                                          fit: BoxFit.cover))
+                                  ? Image.network(
+                                      resolveMediaUrl(logoUrl),
+                                      width: 60,
+                                      height: 60,
+                                      fit: BoxFit.cover,
+                                    )
                                   : Container(
                                       width: 60,
                                       height: 60,
@@ -266,7 +274,7 @@ class _VendorProfileManagementScreenState
                     onPressed: isSaving
                         ? null
                         : () async {
-                            await ref
+                            final error = await ref
                                 .read(vendorOwnProvider.notifier)
                                 .saveProfile(
                                   description: _descCtrl.text.trim().isEmpty
@@ -280,9 +288,13 @@ class _VendorProfileManagementScreenState
                                       : _websiteCtrl.text.trim(),
                                 );
                             if (!context.mounted) return;
-                            showWedSnackBar(context,
-                                'Profile updated successfully!',
-                                type: SnackType.success);
+                            if (error != null) {
+                              showWedSnackBar(context, error, type: SnackType.error);
+                            } else {
+                              showWedSnackBar(context,
+                                  'Profile updated successfully!',
+                                  type: SnackType.success);
+                            }
                           },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.amber,

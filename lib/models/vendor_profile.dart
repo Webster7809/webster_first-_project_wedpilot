@@ -22,6 +22,11 @@ class VendorProfile {
   final String? logoUrl;
   final String? phone;
   final String? website;
+  final String? whatsapp;
+  final String? contactEmail;
+  final String? address;
+  final String? instagramHandle;
+  final List<String> blockedDates;
   final double? rating;
   final int reviewCount;
   final double compositeScore;
@@ -45,6 +50,11 @@ class VendorProfile {
     this.logoUrl,
     this.phone,
     this.website,
+    this.whatsapp,
+    this.contactEmail,
+    this.address,
+    this.instagramHandle,
+    this.blockedDates = const [],
     this.rating,
     this.reviewCount = 0,
     this.compositeScore = 0,
@@ -67,6 +77,11 @@ class VendorProfile {
     String? logoUrl,
     String? phone,
     String? website,
+    String? whatsapp,
+    String? contactEmail,
+    String? address,
+    String? instagramHandle,
+    List<String>? blockedDates,
     double? rating,
     int? reviewCount,
     double? compositeScore,
@@ -89,6 +104,11 @@ class VendorProfile {
         logoUrl: logoUrl ?? this.logoUrl,
         phone: phone ?? this.phone,
         website: website ?? this.website,
+        whatsapp: whatsapp ?? this.whatsapp,
+        contactEmail: contactEmail ?? this.contactEmail,
+        address: address ?? this.address,
+        instagramHandle: instagramHandle ?? this.instagramHandle,
+        blockedDates: blockedDates ?? this.blockedDates,
         rating: rating ?? this.rating,
         reviewCount: reviewCount ?? this.reviewCount,
         compositeScore: compositeScore ?? this.compositeScore,
@@ -140,6 +160,11 @@ class VendorProfile {
         logoUrl: json['logo_url'] as String?,
         phone: json['phone'] as String?,
         website: json['website'] as String?,
+        whatsapp: json['whatsapp'] as String?,
+        contactEmail: json['contact_email'] as String?,
+        address: json['address'] as String?,
+        instagramHandle: json['instagram_handle'] as String?,
+        blockedDates: List<String>.from(json['blocked_dates'] ?? []),
         rating: (json['rating'] as num?)?.toDouble(),
         reviewCount: json['review_count'] as int? ?? 0,
         compositeScore: (json['composite_score'] as num?)?.toDouble() ?? 0,
@@ -168,6 +193,11 @@ class VendorProfile {
         'logo_url': logoUrl,
         'phone': phone,
         'website': website,
+        'whatsapp': whatsapp,
+        'contact_email': contactEmail,
+        'address': address,
+        'instagram_handle': instagramHandle,
+        'blocked_dates': blockedDates,
         'rating': rating,
         'review_count': reviewCount,
         'composite_score': compositeScore,

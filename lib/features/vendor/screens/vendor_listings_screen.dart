@@ -1,15 +1,16 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_own_provider.dart';
 import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
 
 class VendorListingsScreen extends ConsumerStatefulWidget {
@@ -38,7 +39,6 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
   }
 
   Future<void> _pickAndAddImage() async {
-    final vendorId = ref.read(vendorProfileProvider)?.id ?? '';
     final picker = ImagePicker();
     final XFile? file = await picker.pickImage(
       source: ImageSource.gallery,
@@ -46,16 +46,19 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
       maxHeight: 1920,
       imageQuality: 85,
     );
-    if (file == null || !mounted) return;
+    if (file == null) return;
+    if (!mounted) return;
     final media = ref.read(vendorMediaProvider);
-    ref.read(vendorOwnProvider.notifier).addMedia(VendorMedia(
-          id: const Uuid().v4(),
-          vendorId: vendorId,
-          type: 'image',
-          url: file.path,
-          sortOrder: media.length,
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    final error = await ref.read(vendorOwnProvider.notifier).addMedia(
+          bytes,
+          file.name,
           isFeatured: media.isEmpty,
-        ));
+        );
+    if (error != null && mounted) {
+      showWedSnackBar(context, error, type: SnackType.error);
+    }
   }
 
   void _showAddServiceSheet({VendorService? existing}) {
@@ -69,6 +72,9 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (ref.watch(vendorOwnProvider).status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(vendorOwnProvider.notifier).loadOwnVendorData());
+    }
     final services = ref.watch(vendorServicesProvider);
     final media = ref.watch(vendorMediaProvider);
     final isServicesTab = _tabController.index == 0;
@@ -119,7 +125,11 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
                 ),
               );
               if (confirmed == true) {
-                ref.read(vendorOwnProvider.notifier).deleteMedia(id);
+                final error = await ref.read(vendorOwnProvider.notifier).deleteMedia(id);
+                if (!context.mounted) return;
+                if (error != null) {
+                  showWedSnackBar(context, error, type: SnackType.error);
+                }
               }
             },
           ),
@@ -208,7 +218,11 @@ class _ServicesTab extends ConsumerWidget {
               ),
             );
             if (confirmed == true) {
-              ref.read(vendorOwnProvider.notifier).deleteService(service.id);
+              final error = await ref.read(vendorOwnProvider.notifier).deleteService(service.id);
+              if (!context.mounted) return;
+              if (error != null) {
+                showWedSnackBar(context, error, type: SnackType.error);
+              }
             }
           },
         );
@@ -403,10 +417,6 @@ class _PortfolioTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isNetwork = kIsWeb ||
-        item.url.startsWith('http') ||
-        item.url.startsWith('blob:');
-
     return GestureDetector(
       onLongPress: onDelete,
       child: ClipRRect(
@@ -414,21 +424,13 @@ class _PortfolioTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            isNetwork
-                ? Image.network(item.url,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                          color: AppColors.creamDark,
-                          child: const Icon(Icons.broken_image_outlined,
-                              color: AppColors.textHint),
-                        ))
-                : Image.file(File(item.url),
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                          color: AppColors.creamDark,
-                          child: const Icon(Icons.broken_image_outlined,
-                              color: AppColors.textHint),
-                        )),
+            Image.network(resolveMediaUrl(item.url),
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                      color: AppColors.creamDark,
+                      child: const Icon(Icons.broken_image_outlined,
+                          color: AppColors.textHint),
+                    )),
             Positioned(
               top: 4,
               right: 4,
@@ -504,7 +506,7 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     final min = double.tryParse(_priceMinCtrl.text.trim()) ?? 0;
@@ -519,28 +521,31 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
     final vendorId = ref.read(vendorProfileProvider)?.id ?? '';
     final notifier = ref.read(vendorOwnProvider.notifier);
 
-    if (widget.existing != null) {
-      notifier.updateService(widget.existing!.copyWith(
-        title: _titleCtrl.text.trim(),
-        description:
-            _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-        priceMin: min,
-        priceMax: max,
-        unit: _unit,
-      ));
-    } else {
-      notifier.addService(VendorService(
-        id: const Uuid().v4(),
-        vendorId: vendorId,
-        title: _titleCtrl.text.trim(),
-        description:
-            _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-        priceMin: min,
-        priceMax: max,
-        unit: _unit,
-      ));
-    }
+    final error = widget.existing != null
+        ? await notifier.updateService(widget.existing!.copyWith(
+            title: _titleCtrl.text.trim(),
+            description:
+                _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+            priceMin: min,
+            priceMax: max,
+            unit: _unit,
+          ))
+        : await notifier.addService(VendorService(
+            id: const Uuid().v4(),
+            vendorId: vendorId,
+            title: _titleCtrl.text.trim(),
+            description:
+                _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+            priceMin: min,
+            priceMax: max,
+            unit: _unit,
+          ));
 
+    if (!mounted) return;
+    if (error != null) {
+      showWedSnackBar(context, error, type: SnackType.error);
+      return;
+    }
     Navigator.pop(context);
   }
 

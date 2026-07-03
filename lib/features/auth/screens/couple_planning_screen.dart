@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/services/gemini_service.dart';
+import '../../../core/services/wedding_ai_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/format_utils.dart';
@@ -62,10 +62,10 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
   final _styleOptions = ['Elegant', 'Rustic', 'Modern', 'Bohemian', 'Traditional', 'Minimalist'];
   final Set<String> _selectedStyles = {};
 
-  // Gemini AI results for step 4
-  GeminiPlanResult? _geminiResult;
-  bool _geminiLoading = false;
-  String? _geminiError;
+  // AI plan results for step 4
+  WeddingPlanResult? _aiPlanResult;
+  bool _aiPlanLoading = false;
+  String? _aiPlanError;
 
   static const _stepLabels = [
     "LET'S PLAN YOUR DAY",
@@ -156,6 +156,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     final categories = _activeCategories();
     ref.read(selectedServiceCategoriesProvider.notifier).state = categories;
     ref.read(wizardLocationProvider.notifier).state = _locationCtrl.text.trim();
+    ref.read(wizardStylesProvider.notifier).state = _selectedStyles.toList();
     ref.read(budgetClassProvider.notifier).state = switch (_weddingClass) {
       'Low class' => BudgetClass.budgetFriendly,
       'High class' => BudgetClass.highClass,
@@ -170,13 +171,13 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           serviceCategories: categories,
         );
     setState(() => _step++);
-    _loadGeminiPlan(totalBudget, categories);
+    _loadWeddingAiPlan(totalBudget, categories);
   }
 
-  Future<void> _loadGeminiPlan(double totalBudget, List<String> categories) async {
-    setState(() { _geminiLoading = true; _geminiError = null; });
+  Future<void> _loadWeddingAiPlan(double totalBudget, List<String> categories) async {
+    setState(() { _aiPlanLoading = true; _aiPlanError = null; });
     try {
-      final result = await GeminiService.instance.generateWeddingPlan(
+      final result = await WeddingAiService.instance.generateWeddingPlan(
         totalBudget: totalBudget,
         currency: 'ZMW',
         weddingType: _weddingType,
@@ -188,9 +189,9 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         categories: categories,
         topVendorNames: const {},
       );
-      if (mounted) setState(() { _geminiResult = result; _geminiLoading = false; });
+      if (mounted) setState(() { _aiPlanResult = result; _aiPlanLoading = false; });
     } catch (e) {
-      if (mounted) setState(() { _geminiError = e.toString(); _geminiLoading = false; });
+      if (mounted) setState(() { _aiPlanError = e.toString(); _aiPlanLoading = false; });
     }
   }
 
@@ -616,11 +617,11 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Gemini AI Plan Summary ──────────────────────────────────────────
-        _GeminiSummaryCard(
-          loading: _geminiLoading,
-          result: _geminiResult,
-          error: _geminiError,
+        // ── AI Plan Summary ──────────────────────────────────────────────────
+        _AiPlanSummaryCard(
+          loading: _aiPlanLoading,
+          result: _aiPlanResult,
+          error: _aiPlanError,
           categories: categories,
         ),
         const SizedBox(height: 20),
@@ -674,7 +675,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                   if (bestByCategory[category] != null)
                     _PlanVendorCard(
                       match: bestByCategory[category],
-                      overrideReasoning: _geminiResult?.vendorReasonings[category],
+                      overrideReasoning: _aiPlanResult?.vendorReasonings[category],
                     )
                   else
                     Text(
@@ -714,11 +715,11 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
             );
           },
         ),
-        if (budgetState.hasBudget) ...[
+        if (budgetState.hasData) ...[
           const SizedBox(height: 10),
           WizardSectionLabel(icon: Icons.pie_chart_outline_rounded, label: 'Budget breakdown'),
           const SizedBox(height: 12),
-          _BudgetBreakdownCard(budget: budgetState.budget!),
+          _BudgetBreakdownCard(budget: budgetState.data!),
           const SizedBox(height: 24),
         ],
         pdfAsync.when(
@@ -730,26 +731,14 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
             'Could not prepare your plan document. Please try again.',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
           ),
-          data: (bytes) => Column(
-            children: [
-              WedButton(
-                label: 'Share to WhatsApp & more',
-                icon: Icons.ios_share_rounded,
-                variant: WedButtonVariant.primaryDark,
-                onPressed: () =>
-                    Printing.sharePdf(bytes: bytes, filename: 'wedpilot-wedding-plan.pdf'),
-              ),
-              const SizedBox(height: 12),
-              WedButton(
-                label: 'Download PDF',
-                icon: Icons.download_rounded,
-                variant: WedButtonVariant.secondary,
-                onPressed: () => Printing.layoutPdf(
-                  onLayout: (_) async => bytes,
-                  name: 'wedpilot-wedding-plan.pdf',
-                ),
-              ),
-            ],
+          data: (bytes) => WedButton(
+            label: 'Download PDF',
+            icon: Icons.download_rounded,
+            variant: WedButtonVariant.secondary,
+            onPressed: () => Printing.layoutPdf(
+              onLayout: (_) async => bytes,
+              name: 'wedpilot-wedding-plan.pdf',
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -1467,15 +1456,15 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
-// ── Gemini AI summary card ────────────────────────────────────────────────────
+// ── AI plan summary card ────────────────────────────────────────────────────
 
-class _GeminiSummaryCard extends StatelessWidget {
+class _AiPlanSummaryCard extends StatelessWidget {
   final bool loading;
-  final GeminiPlanResult? result;
+  final WeddingPlanResult? result;
   final String? error;
   final List<String> categories;
 
-  const _GeminiSummaryCard({
+  const _AiPlanSummaryCard({
     required this.loading,
     required this.result,
     required this.error,
@@ -1513,7 +1502,7 @@ class _GeminiSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           if (loading) ...[
-            const _GeminiShimmerLines(),
+            const _AiPlanShimmerLines(),
           ] else if (error != null) ...[
             Text(
               'AI summary unavailable — check your API key in .env',
@@ -1593,14 +1582,14 @@ class _BudgetAdviceRow extends StatelessWidget {
   }
 }
 
-class _GeminiShimmerLines extends StatefulWidget {
-  const _GeminiShimmerLines();
+class _AiPlanShimmerLines extends StatefulWidget {
+  const _AiPlanShimmerLines();
 
   @override
-  State<_GeminiShimmerLines> createState() => _GeminiShimmerLinesState();
+  State<_AiPlanShimmerLines> createState() => _AiPlanShimmerLinesState();
 }
 
-class _GeminiShimmerLinesState extends State<_GeminiShimmerLines>
+class _AiPlanShimmerLinesState extends State<_AiPlanShimmerLines>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,

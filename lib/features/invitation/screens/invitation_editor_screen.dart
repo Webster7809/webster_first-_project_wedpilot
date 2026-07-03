@@ -973,39 +973,41 @@ class _InvitationEditorScreenState
           ),
           const SizedBox(height: 16),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               for (final clr in _cardThemeColors)
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: GestureDetector(
-                    onTap: () => setState(() => _cardBgColor = clr),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: clr,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: _cardBgColor.toARGB32() == clr.toARGB32()
-                              ? theme.colorScheme.onSurface
-                              : Colors.transparent,
-                          width: 2.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: clr.withAlpha(
-                                _cardBgColor.toARGB32() == clr.toARGB32()
-                                    ? 100
-                                    : 40),
-                            blurRadius: 6,
+                Expanded(
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _cardBgColor = clr),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: clr,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _cardBgColor.toARGB32() == clr.toARGB32()
+                                ? theme.colorScheme.onSurface
+                                : Colors.transparent,
+                            width: 2.5,
                           ),
-                        ],
+                          boxShadow: [
+                            BoxShadow(
+                              color: clr.withAlpha(
+                                  _cardBgColor.toARGB32() == clr.toARGB32()
+                                      ? 100
+                                      : 40),
+                              blurRadius: 6,
+                            ),
+                          ],
+                        ),
+                        child: _cardBgColor.toARGB32() == clr.toARGB32()
+                            ? const Icon(Icons.check_rounded,
+                                color: Colors.white, size: 18)
+                            : null,
                       ),
-                      child: _cardBgColor.toARGB32() == clr.toARGB32()
-                          ? const Icon(Icons.check_rounded,
-                              color: Colors.white, size: 18)
-                          : null,
                     ),
                   ),
                 ),
@@ -2314,6 +2316,10 @@ class _CustomColorPickerDialogState extends State<_CustomColorPickerDialog> {
     final theme = Theme.of(context);
     return AlertDialog(
       title: Text('Custom Color', style: AppTextStyles.titleMedium),
+      // Content (preview circle + 3 sliders + hex chip) can be taller than
+      // the available height on shorter screens — scrollable: true keeps
+      // every element fully reachable instead of clipping/overflowing.
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

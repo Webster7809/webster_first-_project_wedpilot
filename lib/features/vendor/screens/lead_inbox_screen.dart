@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/router/app_routes.dart';
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/messaging.dart';
@@ -30,6 +31,9 @@ class _LeadInboxScreenState extends ConsumerState<LeadInboxScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (ref.watch(vendorOwnProvider).status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(vendorOwnProvider.notifier).loadOwnVendorData());
+    }
     final inquiries = ref.watch(vendorInquiriesProvider);
     final unreadCount =
         inquiries.where((i) => i.status == InquiryStatus.newInquiry).length;

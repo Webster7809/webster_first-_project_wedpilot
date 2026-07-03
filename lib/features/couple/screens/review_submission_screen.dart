@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/services/vendor_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_text_field.dart';
 import '../../../widgets/wed_snack_bar.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_provider.dart';
 
 class ReviewSubmissionScreen extends ConsumerStatefulWidget {
@@ -38,18 +40,39 @@ class _ReviewSubmissionScreenState extends ConsumerState<ReviewSubmissionScreen>
       showWedSnackBar(context, 'Please fill in all fields', type: SnackType.warning);
       return;
     }
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) {
+      showWedSnackBar(context, 'Not signed in.', type: SnackType.error);
+      return;
+    }
+
     setState(() => _submitting = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      showWedSnackBar(context, 'Review submitted! It will appear after moderation.', type: SnackType.success);
+    try {
+      await VendorApiService.instance.submitReview(
+        token,
+        _selectedVendorId!,
+        rating: _rating,
+        title: _titleCtrl.text.trim(),
+        body: _bodyCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      showWedSnackBar(context, 'Review submitted!', type: SnackType.success);
       context.pop();
+    } on VendorApiException catch (e) {
+      if (!mounted) return;
+      showWedSnackBar(context, e.message, type: SnackType.error);
+    } catch (_) {
+      if (!mounted) return;
+      showWedSnackBar(context, 'Could not reach the server. Please try again.', type: SnackType.error);
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final wishlistedIds = ref.watch(wishlistProvider);
-    final allVendors = ref.watch(allVendorsProvider);
+    final allVendors = ref.watch(allVendorsProvider).valueOrNull ?? [];
     final vendorOptions = wishlistedIds.isEmpty
         ? allVendors
         : allVendors.where((v) => wishlistedIds.contains(v.id)).toList();

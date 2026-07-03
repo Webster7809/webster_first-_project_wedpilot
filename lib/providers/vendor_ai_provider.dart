@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/vendor_profile.dart';
-import '../core/fixtures/vendor_fixtures.dart';
+import '../core/services/wedding_ai_service.dart';
+import '../core/utils/geo_utils.dart';
 import 'auth_provider.dart';
 import 'vendor_provider.dart';
 
@@ -63,14 +64,16 @@ final budgetClassProvider =
 /// Location entered by the couple in wizard Step 0 — takes priority over profile location.
 final wizardLocationProvider = StateProvider<String?>((ref) => null);
 
+/// Style preferences chosen by the couple in wizard Step 2 — feeds the AI vendor matcher.
+final wizardStylesProvider = StateProvider<List<String>>((ref) => const []);
+
 final aiRecommendedVendorsProvider =
     FutureProvider<List<VendorMatch>>((ref) async {
   final budgetClass = ref.watch(budgetClassProvider);
   final categories = ref.watch(selectedServiceCategoriesProvider);
   final coupleProfile = ref.watch(coupleProfileProvider);
   final wizardLocation = ref.watch(wizardLocationProvider);
-
-  await Future.delayed(const Duration(milliseconds: 900));
+  final wizardStyles = ref.watch(wizardStylesProvider);
 
   final locationString = (wizardLocation != null && wizardLocation.isNotEmpty)
       ? wizardLocation
@@ -78,16 +81,63 @@ final aiRecommendedVendorsProvider =
   final coords =
       locationString != null ? coordsForLocation(locationString) : null;
 
-  return _AiEngine.recommend(
-    vendors: mockVendors,
-    budgetClass: budgetClass,
-    categories: categories,
-    coupleLat: coords?[0],
-    coupleLon: coords?[1],
-  );
+  final allVendors = await ref.watch(allVendorsProvider.future);
+  final pool = _AiEngine.filterEligible(allVendors, budgetClass, categories);
+  final scored = _AiEngine.scoreAll(pool, budgetClass, coords?[0], coords?[1]);
+  final localFallback =
+      _AiEngine.recommend(pool: pool, scored: scored, budgetClass: budgetClass);
+
+  if (scored.isEmpty) return localFallback;
+
+  try {
+    final suggestions = await WeddingAiService.instance.matchVendors(
+      budgetClass: budgetClass.name,
+      location: locationString,
+      styles: wizardStyles,
+      categorized: _AiEngine.buildCandidates(scored),
+    );
+
+    final requestedCategories = scored.map((s) => s.vendor.category).toSet();
+    final valid = requestedCategories.every((cat) {
+      final sug = suggestions[cat];
+      return sug != null &&
+          scored.any((s) => s.vendor.category == cat && s.vendor.id == sug.vendorId);
+    });
+    if (!valid) return localFallback;
+
+    final catCounts = <String, int>{
+      for (final cat in requestedCategories)
+        cat: scored.where((s) => s.vendor.category == cat).length,
+    };
+
+    final results = <VendorMatch>[];
+    for (final entry in suggestions.entries) {
+      final match = scored.firstWhere((s) => s.vendor.id == entry.value.vendorId);
+      results.add(VendorMatch(
+        vendorId: match.vendor.id,
+        vendor: match.vendor,
+        finalScore: entry.value.confidence,
+        reputationScore: match.reputation,
+        budgetScore: match.value,
+        locationScore: match.location,
+        availabilityScore: 1.0,
+        reasoning: entry.value.reasoning,
+        rankInCategory: 1,
+        totalInCategory: catCounts[entry.key] ?? 1,
+      ));
+    }
+    return results;
+  } catch (_) {
+    return localFallback;
+  }
 });
 
 // ── AI Recommendation Engine ────────────────────────────────────────────────
+//
+// `filterEligible` + `scoreAll` compute the grounding signals sent to the real
+// LLM matcher (see `WeddingAiService.matchVendors`). `recommend` composes them
+// into a fully ranked local result and serves as the offline fallback when the
+// LLM call fails or returns something malformed.
 
 class _AiEngine {
   _AiEngine._();
@@ -96,37 +146,77 @@ class _AiEngine {
   static const double _minRatingBudget = 3.5;
   static const double _minRatingFlexible = 3.0;
 
-  static List<VendorMatch> recommend({
-    required List<VendorProfile> vendors,
-    required BudgetClass budgetClass,
-    required List<String> categories,
-    double? coupleLat,
-    double? coupleLon,
-  }) {
+  static List<VendorProfile> filterEligible(
+    List<VendorProfile> vendors,
+    BudgetClass budgetClass,
+    List<String> categories,
+  ) {
     var pool = categories.isEmpty
         ? vendors
         : vendors.where((v) => categories.contains(v.category)).toList();
 
     pool = pool.where((v) => _eligible(v, budgetClass)).toList();
+    return pool;
+  }
 
-    final scored = pool.map((v) {
-      final rep = v.performanceScore; // deduped: same formula as old _reputationScore
+  static List<_ScoredVendor> scoreAll(
+    List<VendorProfile> pool,
+    BudgetClass budgetClass,
+    double? coupleLat,
+    double? coupleLon,
+  ) {
+    return pool.map((v) {
+      final rep = v.performanceScore;
       final loc = _locationScore(v, coupleLat, coupleLon);
       final val = _valueScore(v, budgetClass);
       final fin = _finalScore(rep, loc, val, budgetClass);
       return _ScoredVendor(
           vendor: v, reputation: rep, location: loc, value: val, finalScore: fin);
     }).toList();
+  }
 
-    scored.sort((a, b) => b.finalScore.compareTo(a.finalScore));
+  /// Groups scored vendors by category into request DTOs for the AI matcher.
+  static Map<String, List<VendorMatchCandidate>> buildCandidates(
+    List<_ScoredVendor> scored,
+  ) {
+    final byCategory = <String, List<VendorMatchCandidate>>{};
+    for (final s in scored) {
+      final v = s.vendor;
+      byCategory.putIfAbsent(v.category, () => []).add(
+            VendorMatchCandidate(
+              vendorId: v.id,
+              businessName: v.businessName,
+              location: v.location,
+              styleTags: v.styleTags,
+              rating: v.rating,
+              reviewCount: v.reviewCount,
+              priceTier: v.priceTier.name,
+              priceMin: v.priceMin,
+              priceMax: v.priceMax,
+              reputationScore: s.reputation,
+              locationScore: s.location,
+              valueScore: s.value,
+            ),
+          );
+    }
+    return byCategory;
+  }
+
+  /// Local, deterministic ranking — cannot throw. Used as the LLM fallback.
+  static List<VendorMatch> recommend({
+    required List<VendorProfile> pool,
+    required List<_ScoredVendor> scored,
+    required BudgetClass budgetClass,
+  }) {
+    final ranked = [...scored]..sort((a, b) => b.finalScore.compareTo(a.finalScore));
 
     final catTotal = <String, int>{};
-    for (final s in scored) {
+    for (final s in ranked) {
       catTotal[s.vendor.category] = (catTotal[s.vendor.category] ?? 0) + 1;
     }
     final catRank = <String, int>{};
 
-    return scored.map((s) {
+    return ranked.map((s) {
       final rank = (catRank[s.vendor.category] ?? 0) + 1;
       catRank[s.vendor.category] = rank;
       return VendorMatch(

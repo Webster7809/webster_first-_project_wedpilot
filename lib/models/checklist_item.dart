@@ -19,6 +19,17 @@ class ChecklistItem {
     this.linkedVendorName,
   });
 
+  factory ChecklistItem.fromJson(Map<String, dynamic> json) => ChecklistItem(
+        id: json['id'] as String,
+        coupleId: json['couple_id'] as String? ?? '',
+        phase: json['phase'] as String,
+        task: json['task'] as String,
+        isCompleted: json['is_completed'] as bool? ?? false,
+        dueDate: json['due_date'] != null ? DateTime.parse(json['due_date'] as String) : null,
+        linkedVendorId: json['linked_vendor_id'] as String?,
+        linkedVendorName: json['linked_vendor_name'] as String?,
+      );
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'couple_id': coupleId,

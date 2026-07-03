@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import '../core/services/auth_service.dart';
 import '../core/services/couple_profile_service.dart';
 import '../core/services/token_service.dart';
+import '../core/services/vendor_api_service.dart';
 import '../models/user.dart';
 import '../models/couple_profile.dart';
 import '../models/vendor_profile.dart';
@@ -70,9 +70,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // re-reading from secure storage — only cold-start restore needs that read.
   String? _accessToken;
 
-  Box get _onboardingBox => Hive.box('app_settings');
-  bool hasOnboarded(String userId) => _onboardingBox.get('onboarded_$userId', defaultValue: false) as bool;
-  void markOnboarded(String userId) => _onboardingBox.put('onboarded_$userId', true);
+  /// The current session's bearer token, for any provider/service that needs
+  /// to authenticate a backend call. Null means "not signed in."
+  String? get accessToken => _accessToken;
 
   Future<void> login(String email, String password) async {
     state = state.copyWith(isLoading: true, error: null);
@@ -130,8 +130,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (coupleProfile != null) _coupleProfiles[user.id] = coupleProfile;
       needsOnboarding = coupleProfile == null;
     } else if (user.role == UserRole.vendor) {
-      vendorProfile = _vendorProfiles[user.id];
-      needsOnboarding = forceOnboarding || !hasOnboarded(user.id);
+      vendorProfile = await _fetchVendorProfileGracefully(result.accessToken);
+      if (vendorProfile != null) _vendorProfiles[user.id] = vendorProfile;
+      needsOnboarding = forceOnboarding || vendorProfile == null;
     } else {
       needsOnboarding = false;
     }
@@ -155,6 +156,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Fetches the vendor's saved profile, treating any network/server failure
+  /// the same as "no profile yet" rather than blocking login/restore. This is
+  /// the source of truth for whether a vendor still needs onboarding — an
+  /// existing vendor with a saved profile always skips straight to their
+  /// dashboard, on any device.
+  Future<VendorProfile?> _fetchVendorProfileGracefully(String accessToken) async {
+    try {
+      return await VendorApiService.instance.fetchMyProfile(accessToken);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Restores a session on app cold-start after the stored access token was
   /// validated against the backend (see sessionRestoreProvider).
   Future<void> restoreSession(User user, {required String accessToken}) async {
@@ -168,8 +182,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (coupleProfile != null) _coupleProfiles[user.id] = coupleProfile;
       needsOnboarding = coupleProfile == null;
     } else if (user.role == UserRole.vendor) {
-      vendorProfile = _vendorProfiles[user.id];
-      needsOnboarding = !hasOnboarded(user.id);
+      vendorProfile = await _fetchVendorProfileGracefully(accessToken);
+      if (vendorProfile != null) _vendorProfiles[user.id] = vendorProfile;
+      needsOnboarding = vendorProfile == null;
     } else {
       needsOnboarding = false;
     }
@@ -229,9 +244,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   void completeVendorOnboarding() {
-    final userId = state.user?.id;
-    if (userId != null) markOnboarded(userId);
     state = state.copyWith(needsOnboarding: false);
+  }
+
+  /// Called once a vendor's profile has actually been saved to the backend
+  /// (see vendor_onboarding_screen.dart), so the rest of the app sees it
+  /// immediately without a refetch.
+  void setVendorProfile(VendorProfile profile) {
+    final userId = state.user?.id;
+    if (userId != null) _vendorProfiles[userId] = profile;
+    state = state.copyWith(vendorProfile: profile);
   }
 
   Future<void> forgotPassword(String email) async {

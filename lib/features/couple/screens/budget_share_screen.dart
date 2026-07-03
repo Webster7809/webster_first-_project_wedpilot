@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/budget.dart';
@@ -13,9 +14,8 @@ class BudgetShareScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final budgetState = ref.watch(budgetProvider);
-    final budget = budgetState.budget;
 
-    if (budget == null) {
+    if (!budgetState.hasData) {
       return Scaffold(
         backgroundColor: AppColors.cream,
         appBar: AppBar(
@@ -28,13 +28,19 @@ class BudgetShareScreen extends ConsumerWidget {
           title: const Text('Budget Summary',
               style: TextStyle(color: Colors.white)),
         ),
-        body: const Center(
-          child: Text('No budget set up yet.',
-              style: TextStyle(color: AppColors.textSecondary)),
+        body: Center(
+          child: budgetState.status == ResourceStatus.loading
+              ? const CircularProgressIndicator()
+              : budgetState.hasError
+                  ? Text(budgetState.errorMessage ?? 'Something went wrong.',
+                      style: const TextStyle(color: AppColors.textSecondary))
+                  : const Text('No budget set up yet.',
+                      style: TextStyle(color: AppColors.textSecondary)),
         ),
       );
     }
 
+    final budget = budgetState.data!;
     final categories = budget.categories;
     final bookedCount = categories.where((c) => c.spentAmount > 0).length;
     final pendingCount = categories.length - bookedCount;

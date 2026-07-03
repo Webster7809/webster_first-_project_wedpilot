@@ -134,7 +134,11 @@ class _ProfileHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.forestGreen, AppColors.coupleMagenta, AppColors.forestGreen],
+          colors: [
+            AppColors.forestGreen,
+            AppColors.coupleMagenta,
+            AppColors.forestGreen,
+          ],
           stops: [0.0, 0.55, 1.0],
         ),
       ),
@@ -149,7 +153,10 @@ class _ProfileHero extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withAlpha(51),
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withAlpha(128), width: 2),
+                border: Border.all(
+                  color: Colors.white.withAlpha(128),
+                  width: 2,
+                ),
               ),
               child: const Center(
                 child: Text('💍', style: TextStyle(fontSize: 32)),
@@ -181,8 +188,19 @@ class _ProfileHero extends StatelessWidget {
 
   String _formatDate(DateTime d) {
     const months = [
-      '', 'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      '',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return '${months[d.month]} ${d.day}, ${d.year}';
   }
@@ -277,7 +295,12 @@ class _SettingsList extends StatelessWidget {
           for (int i = 0; i < items.length; i++) ...[
             items[i],
             if (i < items.length - 1)
-              const Divider(height: 1, indent: 52, endIndent: 0, color: AppColors.divider),
+              const Divider(
+                height: 1,
+                indent: 52,
+                endIndent: 0,
+                color: AppColors.divider,
+              ),
           ],
         ],
       ),
@@ -300,20 +323,27 @@ class _SettingItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = isDestructive ? AppColors.error : AppColors.textSecondary;
-    return ListTile(
-      onTap: onTap,
-      leading: Icon(icon, size: 22, color: color),
-      title: Text(
-        label,
-        style: AppTextStyles.bodyMedium.copyWith(
-          color: isDestructive ? AppColors.error : AppColors.textPrimary,
-          fontWeight: isDestructive ? FontWeight.w600 : FontWeight.normal,
+    return Material(
+      type: MaterialType.transparency,
+      child: ListTile(
+        onTap: onTap,
+        leading: Icon(icon, size: 22, color: color),
+        title: Text(
+          label,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: isDestructive ? AppColors.error : AppColors.textPrimary,
+            fontWeight: isDestructive ? FontWeight.w600 : FontWeight.normal,
+          ),
         ),
+        trailing: isDestructive
+            ? null
+            : const Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: AppColors.textHint,
+              ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       ),
-      trailing: isDestructive
-          ? null
-          : const Icon(Icons.chevron_right, size: 20, color: AppColors.textHint),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }
 }

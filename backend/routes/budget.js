@@ -1,0 +1,268 @@
+const express = require('express');
+const Budget = require('../db/models/budget');
+const BudgetCategory = require('../db/models/budgetCategory');
+const BudgetCustomItem = require('../db/models/budgetCustomItem');
+const Expense = require('../db/models/expense');
+const CoupleProfile = require('../db/models/coupleProfile');
+const verifyJwt = require('../middleware/verifyJwt');
+const { requireCouple } = require('../middleware/roles');
+const { makeUploader, relativeUploadUrl } = require('../middleware/upload');
+const { buildCategoriesFor } = require('../constants/budgetTemplate');
+
+const router = express.Router();
+const receiptUploader = makeUploader('receipts', { allowedMimePrefixes: ['image/'], maxSizeMb: 8 });
+
+// ── Serialization ────────────────────────────────────────────────────────────────
+
+function serializeCategory(c) {
+  return {
+    id: c.id,
+    budget_id: c.budget_id,
+    category_name: c.category_name,
+    category_icon: c.category_icon,
+    allocated_amount: Number(c.allocated_amount),
+    spent_amount: Number(c.spent_amount),
+    ai_justification: c.ai_justification,
+  };
+}
+
+function serializeCustomItem(i) {
+  return { id: i.id, name: i.name, amount: Number(i.amount) };
+}
+
+function serializeExpense(e) {
+  return {
+    expense_id: e.expense_id,
+    budget_id: e.budget_id,
+    category_name: e.category_name,
+    vendor_id: e.vendor_id,
+    vendor_name: e.vendor_name,
+    amount: Number(e.amount),
+    description: e.description,
+    receipt_url: e.receipt_url,
+    status: e.status,
+    created_at: e.created_at,
+  };
+}
+
+async function serializeBudget(budget) {
+  const [categories, customItems, expenses] = await Promise.all([
+    BudgetCategory.findAll({ where: { budget_id: budget.budget_id } }),
+    BudgetCustomItem.findAll({ where: { budget_id: budget.budget_id } }),
+    Expense.findAll({ where: { budget_id: budget.budget_id }, order: [['created_at', 'DESC']] }),
+  ]);
+  return {
+    budget_id: budget.budget_id,
+    couple_id: budget.couple_user_id,
+    total_amount: Number(budget.total_amount),
+    currency: budget.currency,
+    is_ai_generated: budget.is_ai_generated,
+    categories: categories.map(serializeCategory),
+    custom_items: customItems.map(serializeCustomItem),
+    expenses: expenses.map(serializeExpense),
+    created_at: budget.created_at,
+  };
+}
+
+async function findOwnBudgetOr404(req, res) {
+  const budget = await Budget.findOne({ where: { couple_user_id: req.user.user_id } });
+  if (!budget) {
+    res.status(404).json({ error: 'No budget yet.' });
+    return null;
+  }
+  return budget;
+}
+
+// ── POST /api/budget ────────────────────────────────────────────────────────────
+// Explicit create/update. Generates categories from the template only when no
+// budget exists yet; on repeat calls it only updates total_amount/currency and
+// leaves existing categories/expenses untouched (reallocating on every budget
+// edit is out of scope — the couple can adjust categories manually).
+router.post('/', verifyJwt, requireCouple, async (req, res) => {
+  const { total_amount, currency, service_categories, custom_items } = req.body;
+  if (typeof total_amount !== 'number' || total_amount < 0) {
+    return res.status(400).json({ error: 'total_amount must be a non-negative number.' });
+  }
+
+  try {
+    let budget = await Budget.findOne({ where: { couple_user_id: req.user.user_id } });
+    if (budget) {
+      budget.total_amount = total_amount;
+      if (currency) budget.currency = currency;
+      await budget.save();
+      return res.json({ budget: await serializeBudget(budget) });
+    }
+
+    budget = await Budget.create({
+      couple_user_id: req.user.user_id,
+      total_amount,
+      currency: currency || 'ZMW',
+      is_ai_generated: true,
+    });
+
+    const customItemRows = Array.isArray(custom_items) ? custom_items : [];
+    if (customItemRows.length) {
+      await BudgetCustomItem.bulkCreate(
+        customItemRows.map((i) => ({ budget_id: budget.budget_id, name: i.name, amount: i.amount })),
+      );
+    }
+    const categories = buildCategoriesFor(total_amount, service_categories, customItemRows);
+    await BudgetCategory.bulkCreate(categories.map((c) => ({ ...c, budget_id: budget.budget_id })));
+
+    res.status(201).json({ budget: await serializeBudget(budget) });
+  } catch (err) {
+    console.error('Create/update budget error:', err.message);
+    res.status(500).json({ error: 'Could not save budget.' });
+  }
+});
+
+// ── GET /api/budget ─────────────────────────────────────────────────────────────
+// Fetch; lazily auto-creates from the template only if the couple's profile
+// already has a total_budget set (a resumed-session safety net for someone
+// who reaches the dashboard without going through the wizard's POST above).
+router.get('/', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    let budget = await Budget.findOne({ where: { couple_user_id: req.user.user_id } });
+    if (!budget) {
+      const profile = await CoupleProfile.findOne({ where: { user_id: req.user.user_id } });
+      if (!profile || profile.total_budget == null) {
+        return res.status(404).json({ error: 'No budget yet.' });
+      }
+      budget = await Budget.create({
+        couple_user_id: req.user.user_id,
+        total_amount: profile.total_budget,
+        currency: profile.currency || 'ZMW',
+        is_ai_generated: true,
+      });
+      const categories = buildCategoriesFor(Number(profile.total_budget), profile.style_tags, []);
+      await BudgetCategory.bulkCreate(categories.map((c) => ({ ...c, budget_id: budget.budget_id })));
+    }
+    res.json({ budget: await serializeBudget(budget) });
+  } catch (err) {
+    console.error('Get budget error:', err.message);
+    res.status(500).json({ error: 'Could not load budget.' });
+  }
+});
+
+// ── PUT /api/budget/categories/:id ──────────────────────────────────────────────
+router.put('/categories/:id', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const budget = await findOwnBudgetOr404(req, res);
+    if (!budget) return;
+    const category = await BudgetCategory.findOne({ where: { id: req.params.id, budget_id: budget.budget_id } });
+    if (!category) return res.status(404).json({ error: 'Category not found.' });
+
+    const { allocated_amount } = req.body;
+    if (typeof allocated_amount !== 'number' || allocated_amount < 0) {
+      return res.status(400).json({ error: 'allocated_amount must be a non-negative number.' });
+    }
+    if (allocated_amount < Number(category.spent_amount)) {
+      return res.status(400).json({
+        error: `Cannot allocate less than already spent (${budget.currency} ${Number(category.spent_amount).toFixed(2)}).`,
+      });
+    }
+
+    category.allocated_amount = allocated_amount;
+    await category.save();
+    res.json({ category: serializeCategory(category) });
+  } catch (err) {
+    console.error('Update category error:', err.message);
+    res.status(500).json({ error: 'Could not update category.' });
+  }
+});
+
+// ── Expenses ─────────────────────────────────────────────────────────────────────
+
+router.post('/expenses', verifyJwt, requireCouple, receiptUploader.single('receipt'), async (req, res) => {
+  try {
+    const budget = await findOwnBudgetOr404(req, res);
+    if (!budget) return;
+
+    const { category_name, amount, description, vendor_id, vendor_name } = req.body;
+    const amountNum = Number(amount);
+    if (!category_name) return res.status(400).json({ error: 'category_name is required.' });
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive number.' });
+    }
+    if (!description || description.trim().length < 3) {
+      return res.status(400).json({ error: 'Description must be at least 3 characters.' });
+    }
+
+    const category = await BudgetCategory.findOne({ where: { budget_id: budget.budget_id, category_name } });
+    if (!category) return res.status(400).json({ error: 'Selected category does not exist in this budget.' });
+
+    const receiptUrl = req.file ? relativeUploadUrl('receipts', req.file.filename) : null;
+    const expense = await Expense.create({
+      budget_id: budget.budget_id,
+      category_name,
+      vendor_id: vendor_id || null,
+      vendor_name: vendor_name || null,
+      amount: amountNum,
+      description: description.trim(),
+      receipt_url: receiptUrl,
+      status: 'paid',
+    });
+
+    category.spent_amount = Number(category.spent_amount) + amountNum;
+    await category.save();
+
+    res.status(201).json({ expense: serializeExpense(expense) });
+  } catch (err) {
+    console.error('Add expense error:', err.message);
+    res.status(500).json({ error: 'Could not add expense.' });
+  }
+});
+
+router.delete('/expenses/:id', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const budget = await findOwnBudgetOr404(req, res);
+    if (!budget) return;
+    const expense = await Expense.findOne({ where: { expense_id: req.params.id, budget_id: budget.budget_id } });
+    if (!expense) return res.status(404).json({ error: 'Expense not found.' });
+
+    const category = await BudgetCategory.findOne({ where: { budget_id: budget.budget_id, category_name: expense.category_name } });
+    if (category) {
+      category.spent_amount = Math.max(0, Number(category.spent_amount) - Number(expense.amount));
+      await category.save();
+    }
+
+    await expense.destroy();
+    res.status(204).send();
+  } catch (err) {
+    console.error('Delete expense error:', err.message);
+    res.status(500).json({ error: 'Could not delete expense.' });
+  }
+});
+
+// ── Custom items ─────────────────────────────────────────────────────────────────
+
+router.post('/custom-items', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const budget = await findOwnBudgetOr404(req, res);
+    if (!budget) return;
+    const { name, amount } = req.body;
+    if (!name || typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({ error: 'name and a positive amount are required.' });
+    }
+    const item = await BudgetCustomItem.create({ budget_id: budget.budget_id, name, amount });
+    res.status(201).json({ custom_item: serializeCustomItem(item) });
+  } catch (err) {
+    console.error('Add custom item error:', err.message);
+    res.status(500).json({ error: 'Could not add item.' });
+  }
+});
+
+router.delete('/custom-items/:id', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const budget = await findOwnBudgetOr404(req, res);
+    if (!budget) return;
+    const deleted = await BudgetCustomItem.destroy({ where: { id: req.params.id, budget_id: budget.budget_id } });
+    if (!deleted) return res.status(404).json({ error: 'Item not found.' });
+    res.status(204).send();
+  } catch (err) {
+    console.error('Delete custom item error:', err.message);
+    res.status(500).json({ error: 'Could not delete item.' });
+  }
+});
+
+module.exports = router;

@@ -4,6 +4,7 @@ class WedTextField extends StatefulWidget {
   final String label;
   final String? hint;
   final String? helperText;
+  final String? errorText;
   final TextEditingController? controller;
   final bool isPassword;
   final TextInputType keyboardType;
@@ -16,12 +17,15 @@ class WedTextField extends StatefulWidget {
   final VoidCallback? onTap;
   final double borderRadius;
   final Color? fillColor;
+  final TextCapitalization textCapitalization;
+  final bool autofocus;
 
   const WedTextField({
     super.key,
     this.label = '',
     this.hint,
     this.helperText,
+    this.errorText,
     this.controller,
     this.isPassword = false,
     this.keyboardType = TextInputType.text,
@@ -34,6 +38,8 @@ class WedTextField extends StatefulWidget {
     this.onTap,
     this.borderRadius = 12,
     this.fillColor,
+    this.textCapitalization = TextCapitalization.none,
+    this.autofocus = false,
   });
 
   @override
@@ -54,9 +60,12 @@ class _WedTextFieldState extends State<WedTextField> {
       maxLines: widget.isPassword ? 1 : widget.maxLines,
       readOnly: widget.readOnly,
       onTap: widget.onTap,
+      textCapitalization: widget.textCapitalization,
+      autofocus: widget.autofocus,
       decoration: InputDecoration(
         hintText: widget.hint,
         helperText: widget.helperText,
+        errorText: widget.errorText,
         filled: widget.fillColor != null,
         fillColor: widget.fillColor,
         isDense: true,

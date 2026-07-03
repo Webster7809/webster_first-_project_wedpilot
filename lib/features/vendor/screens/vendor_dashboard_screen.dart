@@ -3,25 +3,75 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/router/app_routes.dart';
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/messaging.dart';
-import '../../../providers/auth_provider.dart';
+import '../../../models/vendor_profile.dart';
 import '../../../providers/vendor_own_provider.dart';
+import '../../../widgets/wed_button.dart';
 
 class VendorDashboardScreen extends ConsumerWidget {
   const VendorDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final vendor = ref.watch(vendorProfileProvider);
-    final inquiries = ref.watch(vendorInquiriesProvider);
-    final services = ref.watch(vendorServicesProvider);
+    final ownState = ref.watch(vendorOwnProvider);
+
+    if (ownState.status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(vendorOwnProvider.notifier).loadOwnVendorData());
+    }
 
     return Scaffold(
       backgroundColor: AppColors.cream,
-      body: CustomScrollView(
-        slivers: [
+      body: ownState.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (message) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.cloud_off_rounded,
+                    size: 48, color: Theme.of(context).colorScheme.onSurface.withAlpha(102)),
+                const SizedBox(height: 16),
+                Text("Couldn't load your dashboard", style: AppTextStyles.headlineMedium),
+                const SizedBox(height: 8),
+                Text(message,
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 24),
+                WedButton(
+                  label: 'Retry',
+                  onPressed: () => ref.read(vendorOwnProvider.notifier).loadOwnVendorData(),
+                  icon: Icons.refresh_rounded,
+                  borderRadius: 30,
+                ),
+              ],
+            ),
+          ),
+        ),
+        data: (ownData) => _VendorDashboardBody(
+          vendor: ownData.profile,
+          inquiries: ownData.inquiries,
+          services: ownData.services,
+        ),
+      ),
+    );
+  }
+}
+
+class _VendorDashboardBody extends StatelessWidget {
+  final VendorProfile? vendor;
+  final List<Inquiry> inquiries;
+  final List<VendorService> services;
+
+  const _VendorDashboardBody({required this.vendor, required this.inquiries, required this.services});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
           // ── Header ─────────────────────────────────────────────────────────
           SliverAppBar(
             pinned: true,
@@ -175,6 +225,11 @@ class VendorDashboardScreen extends ConsumerWidget {
                       label: 'Upgrade',
                       onTap: () => context.push(AppRoutes.vendorSubscription),
                     ),
+                    _QuickAction(
+                      icon: Icons.edit_note_rounded,
+                      label: 'Update listing',
+                      onTap: () => context.push(AppRoutes.vendorOnboarding),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 28),
@@ -270,8 +325,7 @@ class VendorDashboardScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
+      );
   }
 }
 

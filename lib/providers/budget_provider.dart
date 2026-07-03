@@ -1,84 +1,78 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/budget.dart';
 import '../models/couple_profile.dart';
 import '../core/services/budget_service.dart';
+import '../core/services/budget_api_service.dart';
+import '../core/state/resource.dart';
+import 'auth_provider.dart';
 
 export '../core/services/budget_service.dart' show BudgetSummary;
 
-enum BudgetStatus { initial, loading, ready, error }
+class BudgetNotifier extends StateNotifier<Resource<Budget>> {
+  BudgetNotifier(this._ref) : super(const Resource());
 
-class BudgetState {
-  final BudgetStatus status;
-  final Budget? budget;
-  final String? errorMessage;
+  final Ref _ref;
+  final BudgetApiService _service = BudgetApiService.instance;
 
-  const BudgetState({
-    this.status = BudgetStatus.initial,
-    this.budget,
-    this.errorMessage,
-  });
-
-  static const _absent = Object();
-
-  BudgetState copyWith({
-    BudgetStatus? status,
-    Budget? budget,
-    Object? errorMessage = _absent,
-  }) {
-    return BudgetState(
-      status: status ?? this.status,
-      budget: budget ?? this.budget,
-      errorMessage:
-          identical(errorMessage, _absent) ? this.errorMessage : errorMessage as String?,
-    );
-  }
-
-  bool get isLoading => status == BudgetStatus.loading;
-  bool get hasError => status == BudgetStatus.error;
-  bool get hasBudget => budget != null;
-}
-
-class BudgetNotifier extends StateNotifier<BudgetState> {
-  BudgetNotifier() : super(const BudgetState());
+  String? get _token => _ref.read(authProvider.notifier).accessToken;
 
   // ── Initialization ──────────────────────────────────────────────────────────
 
+  /// Dashboard path — fetches the couple's existing budget (or lazily
+  /// auto-creates one server-side if their profile already has a total set).
   Future<void> initializeBudgetForProfile(CoupleProfile? profile) async {
     if (profile == null || !profile.hasBudget) return;
-    if (state.hasBudget && state.status == BudgetStatus.ready) return;
-    await loadBudget(
-      total: profile.totalBudget!,
-      currency: profile.currency,
-    );
+    if (state.hasData && state.status == ResourceStatus.ready) return;
+
+    final token = _token;
+    if (token == null) return;
+    state = state.copyWith(status: ResourceStatus.loading);
+    try {
+      final budget = await _service.fetchBudget(token);
+      if (budget == null) {
+        state = state.copyWith(status: ResourceStatus.ready);
+        return;
+      }
+      state = state.copyWith(status: ResourceStatus.ready, data: budget);
+    } on BudgetApiException catch (e) {
+      state = state.copyWith(status: ResourceStatus.error, errorMessage: e.message);
+    } catch (_) {
+      state = state.copyWith(
+        status: ResourceStatus.error,
+        errorMessage: 'Could not reach the server. Please try again.',
+      );
+    }
   }
 
+  /// Wizard path — explicit create/update.
   Future<void> loadBudget({
     required double total,
     required String currency,
     List<String>? serviceCategories,
     List<BudgetCustomItem>? customItems,
   }) async {
-    state = state.copyWith(status: BudgetStatus.loading, errorMessage: null);
-    await Future.delayed(const Duration(milliseconds: 250));
-
+    final token = _token;
+    if (token == null) {
+      state = state.copyWith(status: ResourceStatus.error, errorMessage: 'Not signed in.');
+      return;
+    }
+    state = state.copyWith(status: ResourceStatus.loading, errorMessage: null);
     try {
-      Budget budget = BudgetService.createFromTemplate(
+      final budget = await _service.initBudget(
+        token,
         total: total,
         currency: currency,
         serviceCategories: serviceCategories,
         customItems: customItems,
       );
-
-      // Seed realistic sample expenses so the dashboard looks populated
-      final seeds = _seedExpenses(budget);
-      for (final e in seeds) {
-        budget = BudgetService.addExpense(budget, e);
-      }
-
-      state = state.copyWith(status: BudgetStatus.ready, budget: budget);
-    } catch (e) {
+      state = state.copyWith(status: ResourceStatus.ready, data: budget);
+    } on BudgetApiException catch (e) {
+      state = state.copyWith(status: ResourceStatus.error, errorMessage: e.message);
+    } catch (_) {
       state = state.copyWith(
-        status: BudgetStatus.error,
+        status: ResourceStatus.error,
         errorMessage: 'Unable to generate budget. Please try again.',
       );
     }
@@ -87,8 +81,12 @@ class BudgetNotifier extends StateNotifier<BudgetState> {
   // ── Expense CRUD ────────────────────────────────────────────────────────────
 
   /// Returns a validation error string, or null on success.
-  String? addExpense(Expense expense) {
-    final budget = state.budget;
+  Future<String?> addExpense(
+    Expense expense, {
+    Uint8List? receiptBytes,
+    String? receiptFilename,
+  }) async {
+    final budget = state.data;
     if (budget == null) return 'No active budget found.';
 
     final error = BudgetService.validateExpense(
@@ -99,30 +97,55 @@ class BudgetNotifier extends StateNotifier<BudgetState> {
     );
     if (error != null) return error;
 
-    state = state.copyWith(
-      budget: BudgetService.addExpense(budget, expense),
-    );
-    return null;
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+
+    try {
+      final created = await _service.addExpense(
+        token,
+        categoryName: expense.categoryName,
+        amount: expense.amount,
+        description: expense.description,
+        vendorId: expense.vendorId,
+        vendorName: expense.vendorName,
+        receiptBytes: receiptBytes,
+        receiptFilename: receiptFilename,
+      );
+      state = state.copyWith(data: BudgetService.addExpense(budget, created));
+      return null;
+    } on BudgetApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
   /// Returns a validation error string, or null on success.
-  String? removeExpense(String expenseId) {
-    final budget = state.budget;
+  Future<String?> removeExpense(String expenseId) async {
+    final budget = state.data;
     if (budget == null) return 'No active budget found.';
     if (budget.expenses.every((e) => e.id != expenseId)) {
       return 'Expense not found.';
     }
 
-    state = state.copyWith(
-      budget: BudgetService.removeExpense(budget, expenseId),
-    );
-    return null;
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+
+    try {
+      await _service.removeExpense(token, expenseId);
+      state = state.copyWith(data: BudgetService.removeExpense(budget, expenseId));
+      return null;
+    } on BudgetApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
   // ── Category allocation ─────────────────────────────────────────────────────
 
-  String? updateCategoryAllocation(String categoryName, double newAmount) {
-    final budget = state.budget;
+  Future<String?> updateCategoryAllocation(String categoryName, double newAmount) async {
+    final budget = state.data;
     if (budget == null) return 'No active budget found.';
 
     final error = BudgetService.validateAllocation(
@@ -132,73 +155,44 @@ class BudgetNotifier extends StateNotifier<BudgetState> {
     );
     if (error != null) return error;
 
-    state = state.copyWith(
-      budget: BudgetService.updateCategoryAllocation(budget, categoryName, newAmount),
-    );
-    return null;
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+
+    final category = budget.categories.where((c) => c.categoryName == categoryName).firstOrNull;
+    if (category == null) return 'Category not found.';
+
+    try {
+      await _service.updateCategoryAllocation(token, category.id, newAmount);
+      state = state.copyWith(
+        data: BudgetService.updateCategoryAllocation(budget, categoryName, newAmount),
+      );
+      return null;
+    } on BudgetApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
   // ── Summary ─────────────────────────────────────────────────────────────────
 
   BudgetSummary? generateSummary() {
-    final budget = state.budget;
+    final budget = state.data;
     if (budget == null) return null;
     return BudgetService.generateSummary(budget);
   }
 
-  void clearBudget() => state = const BudgetState();
-
-  /// Alias kept for backward compatibility with wizard and home screens.
-  Future<void> loadMockBudget(
-    double total,
-    String currency, {
-    List<String>? serviceCategories,
-    List<BudgetCustomItem>? customItems,
-  }) =>
-      loadBudget(
-        total: total,
-        currency: currency,
-        serviceCategories: serviceCategories,
-        customItems: customItems,
-      );
-
-  // ── Seed data ───────────────────────────────────────────────────────────────
-
-  List<Expense> _seedExpenses(Budget budget) {
-    final cats = budget.categories.map((c) => c.categoryName).toList();
-    final seeds = <Expense>[];
-
-    void add(String category, double amount, String desc) {
-      if (cats.contains(category)) {
-        seeds.add(Expense(
-          id: 'seed-${seeds.length + 1}',
-          budgetId: budget.id,
-          categoryName: category,
-          amount: amount,
-          description: desc,
-          status: 'paid',
-          createdAt: DateTime.now().subtract(Duration(days: seeds.length + 1)),
-        ));
-      }
-    }
-
-    add('Photography', budget.totalAmount * 0.08, 'Photographer deposit — Golden Hour Studio');
-    add('Venue', budget.totalAmount * 0.12, 'Venue booking deposit — Grand Ballroom');
-    add('Catering', budget.totalAmount * 0.06, 'Catering tasting session');
-    add('Florist', budget.totalAmount * 0.03, 'Floral arrangement consultation');
-
-    return seeds;
-  }
+  void clearBudget() => state = const Resource();
 }
 
 // ── Providers ────────────────────────────────────────────────────────────────
 
-final budgetProvider = StateNotifierProvider<BudgetNotifier, BudgetState>(
-  (ref) => BudgetNotifier(),
+final budgetProvider = StateNotifierProvider<BudgetNotifier, Resource<Budget>>(
+  (ref) => BudgetNotifier(ref),
 );
 
 final budgetSummaryProvider = Provider<Map<String, double>?>((ref) {
-  final budget = ref.watch(budgetProvider).budget;
+  final budget = ref.watch(budgetProvider).data;
   if (budget == null) return null;
   return {
     'total': budget.totalAmount,
@@ -210,5 +204,5 @@ final budgetSummaryProvider = Provider<Map<String, double>?>((ref) {
 });
 
 final budgetExpensesProvider = Provider<List<Expense>>((ref) {
-  return ref.watch(budgetProvider).budget?.expenses ?? [];
+  return ref.watch(budgetProvider).data?.expenses ?? [];
 });

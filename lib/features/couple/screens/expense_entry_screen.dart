@@ -1,6 +1,9 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -25,6 +28,18 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
   final _vendorCtrl = TextEditingController();
   bool _isSaving = false;
   String? _globalError;
+  Uint8List? _receiptBytes;
+  String? _receiptFilename;
+
+  Future<void> _pickReceipt() async {
+    final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (file == null || !mounted) return;
+    final bytes = await file.readAsBytes();
+    setState(() {
+      _receiptBytes = bytes;
+      _receiptFilename = file.name;
+    });
+  }
 
   @override
   void dispose() {
@@ -38,7 +53,7 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
     setState(() => _globalError = null);
     if (!_formKey.currentState!.validate()) return;
 
-    final budget = ref.read(budgetProvider).budget;
+    final budget = ref.read(budgetProvider).data;
     if (budget == null) {
       setState(() => _globalError = 'No active budget found. Please set up your budget first.');
       return;
@@ -67,11 +82,14 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
       createdAt: DateTime.now(),
     );
 
-    final error = ref.read(budgetProvider.notifier).addExpense(expense);
-
-    setState(() => _isSaving = false);
+    final error = await ref.read(budgetProvider.notifier).addExpense(
+          expense,
+          receiptBytes: _receiptBytes,
+          receiptFilename: _receiptFilename,
+        );
 
     if (!mounted) return;
+    setState(() => _isSaving = false);
 
     if (error != null) {
       setState(() => _globalError = error);
@@ -83,7 +101,7 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final budget = ref.watch(budgetProvider).budget;
+    final budget = ref.watch(budgetProvider).data;
     final budgetCategories = budget?.categories.map((c) => c.categoryName).toList()
         ?? AppConstants.vendorCategories;
 
@@ -237,6 +255,28 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
                 controller: _vendorCtrl,
                 prefixIcon: Icons.storefront_outlined,
               ),
+              const SizedBox(height: 16),
+
+              // Receipt (optional)
+              OutlinedButton.icon(
+                onPressed: _pickReceipt,
+                icon: Icon(_receiptBytes != null
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.receipt_long_outlined),
+                label: Text(_receiptBytes != null
+                    ? 'Receipt attached'
+                    : 'Attach receipt (optional)'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _receiptBytes != null
+                      ? AppColors.success
+                      : AppColors.textSecondary,
+                  side: BorderSide(
+                    color: _receiptBytes != null ? AppColors.success : AppColors.divider,
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+              ),
               const SizedBox(height: 32),
 
               // Recent expenses from this category
@@ -336,9 +376,10 @@ class _ExpenseRow extends ConsumerWidget {
             IconButton(
               icon: const Icon(Icons.delete_outline,
                   size: 18, color: AppColors.error),
-              onPressed: () {
+              onPressed: () async {
                 final error =
-                    ref.read(budgetProvider.notifier).removeExpense(expense.id);
+                    await ref.read(budgetProvider.notifier).removeExpense(expense.id);
+                if (!context.mounted) return;
                 if (error != null) {
                   showWedSnackBar(context, error, type: SnackType.error);
                 } else {

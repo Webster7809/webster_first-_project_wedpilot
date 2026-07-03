@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_shadows.dart';
@@ -20,14 +21,22 @@ class CoupleDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final couple = ref.watch(coupleProfileProvider);
     final budgetState = ref.watch(budgetProvider);
-    final budget = budgetState.budget;
+    final budget = budgetState.data;
     final user = ref.watch(currentUserProvider);
-    final tasks = ref.watch(taskProvider);
+    final tasksState = ref.watch(taskProvider);
+    final tasks = tasksState.data ?? [];
     final wishlist = ref.watch(wishlistProvider);
-    final allVendors = ref.watch(allVendorsProvider);
+    final allVendorsAsync = ref.watch(allVendorsProvider);
+    final allVendors = allVendorsAsync.valueOrNull ?? [];
 
-    if (couple?.hasBudget == true && budgetState.status == BudgetStatus.initial) {
+    if (couple?.hasBudget == true && budgetState.status == ResourceStatus.initial) {
       ref.read(budgetProvider.notifier).initializeBudgetForProfile(couple);
+    }
+    if (tasksState.status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(taskProvider.notifier).loadTasks());
+    }
+    if (ref.read(wishlistProvider.notifier).status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(wishlistProvider.notifier).loadWishlist());
     }
 
     final shortlisted = allVendors.where((v) => wishlist.contains(v.id)).toList();

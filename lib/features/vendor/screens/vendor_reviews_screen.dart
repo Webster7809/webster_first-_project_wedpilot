@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/review.dart';
@@ -11,6 +12,9 @@ class VendorReviewsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(vendorOwnProvider).status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(vendorOwnProvider.notifier).loadOwnVendorData());
+    }
     final reviews = ref.watch(vendorReviewsProvider);
     final approved =
         reviews.where((r) => r.status == ReviewStatus.approved).toList();
@@ -81,10 +85,19 @@ class VendorReviewsScreen extends ConsumerWidget {
                     style: AppTextStyles.headlineSmall
                         .copyWith(color: AppColors.forestGreen)),
                 const SizedBox(height: 12),
-                ...reviews.map((r) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _ReviewCard(review: r),
-                    )),
+                if (reviews.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Text(
+                      'No reviews yet.',
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                    ),
+                  )
+                else
+                  ...reviews.map((r) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _ReviewCard(review: r),
+                      )),
               ]),
             ),
           ),

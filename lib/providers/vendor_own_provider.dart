@@ -1,7 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/vendor_profile.dart';
 import '../models/messaging.dart';
 import '../models/review.dart';
+import '../core/services/vendor_api_service.dart';
+import '../core/state/resource.dart';
 import 'auth_provider.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -48,310 +52,393 @@ class VendorOwnState {
       );
 }
 
+Set<DateTime> _parseBlockedDates(List<String> raw) => raw
+    .map((s) => DateTime.tryParse(s))
+    .whereType<DateTime>()
+    .map((d) => DateTime(d.year, d.month, d.day))
+    .toSet();
+
+List<String> _formatBlockedDates(Set<DateTime> dates) =>
+    dates.map((d) => d.toIso8601String().split('T').first).toList();
+
 // ── Notifier ──────────────────────────────────────────────────────────────────
 
-class VendorOwnNotifier extends StateNotifier<VendorOwnState> {
-  VendorOwnNotifier(this._ref) : super(const VendorOwnState()) {
-    final profile = _ref.read(vendorProfileProvider);
-    if (profile != null) {
-      state = VendorOwnState(
+class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
+  VendorOwnNotifier(this._ref) : super(const Resource());
+
+  final Ref _ref;
+  final VendorApiService _service = VendorApiService.instance;
+
+  String? get _token => _ref.read(authProvider.notifier).accessToken;
+
+  // ── Load ─────────────────────────────────────────────────────────────────────
+
+  Future<void> loadOwnVendorData() async {
+    final token = _token;
+    if (token == null) {
+      state = state.copyWith(status: ResourceStatus.error, errorMessage: 'Not signed in.');
+      return;
+    }
+    state = state.copyWith(status: ResourceStatus.loading);
+    try {
+      final profile = await _service.fetchMyProfile(token);
+      if (profile == null) {
+        // Vendor hasn't completed onboarding yet — a genuinely empty state,
+        // not an error.
+        state = state.copyWith(status: ResourceStatus.ready, data: const VendorOwnState());
+        return;
+      }
+      final results = await Future.wait([
+        _service.fetchMyInquiries(token),
+        _service.fetchMyReviews(token),
+      ]);
+      final data = VendorOwnState(
         profile: profile,
-        services: List.of(profile.services),
-        media: List.of(profile.media),
-        inquiries: _mockInquiries(profile.id),
-        reviews: _mockReviews(profile.id),
-        notificationsEnabled: true,
+        services: profile.services,
+        media: profile.media,
+        inquiries: results[0] as List<Inquiry>,
+        reviews: results[1] as List<Review>,
+        blockedDates: _parseBlockedDates(profile.blockedDates),
+      );
+      _ref.read(authProvider.notifier).setVendorProfile(profile);
+      state = state.copyWith(status: ResourceStatus.ready, data: data);
+    } on VendorApiException catch (e) {
+      state = state.copyWith(status: ResourceStatus.error, errorMessage: e.message);
+    } catch (_) {
+      state = state.copyWith(
+        status: ResourceStatus.error,
+        errorMessage: 'Could not reach the server. Please try again.',
       );
     }
   }
 
-  final Ref _ref;
-
   // ── Profile ────────────────────────────────────────────────────────────────
 
-  Future<void> saveProfile({
+  /// Creates the vendor's profile for the first time (onboarding submission).
+  /// Unlike [saveProfile], this doesn't require existing state to merge with.
+  Future<String?> createProfile({
+    required String businessName,
+    required String category,
+    String? description,
+    String? location,
+    String? phone,
+    String? whatsapp,
+    String? contactEmail,
+    String? address,
+    String? instagramHandle,
+  }) async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    try {
+      final saved = await _service.saveMyProfile(
+        token,
+        businessName: businessName,
+        category: category,
+        description: description,
+        location: location,
+        styleTags: const [],
+        phone: phone,
+        whatsapp: whatsapp,
+        contactEmail: contactEmail,
+        address: address,
+        instagramHandle: instagramHandle,
+      );
+      _ref.read(authProvider.notifier).setVendorProfile(saved);
+      state = state.copyWith(
+        status: ResourceStatus.ready,
+        data: VendorOwnState(profile: saved, services: saved.services, media: saved.media),
+      );
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+  }
+
+  Future<String?> saveProfile({
     String? description,
     String? phone,
     String? website,
+    String? whatsapp,
+    String? contactEmail,
+    String? address,
+    String? instagramHandle,
     String? logoUrl,
   }) async {
-    if (state.profile == null) return;
-    state = state.copyWith(isSaving: true);
-    await Future.delayed(const Duration(milliseconds: 600));
-    state = state.copyWith(
-      isSaving: false,
-      profile: state.profile!.copyWith(
-        description: description,
-        phone: phone,
-        website: website,
-        logoUrl: logoUrl,
-      ),
-    );
+    final current = state.data?.profile;
+    if (current == null) return 'No vendor profile yet.';
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+
+    state = state.copyWith(data: state.data!.copyWith(isSaving: true));
+    try {
+      final saved = await _service.saveMyProfile(
+        token,
+        businessName: current.businessName,
+        category: current.category,
+        description: description ?? current.description,
+        location: current.location,
+        latitude: current.latitude,
+        longitude: current.longitude,
+        styleTags: current.styleTags,
+        logoUrl: logoUrl ?? current.logoUrl,
+        phone: phone ?? current.phone,
+        website: website ?? current.website,
+        whatsapp: whatsapp ?? current.whatsapp,
+        contactEmail: contactEmail ?? current.contactEmail,
+        address: address ?? current.address,
+        instagramHandle: instagramHandle ?? current.instagramHandle,
+      );
+      _ref.read(authProvider.notifier).setVendorProfile(saved);
+      state = state.copyWith(
+        data: state.data!.copyWith(
+          isSaving: false,
+          profile: saved,
+          services: saved.services,
+          media: saved.media,
+        ),
+      );
+      return null;
+    } on VendorApiException catch (e) {
+      state = state.copyWith(data: state.data!.copyWith(isSaving: false));
+      return e.message;
+    } catch (_) {
+      state = state.copyWith(data: state.data!.copyWith(isSaving: false));
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
-  void updateNotifications(bool enabled) =>
-      state = state.copyWith(notificationsEnabled: enabled);
+  /// Uploads a new logo image and saves it as the profile's logoUrl.
+  Future<String?> uploadLogo(Uint8List bytes, String filename) async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    try {
+      final media = await _service.uploadMedia(token, bytes: bytes, filename: filename);
+      return saveProfile(logoUrl: media.url);
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+  }
+
+  void updateNotifications(bool enabled) {
+    final current = state.data;
+    if (current == null) return;
+    state = state.copyWith(data: current.copyWith(notificationsEnabled: enabled));
+  }
 
   // ── Services ───────────────────────────────────────────────────────────────
 
-  void addService(VendorService service) {
-    final updated = [...state.services, service];
-    state = state.copyWith(
-      services: updated,
-      profile: state.profile?.copyWith(services: updated),
-    );
+  Future<String?> addService(VendorService service) async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    final current = state.data;
+    if (current == null) return 'No vendor profile yet.';
+    try {
+      final created = await _service.createService(token, service);
+      state = state.copyWith(data: current.copyWith(services: [...current.services, created]));
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
-  void updateService(VendorService updated) {
-    final list = state.services.map((s) => s.id == updated.id ? updated : s).toList();
-    state = state.copyWith(
-      services: list,
-      profile: state.profile?.copyWith(services: list),
-    );
+  Future<String?> updateService(VendorService updated) async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    final current = state.data;
+    if (current == null) return 'No vendor profile yet.';
+    try {
+      final saved = await _service.updateService(token, updated);
+      state = state.copyWith(
+        data: current.copyWith(
+          services: current.services.map((s) => s.id == saved.id ? saved : s).toList(),
+        ),
+      );
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
-  void deleteService(String id) {
-    final list = state.services.where((s) => s.id != id).toList();
-    state = state.copyWith(
-      services: list,
-      profile: state.profile?.copyWith(services: list),
-    );
+  Future<String?> deleteService(String id) async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    final current = state.data;
+    if (current == null) return 'No vendor profile yet.';
+    try {
+      await _service.deleteService(token, id);
+      state = state.copyWith(
+        data: current.copyWith(services: current.services.where((s) => s.id != id).toList()),
+      );
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
-  void toggleServiceActive(String id) {
-    final list = state.services
-        .map((s) => s.id == id ? s.copyWith(isActive: !s.isActive) : s)
-        .toList();
-    state = state.copyWith(
-      services: list,
-      profile: state.profile?.copyWith(services: list),
-    );
+  Future<String?> toggleServiceActive(String id) async {
+    final current = state.data;
+    if (current == null) return 'No vendor profile yet.';
+    final existing = current.services.where((s) => s.id == id).firstOrNull;
+    if (existing == null) return 'Service not found.';
+    return updateService(existing.copyWith(isActive: !existing.isActive));
   }
 
   // ── Media / Portfolio ──────────────────────────────────────────────────────
 
-  void addMedia(VendorMedia item) {
-    final list = [...state.media, item];
-    state = state.copyWith(
-      media: list,
-      profile: state.profile?.copyWith(media: list),
-    );
+  Future<String?> addMedia(Uint8List bytes, String filename, {bool isFeatured = false}) async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    final current = state.data;
+    if (current == null) return 'No vendor profile yet.';
+    try {
+      final created = await _service.uploadMedia(token, bytes: bytes, filename: filename, isFeatured: isFeatured);
+      state = state.copyWith(data: current.copyWith(media: [...current.media, created]));
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
-  void deleteMedia(String id) {
-    final list = state.media.where((m) => m.id != id).toList();
-    state = state.copyWith(
-      media: list,
-      profile: state.profile?.copyWith(media: list),
-    );
+  Future<String?> deleteMedia(String id) async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    final current = state.data;
+    if (current == null) return 'No vendor profile yet.';
+    try {
+      await _service.deleteMedia(token, id);
+      state = state.copyWith(data: current.copyWith(media: current.media.where((m) => m.id != id).toList()));
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
-  void toggleFeaturedMedia(String id) {
-    final list = state.media
-        .map((m) => m.copyWith(isFeatured: m.id == id))
-        .toList();
-    state = state.copyWith(
-      media: list,
-      profile: state.profile?.copyWith(media: list),
-    );
+  Future<String?> toggleFeaturedMedia(String id) async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    final current = state.data;
+    if (current == null) return 'No vendor profile yet.';
+    try {
+      final updated = await _service.toggleFeaturedMedia(token, id);
+      state = state.copyWith(
+        data: current.copyWith(
+          media: current.media.map((m) => m.id == id ? updated : m).toList(),
+        ),
+      );
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
   // ── Availability ───────────────────────────────────────────────────────────
 
   void toggleBlockedDate(DateTime day) {
+    final current = state.data;
+    if (current == null) return;
     final normalized = DateTime(day.year, day.month, day.day);
-    final set = Set<DateTime>.of(state.blockedDates);
+    final set = Set<DateTime>.of(current.blockedDates);
     if (set.contains(normalized)) {
       set.remove(normalized);
     } else {
       set.add(normalized);
     }
-    state = state.copyWith(blockedDates: set);
+    state = state.copyWith(data: current.copyWith(blockedDates: set));
   }
 
-  void persistBlockedDates() {
-    // No-op — data already in state. Replace with real API call when backend is ready.
+  Future<String?> persistBlockedDates() async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    final current = state.data;
+    if (current == null) return 'No vendor profile yet.';
+    try {
+      await _service.setBlockedDates(token, _formatBlockedDates(current.blockedDates));
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
   // ── Inquiries ──────────────────────────────────────────────────────────────
 
-  void markInquiryStatus(String id, InquiryStatus status) {
-    state = state.copyWith(
-      inquiries: state.inquiries
-          .map((i) => i.id == id ? _inquiryWithStatus(i, status) : i)
-          .toList(),
-    );
+  Future<String?> markInquiryStatus(String id, InquiryStatus status) async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    final current = state.data;
+    if (current == null) return 'No vendor profile yet.';
+    try {
+      final updated = await _service.updateInquiryStatus(token, id, status.name);
+      state = state.copyWith(
+        data: current.copyWith(
+          inquiries: current.inquiries.map((i) => i.id == id ? updated : i).toList(),
+        ),
+      );
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 }
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
 final vendorOwnProvider =
-    StateNotifierProvider<VendorOwnNotifier, VendorOwnState>(
+    StateNotifierProvider<VendorOwnNotifier, Resource<VendorOwnState>>(
   (ref) => VendorOwnNotifier(ref),
 );
 
+final vendorOwnProfileProvider = Provider<VendorProfile?>(
+  (ref) => ref.watch(vendorOwnProvider).data?.profile,
+);
+
 final vendorServicesProvider = Provider<List<VendorService>>(
-  (ref) => ref.watch(vendorOwnProvider).services,
+  (ref) => ref.watch(vendorOwnProvider).data?.services ?? [],
 );
 
 final vendorMediaProvider = Provider<List<VendorMedia>>(
-  (ref) => ref.watch(vendorOwnProvider).media,
+  (ref) => ref.watch(vendorOwnProvider).data?.media ?? [],
 );
 
 final vendorInquiriesProvider = Provider<List<Inquiry>>(
-  (ref) => ref.watch(vendorOwnProvider).inquiries,
+  (ref) => ref.watch(vendorOwnProvider).data?.inquiries ?? [],
 );
 
 final vendorReviewsProvider = Provider<List<Review>>(
-  (ref) => ref.watch(vendorOwnProvider).reviews,
+  (ref) => ref.watch(vendorOwnProvider).data?.reviews ?? [],
 );
 
 final vendorBlockedDatesProvider = Provider<Set<DateTime>>(
-  (ref) => ref.watch(vendorOwnProvider).blockedDates,
+  (ref) => ref.watch(vendorOwnProvider).data?.blockedDates ?? {},
 );
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-Inquiry _inquiryWithStatus(Inquiry i, InquiryStatus status) => Inquiry(
-      id: i.id,
-      coupleId: i.coupleId,
-      vendorId: i.vendorId,
-      coupleName: i.coupleName,
-      vendorName: i.vendorName,
-      status: status,
-      budgetRangeMin: i.budgetRangeMin,
-      budgetRangeMax: i.budgetRangeMax,
-      weddingDate: i.weddingDate,
-      message: i.message,
-      respondedAt: i.respondedAt,
-      createdAt: i.createdAt,
-    );
-
-// ── Mock seed data ─────────────────────────────────────────────────────────────
-
-List<Inquiry> _mockInquiries(String vendorId) => [
-      Inquiry(
-        id: 'inq-001',
-        coupleId: 'profile-001',
-        vendorId: vendorId,
-        coupleName: 'Chanda & Mutale',
-        status: InquiryStatus.newInquiry,
-        budgetRangeMin: 20000,
-        budgetRangeMax: 35000,
-        weddingDate: DateTime(2027, 8, 14),
-        message: 'Hi! We love your garden venue and would like to inquire about availability for our wedding.',
-        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-      ),
-      Inquiry(
-        id: 'inq-002',
-        coupleId: 'profile-002',
-        vendorId: vendorId,
-        coupleName: 'Nkemba & Lweendo',
-        status: InquiryStatus.newInquiry,
-        budgetRangeMin: 25000,
-        budgetRangeMax: 40000,
-        weddingDate: DateTime(2027, 11, 22),
-        message: 'We are planning a garden wedding for about 200 guests. Is your venue available?',
-        createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-      ),
-      Inquiry(
-        id: 'inq-003',
-        coupleId: 'profile-003',
-        vendorId: vendorId,
-        coupleName: 'Tawonga & Bupe',
-        status: InquiryStatus.responded,
-        budgetRangeMin: 15000,
-        budgetRangeMax: 28000,
-        weddingDate: DateTime(2027, 4, 10),
-        message: 'Do you offer indoor and garden combo packages? Our guest count is around 150.',
-        respondedAt: DateTime.now().subtract(const Duration(days: 1)),
-        createdAt: DateTime.now().subtract(const Duration(days: 2)),
-      ),
-      Inquiry(
-        id: 'inq-004',
-        coupleId: 'profile-004',
-        vendorId: vendorId,
-        coupleName: 'Monde & Kafula',
-        status: InquiryStatus.booked,
-        budgetRangeMin: 30000,
-        budgetRangeMax: 45000,
-        weddingDate: DateTime(2027, 2, 14),
-        message: 'We would like to book the open air garden for Valentine\'s Day. Please confirm.',
-        respondedAt: DateTime.now().subtract(const Duration(days: 3)),
-        createdAt: DateTime.now().subtract(const Duration(days: 5)),
-      ),
-      Inquiry(
-        id: 'inq-005',
-        coupleId: 'profile-005',
-        vendorId: vendorId,
-        coupleName: 'Mirriam & Chisomo',
-        status: InquiryStatus.viewed,
-        weddingDate: DateTime(2027, 9, 5),
-        message: 'Can we schedule a site visit? We are very interested in your venue.',
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-      ),
-    ];
-
-List<Review> _mockReviews(String vendorId) => [
-      Review(
-        id: 'rev-001',
-        coupleId: 'profile-001',
-        vendorId: vendorId,
-        coupleName: 'Thandiwe & Chisomo',
-        rating: 5,
-        title: 'Absolutely stunning venue!',
-        body: 'Mukuba Gardens exceeded all our expectations. The garden setting was magical and the staff were incredibly attentive throughout our entire wedding day. Every guest complimented the venue.',
-        status: ReviewStatus.approved,
-        publishedAt: DateTime.now().subtract(const Duration(days: 14)),
-        createdAt: DateTime.now().subtract(const Duration(days: 16)),
-      ),
-      Review(
-        id: 'rev-002',
-        coupleId: 'profile-002',
-        vendorId: vendorId,
-        coupleName: 'Bupe & Mwila',
-        rating: 5,
-        title: 'Perfect for a garden wedding',
-        body: 'We had 250 guests and the venue handled everything seamlessly. The open air package gave us the outdoor feel we wanted while keeping everyone comfortable.',
-        status: ReviewStatus.approved,
-        publishedAt: DateTime.now().subtract(const Duration(days: 30)),
-        createdAt: DateTime.now().subtract(const Duration(days: 32)),
-      ),
-      Review(
-        id: 'rev-003',
-        coupleId: 'profile-003',
-        vendorId: vendorId,
-        coupleName: 'Natasha & Kelvin',
-        rating: 5,
-        title: 'Highly recommend!',
-        body: 'From the first site visit to our wedding day, the team was professional and warm. The garden looks even better in person than in photos.',
-        status: ReviewStatus.approved,
-        publishedAt: DateTime.now().subtract(const Duration(days: 45)),
-        createdAt: DateTime.now().subtract(const Duration(days: 47)),
-      ),
-      Review(
-        id: 'rev-004',
-        coupleId: 'profile-004',
-        vendorId: vendorId,
-        coupleName: 'Grace & Luckson',
-        rating: 4,
-        title: 'Beautiful venue, minor hiccups',
-        body: 'The venue itself is gorgeous and the team very helpful. We had a slight delay during setup but it was resolved quickly. Overall a wonderful experience.',
-        status: ReviewStatus.approved,
-        publishedAt: DateTime.now().subtract(const Duration(days: 60)),
-        createdAt: DateTime.now().subtract(const Duration(days: 62)),
-      ),
-      Review(
-        id: 'rev-005',
-        coupleId: 'profile-005',
-        vendorId: vendorId,
-        coupleName: 'Loveness & Dickson',
-        rating: 5,
-        title: 'Dream wedding achieved!',
-        body: 'I cannot speak highly enough of Mukuba Gardens. Our guests are still talking about how beautiful the venue was. Worth every kwacha.',
-        status: ReviewStatus.approved,
-        publishedAt: DateTime.now().subtract(const Duration(days: 90)),
-        createdAt: DateTime.now().subtract(const Duration(days: 92)),
-      ),
-    ];
+/// Real revenue aggregate from confirmed expenses linked to this vendor.
+/// Reads as zero until couples' expense entries are tied to a vendor id
+/// (there's no vendor picker in the expense form yet) — an honest empty
+/// state rather than a fabricated figure.
+final vendorRevenueProvider = FutureProvider<VendorRevenue>((ref) async {
+  final token = ref.watch(authProvider.notifier).accessToken;
+  if (token == null) {
+    return const VendorRevenue(thisMonth: 0, lastMonth: 0, yearToDate: 0);
+  }
+  return VendorApiService.instance.fetchMyRevenue(token);
+});

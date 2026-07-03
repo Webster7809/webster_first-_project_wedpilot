@@ -1,8 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/vendor_profile.dart';
-import '../core/fixtures/vendor_fixtures.dart';
+import '../core/services/vendor_api_service.dart';
+import '../core/state/resource.dart';
+import '../core/utils/geo_utils.dart';
 import 'auth_provider.dart';
-import 'vendor_own_provider.dart';
 
 final selectedCategoryProvider = StateProvider<String>((ref) => 'Photography');
 
@@ -10,107 +11,110 @@ final selectedServiceCategoriesProvider = StateProvider<List<String>>((ref) => [
 
 final vendorSearchQueryProvider = StateProvider<String>((ref) => '');
 
-// ── Shared vendor registry — mockVendors merged with the live vendor profile ──
-
-final vendorRegistryProvider = Provider<List<VendorProfile>>((ref) {
-  final ownProfile = ref.watch(vendorOwnProvider).profile;
-  if (ownProfile == null) return mockVendors;
-
-  final idx = mockVendors.indexWhere((v) => v.id == ownProfile.id);
-  if (idx == -1) return [...mockVendors, ownProfile];
-
-  return [
-    for (int i = 0; i < mockVendors.length; i++)
-      if (i == idx) ownProfile else mockVendors[i],
-  ];
-});
-
 // ── Location-aware vendor list ──────────────────────────────────────────────
 
 final vendorListProvider = FutureProvider.family<List<VendorProfile>, String>(
   (ref, category) async {
-    final coupleProfile = ref.watch(coupleProfileProvider);
-    final registry = ref.watch(vendorRegistryProvider);
-    await Future.delayed(const Duration(milliseconds: 600));
+    final token = ref.watch(authProvider.notifier).accessToken;
+    if (token == null) return [];
 
-    final filtered = registry.where((v) => v.category == category).toList();
+    final coupleProfile = ref.watch(coupleProfileProvider);
+    final vendors = await VendorApiService.instance.fetchVendors(token, category: category);
 
     final location = coupleProfile?.location;
-    if (location == null || location.isEmpty) return filtered;
+    if (location == null || location.isEmpty) return vendors;
 
     final coords = coordsForLocation(location);
-    if (coords == null) return filtered;
+    if (coords == null) return vendors;
 
-    filtered.sort((a, b) {
+    final sorted = [...vendors];
+    sorted.sort((a, b) {
       final scoreA = vendorMatchScore(a, coords[0], coords[1]);
       final scoreB = vendorMatchScore(b, coords[0], coords[1]);
       return scoreB.compareTo(scoreA);
     });
-
-    return filtered;
+    return sorted;
   },
 );
 
 final vendorDetailProvider = FutureProvider.family<VendorProfile, String>(
   (ref, vendorId) async {
-    await Future.delayed(const Duration(milliseconds: 400));
-    return mockVendors.firstWhere(
-      (v) => v.id == vendorId,
-      orElse: () => mockVendors.isNotEmpty
-          ? mockVendors.first
-          : throw StateError('No vendor found with id $vendorId'),
-    );
+    final token = ref.watch(authProvider.notifier).accessToken;
+    if (token == null) throw StateError('Not signed in.');
+    return VendorApiService.instance.fetchVendorDetail(token, vendorId);
   },
 );
 
-final recommendedVendorsProvider = Provider<List<VendorProfile>>((ref) {
+final recommendedVendorsProvider = FutureProvider<List<VendorProfile>>((ref) async {
+  final token = ref.watch(authProvider.notifier).accessToken;
+  if (token == null) return [];
   final selectedServices = ref.watch(selectedServiceCategoriesProvider);
-  if (selectedServices.isEmpty) return mockVendors.take(4).toList();
-  return mockVendors
-      .where((v) => selectedServices.contains(v.category))
-      .toList();
+  final allVendors = await VendorApiService.instance.fetchVendors(token);
+  if (selectedServices.isEmpty) return allVendors.take(4).toList();
+  return allVendors.where((v) => selectedServices.contains(v.category)).toList();
 });
 
-final allVendorsProvider = Provider<List<VendorProfile>>((ref) => mockVendors);
+final allVendorsProvider = FutureProvider<List<VendorProfile>>((ref) async {
+  final token = ref.watch(authProvider.notifier).accessToken;
+  if (token == null) return [];
+  return VendorApiService.instance.fetchVendors(token);
+});
 
 // ── Wishlist ────────────────────────────────────────────────────────────────
+//
+// Exposed as a plain List<String> (empty by default) rather than a
+// Resource-wrapped type, since every consumer just needs `.contains(id)`
+// membership checks — the dedicated wishlist screen already treats an empty
+// list as a legitimate empty state. `status` is available separately for
+// screens that need to trigger the initial load exactly once.
 
 final wishlistProvider = StateNotifierProvider<WishlistNotifier, List<String>>(
-  (ref) => WishlistNotifier(),
+  (ref) => WishlistNotifier(ref),
 );
 
 class WishlistNotifier extends StateNotifier<List<String>> {
-  WishlistNotifier() : super([]);
+  WishlistNotifier(this._ref) : super([]);
 
-  void toggle(String vendorId) {
-    if (state.contains(vendorId)) {
-      state = state.where((id) => id != vendorId).toList();
-    } else {
-      state = [...state, vendorId];
+  final Ref _ref;
+  ResourceStatus status = ResourceStatus.initial;
+
+  String? get _token => _ref.read(authProvider.notifier).accessToken;
+
+  Future<void> loadWishlist() async {
+    final token = _token;
+    if (token == null) return;
+    status = ResourceStatus.loading;
+    try {
+      state = await VendorApiService.instance.fetchWishlist(token);
+      status = ResourceStatus.ready;
+    } catch (_) {
+      status = ResourceStatus.error;
+    }
+  }
+
+  Future<void> toggle(String vendorId) async {
+    final token = _token;
+    if (token == null) return;
+    final wasWishlisted = state.contains(vendorId);
+
+    // Optimistic update, rolled back if the API call fails.
+    state = wasWishlisted
+        ? state.where((id) => id != vendorId).toList()
+        : [...state, vendorId];
+
+    try {
+      if (wasWishlisted) {
+        await VendorApiService.instance.removeFromWishlist(token, vendorId);
+      } else {
+        await VendorApiService.instance.addToWishlist(token, vendorId);
+      }
+    } catch (_) {
+      // Roll back to the prior state on failure.
+      state = wasWishlisted
+          ? [...state, vendorId]
+          : state.where((id) => id != vendorId).toList();
     }
   }
 
   bool isWishlisted(String vendorId) => state.contains(vendorId);
-}
-
-// ── Vendor Ratings ──────────────────────────────────────────────────────────
-
-final vendorRatingsProvider =
-    StateNotifierProvider<VendorRatingNotifier, Map<String, int>>(
-  (ref) => VendorRatingNotifier(),
-);
-
-class VendorRatingNotifier extends StateNotifier<Map<String, int>> {
-  VendorRatingNotifier() : super(const {});
-
-  void rate(String vendorId, int stars) {
-    assert(stars >= 1 && stars <= 5);
-    state = {...state, vendorId: stars};
-  }
-
-  void unrate(String vendorId) {
-    state = Map.from(state)..remove(vendorId);
-  }
-
-  int? getRating(String vendorId) => state[vendorId];
 }

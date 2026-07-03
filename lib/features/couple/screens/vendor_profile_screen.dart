@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/vendor_profile.dart';
@@ -251,45 +252,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-
-                    // Match banner
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.forestGreen,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.star_rounded,
-                              color: AppColors.amber, size: 22),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '96% match for your wedding',
-                                  style: AppTextStyles.titleMedium.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Fits your Flexible tier & 80–200 guest range',
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: Colors.white.withAlpha(178),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8),
 
                     // About
                     Text('About this venue',
@@ -440,25 +403,32 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    GridView.count(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                      childAspectRatio: 1,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      children: List.generate(
-                        vendor.media.isEmpty ? 3 : vendor.media.length.clamp(0, 6),
-                        (_) => Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.amber.withAlpha(20),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.camera_alt_outlined,
-                              color: AppColors.amber, size: 24),
-                        ),
+                    if (vendor.media.isEmpty)
+                      Text(
+                        'No photos yet.',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                      )
+                    else
+                      GridView.count(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 1,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: vendor.media.take(6).map((m) => ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.network(
+                                resolveMediaUrl(m.url),
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  color: AppColors.amber.withAlpha(20),
+                                  child: const Icon(Icons.broken_image_outlined,
+                                      color: AppColors.amber, size: 24),
+                                ),
+                              ),
+                            )).toList(),
                       ),
-                    ),
                     const SizedBox(height: 24),
 
                     // Details
@@ -467,9 +437,6 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                             color: AppColors.forestGreen,
                             fontWeight: FontWeight.w700)),
                     const SizedBox(height: 12),
-                    _DetailRow(
-                        icon: Icons.people_outline_rounded,
-                        label: 'Up to 300 guests'),
                     _DetailRow(
                         icon: Icons.verified_user_outlined,
                         label: vendor.isVerified ? 'Verified vendor' : 'Pending verification',
@@ -532,7 +499,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
             const SizedBox(width: 12),
             Expanded(
               child: OutlinedButton(
-                onPressed: () {},
+                onPressed: () => ref.read(wishlistProvider.notifier).toggle(vendor.id),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.divider, width: 1.5),
                   shape: RoundedRectangleBorder(
@@ -540,8 +507,8 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   foregroundColor: AppColors.textPrimary,
                 ),
-                child: const Text('Shortlist',
-                    style: TextStyle(
+                child: Text(isWishlisted ? 'Shortlisted' : 'Shortlist',
+                    style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600)),
               ),
             ),

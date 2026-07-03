@@ -1,12 +1,14 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/checklist_item.dart';
 import '../../../providers/task_provider.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
+import '../../../widgets/wed_text_field.dart';
 
 class PlanningChecklistScreen extends ConsumerStatefulWidget {
   const PlanningChecklistScreen({super.key});
@@ -22,129 +24,37 @@ class _PlanningChecklistScreenState
 
   @override
   Widget build(BuildContext context) {
-    final tasks = ref.watch(taskProvider);
-    final progress = ref.watch(taskProgressProvider);
-    final phases = ref.watch(taskPhasesProvider);
-    final allPhases = ['All', ...phases];
+    final tasksState = ref.watch(taskProvider);
 
-    final filtered = _filterPhase == 'All'
-        ? tasks
-        : tasks.where((t) => t.phase == _filterPhase).toList();
-
-    final completed = tasks.where((t) => t.isCompleted).length;
+    if (tasksState.status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(taskProvider.notifier).loadTasks());
+    }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Task Planner'),
-        actions: [
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Text(
-                '$completed/${tasks.length}',
-                style: AppTextStyles.labelLarge
-                    .copyWith(color: AppColors.secondary),
-              ),
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showTaskDialog(context),
-        backgroundColor: AppColors.secondary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Task'),
-      ),
-      body: Column(
-        children: [
-          // Progress bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Overall Progress: ${(progress * 100).toStringAsFixed(0)}%',
-                      style: AppTextStyles.labelLarge,
-                    ),
-                    Text(
-                      '$completed of ${tasks.length} tasks',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: Theme.of(context).colorScheme.outlineVariant.withAlpha(102),
-                  valueColor:
-                      AlwaysStoppedAnimation<Color>(AppColors.secondary),
-                  minHeight: 8,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ],
-            ),
-          ),
-
-          // Phase filter chips
-          SizedBox(
-            height: 44,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: allPhases.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (_, i) {
-                final phase = allPhases[i];
-                final isSelected = _filterPhase == phase;
-                return FilterChip(
-                  label: Text(
-                    phase == 'All' ? 'All Phases' : phase,
-                    style: AppTextStyles.caption.copyWith(
-                      color: isSelected
-                          ? Colors.white
-                          : Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  selected: isSelected,
-                  onSelected: (_) =>
-                      setState(() => _filterPhase = phase),
-                  selectedColor: AppColors.secondary,
-                  backgroundColor: Theme.of(context).colorScheme.surface,
-                  showCheckmark: false,
-                  side: BorderSide(
-                    color: isSelected
-                        ? AppColors.secondary
-                        : Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // Task list grouped by phase
-          Expanded(
-            child: filtered.isEmpty
-                ? _EmptyState(
-                    filterPhase: _filterPhase,
-                    onAdd: () => _showTaskDialog(context),
-                  )
-                : _GroupedTaskList(
-                    tasks: filtered,
-                    onToggle: (id) =>
-                        ref.read(taskProvider.notifier).toggleComplete(id),
-                    onEdit: (item) => _showTaskDialog(context, existing: item),
-                    onDelete: (id) => _confirmDelete(context, id),
-                  ),
-          ),
-        ],
+      appBar: AppBar(title: const Text('Task Planner')),
+      floatingActionButton: tasksState.hasData
+          ? FloatingActionButton.extended(
+              onPressed: () => _showTaskDialog(context),
+              backgroundColor: AppColors.secondary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Task'),
+            )
+          : null,
+      body: tasksState.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (message) => _ErrorState(
+          message: message,
+          onRetry: () => ref.read(taskProvider.notifier).loadTasks(),
+        ),
+        data: (tasks) => _TaskPlannerBody(
+          tasks: tasks,
+          filterPhase: _filterPhase,
+          onFilterChanged: (phase) => setState(() => _filterPhase = phase),
+          onAdd: () => _showTaskDialog(context),
+          onEdit: (item) => _showTaskDialog(context, existing: item),
+          onDelete: (id) => _confirmDelete(context, id),
+        ),
       ),
     );
   }
@@ -157,10 +67,12 @@ class _PlanningChecklistScreenState
       builder: (_) => _TaskFormSheet(
         existing: existing,
         phases: ref.read(taskPhasesProvider),
-        onSave: (taskName, phase, dueDate, clearDue) {
+        onSave: (taskName, phase, dueDate, clearDue) async {
           String? error;
           if (existing != null) {
-            error = ref.read(taskProvider.notifier).editTask(
+            error = await ref
+                .read(taskProvider.notifier)
+                .editTask(
                   id: existing.id,
                   taskName: taskName,
                   phase: phase,
@@ -168,12 +80,11 @@ class _PlanningChecklistScreenState
                   clearDueDate: clearDue,
                 );
           } else {
-            error = ref.read(taskProvider.notifier).addTask(
-                  taskName: taskName,
-                  phase: phase,
-                  dueDate: dueDate,
-                );
+            error = await ref
+                .read(taskProvider.notifier)
+                .addTask(taskName: taskName, phase: phase, dueDate: dueDate);
           }
+          if (!context.mounted) return;
 
           if (error != null) {
             showWedSnackBar(context, error, type: SnackType.error);
@@ -194,18 +105,26 @@ class _PlanningChecklistScreenState
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete Task'),
-        content:
-            const Text('Are you sure you want to delete this task? This cannot be undone.'),
+        content: const Text(
+          'Are you sure you want to delete this task? This cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              ref.read(taskProvider.notifier).deleteTask(id);
-              showWedSnackBar(context, 'Task deleted.', type: SnackType.info);
+              final error = await ref
+                  .read(taskProvider.notifier)
+                  .deleteTask(id);
+              if (!context.mounted) return;
+              showWedSnackBar(
+                context,
+                error ?? 'Task deleted.',
+                type: error != null ? SnackType.error : SnackType.info,
+              );
             },
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Delete'),
@@ -216,16 +135,263 @@ class _PlanningChecklistScreenState
   }
 }
 
+// ── Error state ──────────────────────────────────────────────────────────────
+
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 48,
+              color: Theme.of(context).colorScheme.onSurface.withAlpha(102),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "Couldn't load your tasks",
+              style: AppTextStyles.headlineMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            WedButton(
+              label: 'Retry',
+              onPressed: onRetry,
+              icon: Icons.refresh_rounded,
+              borderRadius: 30,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Task planner body (progress, filters, list) ─────────────────────────────
+
+class _TaskPlannerBody extends ConsumerWidget {
+  final List<ChecklistItem> tasks;
+  final String filterPhase;
+  final ValueChanged<String> onFilterChanged;
+  final VoidCallback onAdd;
+  final ValueChanged<ChecklistItem> onEdit;
+  final ValueChanged<String> onDelete;
+
+  const _TaskPlannerBody({
+    required this.tasks,
+    required this.filterPhase,
+    required this.onFilterChanged,
+    required this.onAdd,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress = ref.watch(taskProgressProvider);
+    final phases = ref.watch(taskPhasesProvider);
+    final allPhases = ['All', ...phases];
+    final dueSoonTasks = ref.watch(tasksDueSoonProvider);
+    final dueSoonIds = dueSoonTasks.map((t) => t.id).toSet();
+
+    final filtered = filterPhase == 'All'
+        ? tasks
+        : tasks.where((t) => t.phase == filterPhase).toList();
+    final completed = tasks.where((t) => t.isCompleted).length;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '$completed/${tasks.length}',
+              style: AppTextStyles.labelLarge.copyWith(
+                color: AppColors.secondary,
+              ),
+            ),
+          ),
+        ),
+        if (dueSoonTasks.isNotEmpty) _DueSoonBanner(count: dueSoonTasks.length),
+
+        // Progress bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Text(
+                      'Overall Progress: ${(progress * 100).toStringAsFixed(0)}%',
+                      style: AppTextStyles.labelLarge,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      '$completed of ${tasks.length} tasks',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withAlpha(153),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: progress,
+                backgroundColor: Theme.of(
+                  context,
+                ).colorScheme.outlineVariant.withAlpha(102),
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondary),
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
+          ),
+        ),
+
+        // Phase filter chips
+        SizedBox(
+          height: 44,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: allPhases.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final phase = allPhases[i];
+              final isSelected = filterPhase == phase;
+              return FilterChip(
+                label: Text(
+                  phase == 'All' ? 'All Phases' : phase,
+                  style: AppTextStyles.caption.copyWith(
+                    color: isSelected
+                        ? Colors.white
+                        : Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                selected: isSelected,
+                onSelected: (_) => onFilterChanged(phase),
+                selectedColor: AppColors.secondary,
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                showCheckmark: false,
+                side: BorderSide(
+                  color: isSelected
+                      ? AppColors.secondary
+                      : Theme.of(context).colorScheme.outlineVariant,
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Task list grouped by phase
+        Expanded(
+          child: filtered.isEmpty
+              ? _EmptyState(filterPhase: filterPhase, onAdd: onAdd)
+              : _GroupedTaskList(
+                  tasks: filtered,
+                  dueSoonIds: dueSoonIds,
+                  onToggle: (id) async {
+                    final error = await ref
+                        .read(taskProvider.notifier)
+                        .toggleComplete(id);
+                    if (error != null && context.mounted) {
+                      showWedSnackBar(context, error, type: SnackType.error);
+                    }
+                  },
+                  onEdit: onEdit,
+                  onDelete: onDelete,
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Due soon reminder banner ────────────────────────────────────────────────
+
+class _DueSoonBanner extends StatelessWidget {
+  final int count;
+  const _DueSoonBanner({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.warningBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.warning.withAlpha(90)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.schedule_rounded,
+              size: 20,
+              color: AppColors.warning,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                count == 1
+                    ? '1 task due in the next $taskDueSoonWindowDays days'
+                    : '$count tasks due in the next $taskDueSoonWindowDays days',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.warning,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Grouped task list ─────────────────────────────────────────────────────────
 
 class _GroupedTaskList extends StatelessWidget {
   final List<ChecklistItem> tasks;
+  final Set<String> dueSoonIds;
   final ValueChanged<String> onToggle;
   final ValueChanged<ChecklistItem> onEdit;
   final ValueChanged<String> onDelete;
 
   const _GroupedTaskList({
     required this.tasks,
+    required this.dueSoonIds,
     required this.onToggle,
     required this.onEdit,
     required this.onDelete,
@@ -249,6 +415,7 @@ class _GroupedTaskList extends StatelessWidget {
           phase: phase,
           items: phaseItems,
           completedCount: doneCount,
+          dueSoonIds: dueSoonIds,
           onToggle: onToggle,
           onEdit: onEdit,
           onDelete: onDelete,
@@ -262,6 +429,7 @@ class _PhaseSection extends StatefulWidget {
   final String phase;
   final List<ChecklistItem> items;
   final int completedCount;
+  final Set<String> dueSoonIds;
   final ValueChanged<String> onToggle;
   final ValueChanged<ChecklistItem> onEdit;
   final ValueChanged<String> onDelete;
@@ -270,6 +438,7 @@ class _PhaseSection extends StatefulWidget {
     required this.phase,
     required this.items,
     required this.completedCount,
+    required this.dueSoonIds,
     required this.onToggle,
     required this.onEdit,
     required this.onDelete,
@@ -316,12 +485,15 @@ class _PhaseSectionState extends State<_PhaseSection> {
           ),
         ),
         if (_expanded)
-          ...widget.items.map((item) => _TaskTile(
-                item: item,
-                onToggle: () => widget.onToggle(item.id),
-                onEdit: () => widget.onEdit(item),
-                onDelete: () => widget.onDelete(item.id),
-              )),
+          ...widget.items.map(
+            (item) => _TaskTile(
+              item: item,
+              isDueSoon: widget.dueSoonIds.contains(item.id),
+              onToggle: () => widget.onToggle(item.id),
+              onEdit: () => widget.onEdit(item),
+              onDelete: () => widget.onDelete(item.id),
+            ),
+          ),
         const SizedBox(height: 4),
       ],
     );
@@ -333,8 +505,11 @@ class _PhaseProgressPill extends StatelessWidget {
   final int total;
   final double progress;
 
-  const _PhaseProgressPill(
-      {required this.done, required this.total, required this.progress});
+  const _PhaseProgressPill({
+    required this.done,
+    required this.total,
+    required this.progress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -359,12 +534,14 @@ class _PhaseProgressPill extends StatelessWidget {
 
 class _TaskTile extends StatelessWidget {
   final ChecklistItem item;
+  final bool isDueSoon;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _TaskTile({
     required this.item,
+    required this.isDueSoon,
     required this.onToggle,
     required this.onEdit,
     required this.onDelete,
@@ -398,8 +575,9 @@ class _TaskTile extends StatelessWidget {
             content: Text('Delete "${item.task}"?'),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel')),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
               TextButton(
                 onPressed: () {
                   confirmed = true;
@@ -418,8 +596,10 @@ class _TaskTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 6),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 2,
+          ),
           leading: GestureDetector(
             onTap: onToggle,
             child: AnimatedContainer(
@@ -446,22 +626,48 @@ class _TaskTile extends StatelessWidget {
           title: Text(
             item.task,
             style: AppTextStyles.bodyMedium.copyWith(
-              decoration:
-                  item.isCompleted ? TextDecoration.lineThrough : null,
+              decoration: item.isCompleted ? TextDecoration.lineThrough : null,
               color: item.isCompleted
                   ? Theme.of(context).colorScheme.onSurface.withAlpha(128)
                   : Theme.of(context).colorScheme.onSurface,
             ),
           ),
           subtitle: item.dueDate != null
-              ? Text(
-                  'Due ${DateFormat('MMM d, y').format(item.dueDate!)}',
-                  style: AppTextStyles.caption.copyWith(
-                    color: _isOverdue
-                        ? AppColors.error
-                        : Theme.of(context).colorScheme.onSurface.withAlpha(153),
-                    fontWeight: _isOverdue ? FontWeight.w600 : FontWeight.normal,
-                  ),
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_isOverdue || isDueSoon)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Icon(
+                          _isOverdue
+                              ? Icons.error_outline_rounded
+                              : Icons.schedule_rounded,
+                          size: 13,
+                          color: _isOverdue
+                              ? AppColors.error
+                              : AppColors.warning,
+                        ),
+                      ),
+                    Flexible(
+                      child: Text(
+                        'Due ${DateFormat('MMM d, y').format(item.dueDate!)}',
+                        style: AppTextStyles.caption.copyWith(
+                          color: _isOverdue
+                              ? AppColors.error
+                              : isDueSoon
+                              ? AppColors.warning
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withAlpha(153),
+                          fontWeight: (_isOverdue || isDueSoon)
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 )
               : null,
           trailing: IconButton(
@@ -478,42 +684,89 @@ class _TaskTile extends StatelessWidget {
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
-class _EmptyState extends StatelessWidget {
+class _EmptyState extends ConsumerStatefulWidget {
   final String filterPhase;
   final VoidCallback onAdd;
 
   const _EmptyState({required this.filterPhase, required this.onAdd});
 
   @override
+  ConsumerState<_EmptyState> createState() => _EmptyStateState();
+}
+
+class _EmptyStateState extends ConsumerState<_EmptyState> {
+  bool _loadingStarter = false;
+
+  Future<void> _loadStarterChecklist() async {
+    setState(() => _loadingStarter = true);
+    final error = await ref.read(taskProvider.notifier).loadStarterChecklist();
+    if (!mounted) return;
+    setState(() => _loadingStarter = false);
+    if (error != null) {
+      showWedSnackBar(context, error, type: SnackType.error);
+    } else {
+      showWedSnackBar(
+        context,
+        'Starter checklist added.',
+        type: SnackType.success,
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('✅', style: TextStyle(fontSize: 52)),
-          const SizedBox(height: 16),
-          Text(
-            filterPhase == 'All'
-                ? 'No tasks yet'
-                : 'No tasks in "$filterPhase"',
-            style: AppTextStyles.headlineMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Tap "Add Task" to create your first planning task.',
-            style: AppTextStyles.bodySmall.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
+    final showStarterOption = widget.filterPhase == 'All';
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('✅', style: TextStyle(fontSize: 52)),
+                const SizedBox(height: 16),
+                Text(
+                  widget.filterPhase == 'All'
+                      ? 'No tasks yet'
+                      : 'No tasks in "${widget.filterPhase}"',
+                  style: AppTextStyles.headlineMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Tap "Add Task" to create your first planning task.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withAlpha(153),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                WedButton(
+                  label: 'Add Task',
+                  onPressed: widget.onAdd,
+                  icon: Icons.add,
+                  borderRadius: 30,
+                ),
+                if (showStarterOption) ...[
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: _loadingStarter ? null : _loadStarterChecklist,
+                    icon: _loadingStarter
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.checklist_rounded, size: 18),
+                    label: const Text('Load starter checklist'),
+                  ),
+                ],
+              ],
             ),
-            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 24),
-          WedButton(
-            label: 'Add Task',
-            onPressed: onAdd,
-            icon: Icons.add,
-            borderRadius: 30,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -524,7 +777,13 @@ class _EmptyState extends StatelessWidget {
 class _TaskFormSheet extends StatefulWidget {
   final ChecklistItem? existing;
   final List<String> phases;
-  final void Function(String taskName, String phase, DateTime? dueDate, bool clearDue) onSave;
+  final void Function(
+    String taskName,
+    String phase,
+    DateTime? dueDate,
+    bool clearDue,
+  )
+  onSave;
 
   const _TaskFormSheet({
     required this.existing,
@@ -548,7 +807,8 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.existing?.task ?? '');
     _selectedPhase =
-        widget.existing?.phase ?? (widget.phases.isNotEmpty ? widget.phases.first : '');
+        widget.existing?.phase ??
+        (widget.phases.isNotEmpty ? widget.phases.first : '');
     _dueDate = widget.existing?.dueDate;
   }
 
@@ -595,125 +855,147 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.9,
         ),
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              isEdit ? 'Edit Task' : 'New Task',
-              style: AppTextStyles.headlineMedium,
-            ),
-            const SizedBox(height: 20),
-
-            // Task name
-            TextFormField(
-              controller: _nameCtrl,
-              autofocus: true,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                labelText: 'Task name *',
-                hintText: 'e.g. Book the florist',
-                errorText: _error,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              ),
-              onChanged: (_) {
-                if (_error != null) setState(() => _error = null);
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Phase dropdown
-            DropdownButtonFormField<String>(
-              initialValue: _selectedPhase.isEmpty ? null : _selectedPhase,
-              decoration: InputDecoration(
-                labelText: 'Planning phase *',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              ),
-              items: widget.phases
-                  .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedPhase = v!),
-            ),
-            const SizedBox(height: 16),
-
-            // Due date picker
-            GestureDetector(
-              onTap: _pickDate,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.calendar_today_outlined,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.onSurface.withAlpha(153)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _dueDate != null
-                            ? 'Due: ${DateFormat('MMM d, y').format(_dueDate!)}'
-                            : 'Set due date (optional)',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: _dueDate != null
-                              ? Theme.of(context).colorScheme.onSurface
-                              : Theme.of(context).colorScheme.onSurface.withAlpha(153),
-                        ),
-                      ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Handle
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    if (_dueDate != null)
-                      GestureDetector(
-                        onTap: () => setState(() {
-                          _dueDate = null;
-                          _clearDue = true;
-                        }),
-                        child: Icon(Icons.close,
-                            size: 16,
-                            color: Theme.of(context).colorScheme.onSurface.withAlpha(153)),
-                      ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                Text(
+                  isEdit ? 'Edit Task' : 'New Task',
+                  style: AppTextStyles.headlineMedium,
+                ),
+                const SizedBox(height: 20),
 
-            // Save button
-            WedButton(
-              label: isEdit ? 'Save Changes' : 'Add Task',
-              onPressed: _save,
-              height: 50,
-              borderRadius: 14,
+                // Task name
+                WedTextField(
+                  label: 'Task name *',
+                  hint: 'e.g. Book the florist',
+                  controller: _nameCtrl,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.sentences,
+                  errorText: _error,
+                  onChanged: (_) {
+                    if (_error != null) setState(() => _error = null);
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Phase dropdown
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedPhase.isEmpty ? null : _selectedPhase,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'Planning phase *',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                  ),
+                  items: widget.phases
+                      .map(
+                        (p) => DropdownMenuItem(
+                          value: p,
+                          child: Text(p, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => _selectedPhase = v!),
+                ),
+                const SizedBox(height: 16),
+
+                // Due date picker
+                GestureDetector(
+                  onTap: _pickDate,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today_outlined,
+                          size: 18,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(153),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _dueDate != null
+                                ? 'Due: ${DateFormat('MMM d, y').format(_dueDate!)}'
+                                : 'Set due date (optional)',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: _dueDate != null
+                                  ? Theme.of(context).colorScheme.onSurface
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface.withAlpha(153),
+                            ),
+                          ),
+                        ),
+                        if (_dueDate != null)
+                          GestureDetector(
+                            onTap: () => setState(() {
+                              _dueDate = null;
+                              _clearDue = true;
+                            }),
+                            child: Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withAlpha(153),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Save button
+                WedButton(
+                  label: isEdit ? 'Save Changes' : 'Add Task',
+                  onPressed: _save,
+                  height: 50,
+                  borderRadius: 14,
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
