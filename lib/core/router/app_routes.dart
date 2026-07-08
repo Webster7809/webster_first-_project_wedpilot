@@ -9,6 +9,7 @@ class AppRoutes {
 
   // ── Public (no auth) ────────────────────────────────────────────────────
   static const publicInvite = '/i/:shareToken';
+  static const publicGuestInvite = '/g/:inviteToken';
 
   // ── Shared full-screen pushes ────────────────────────────────────────────
   static const notifications = '/notifications';
@@ -51,6 +52,8 @@ class AppRoutes {
   static const adminVendors = '/admin/vendors';
   static const adminAnalytics = '/admin/analytics';
   static const adminModeration = '/admin/moderation';
+  static const adminCategories = '/admin/categories';
+  static const adminInvitationTemplates = '/admin/invitation-templates';
 
   // ── Role prefixes (used in redirect guards) ─────────────────────────────
   static const couplePrefix = '/couple';
@@ -62,7 +65,5 @@ class AppRoutes {
   // the post-creation vendor-guide step (PDF share/download), which renders
   // after needsOnboarding flips to false — including them here would bounce
   // the user straight to their dashboard before that final step ever shows.
-  static const authScreens = {
-    login, register, forgotPassword, verifyEmail,
-  };
+  static const authScreens = {login, register, forgotPassword, verifyEmail};
 }

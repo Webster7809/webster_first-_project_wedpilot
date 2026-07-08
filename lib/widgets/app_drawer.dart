@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../providers/auth_provider.dart';
@@ -50,16 +51,25 @@ class AppDrawer extends ConsumerWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white.withAlpha(128), width: 2),
                     ),
-                    child: Center(
-                      child: Text(
-                        initial,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    child: coupleProfile?.photoUrl != null
+                        ? ClipOval(
+                            child: Image.network(
+                              resolveMediaUrl(coupleProfile!.photoUrl!),
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Center(
+                            child: Text(
+                              initial,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
                   ),
                   const SizedBox(height: 12),
                   Text(

@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/review.dart';
 import '../../../providers/vendor_own_provider.dart';
+import '../../../widgets/wed_avatar.dart';
 
 class VendorReviewsScreen extends ConsumerWidget {
   const VendorReviewsScreen({super.key});
@@ -259,21 +260,7 @@ class _ReviewCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: AppColors.cream,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: AppTextStyles.titleMedium.copyWith(
-                        color: AppColors.amber, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
+              WedAvatar(imageUrl: review.coupleAvatarUrl, name: name, radius: 22),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(

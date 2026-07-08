@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
+import '../../../core/services/messaging_api_service.dart';
+import '../../../core/services/vendor_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/vendor_profile.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../widgets/loading_shimmer.dart';
+import '../../../widgets/wed_snack_bar.dart';
+import '../../../widgets/wed_text_field.dart';
 import '../../../core/utils/format_utils.dart';
 
 class VendorProfileScreen extends ConsumerWidget {
@@ -106,10 +110,15 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                   // Photo placeholder
                   Container(
                     color: AppColors.amber.withAlpha(20),
-                    child: const Center(
-                      child: Icon(Icons.villa_outlined,
-                          size: 56, color: AppColors.amber),
-                    ),
+                    child: vendor.logoUrl != null
+                        ? Image.network(
+                            resolveMediaUrl(vendor.logoUrl!),
+                            fit: BoxFit.cover,
+                          )
+                        : const Center(
+                            child: Icon(Icons.villa_outlined,
+                                size: 56, color: AppColors.amber),
+                          ),
                   ),
                   // Carousel dots
                   Positioned(
@@ -471,18 +480,12 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
           children: [
             Expanded(
               child: ElevatedButton(
-                onPressed: () {
-                  if (vendor.phone != null) {
-                    launchUrl(Uri.parse('tel:${vendor.phone}'));
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('No phone number available'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                },
+                onPressed: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => _InquirySheet(vendor: vendor),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.amber,
                   foregroundColor: Colors.white,
@@ -518,6 +521,133 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
     );
   }
 
+}
+
+// ── Send inquiry sheet ────────────────────────────────────────────────────────
+
+class _InquirySheet extends ConsumerStatefulWidget {
+  final VendorProfile vendor;
+  const _InquirySheet({required this.vendor});
+
+  @override
+  ConsumerState<_InquirySheet> createState() => _InquirySheetState();
+}
+
+class _InquirySheetState extends ConsumerState<_InquirySheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _messageCtrl = TextEditingController();
+  bool _isSending = false;
+
+  @override
+  void dispose() {
+    _messageCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) {
+      showWedSnackBar(context, 'Please sign in to send an inquiry.', type: SnackType.error);
+      return;
+    }
+
+    setState(() => _isSending = true);
+    try {
+      await VendorApiService.instance.sendInquiry(
+        token,
+        widget.vendor.id,
+        message: _messageCtrl.text.trim(),
+      );
+      // Best-effort: also open a chat thread so the couple can follow up
+      // beyond the initial inquiry. A failure here shouldn't block the
+      // inquiry itself from being reported as sent.
+      try {
+        await MessagingApiService.instance.startConversation(token, widget.vendor.id);
+      } catch (_) {}
+      if (!mounted) return;
+      Navigator.pop(context);
+      showWedSnackBar(context, 'Inquiry sent to ${widget.vendor.businessName}!', type: SnackType.success);
+    } on VendorApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSending = false);
+      showWedSnackBar(context, e.message, type: SnackType.error);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSending = false);
+      showWedSnackBar(context, 'Could not send inquiry. Please try again.', type: SnackType.error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Send inquiry to ${widget.vendor.businessName}',
+                style: AppTextStyles.headlineMedium.copyWith(color: AppColors.forestGreen),
+              ),
+              const SizedBox(height: 20),
+              WedTextField(
+                label: 'Message',
+                hint: 'Tell them about your wedding date, guest count, and what you need…',
+                controller: _messageCtrl,
+                maxLines: 5,
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Message is required' : null,
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isSending ? null : _send,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.amber,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                  ),
+                  child: _isSending
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Text('Send inquiry',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Overlay circle button ─────────────────────────────────────────────────────

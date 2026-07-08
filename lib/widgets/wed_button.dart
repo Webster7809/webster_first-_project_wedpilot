@@ -65,6 +65,7 @@ class WedButton extends StatelessWidget {
           );
 
     return Center(
+      heightFactor: 1,
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: width != null ? width! : maxWidth,

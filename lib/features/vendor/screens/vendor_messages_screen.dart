@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../providers/auth_provider.dart';
 import '../../../providers/messaging_provider.dart';
 import '../../../widgets/wed_avatar.dart';
 
@@ -12,8 +11,7 @@ class VendorMessagesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final vendorId = ref.watch(vendorProfileProvider)?.id ?? '';
-    final convsAsync = ref.watch(vendorConversationsProvider(vendorId));
+    final convsAsync = ref.watch(conversationsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -63,7 +61,7 @@ class VendorMessagesScreen extends ConsumerWidget {
               return ListTile(
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 8),
-                leading: WedAvatar(name: name, radius: 24),
+                leading: WedAvatar(imageUrl: conv.coupleAvatarUrl, name: name, radius: 24),
                 title: Text(name,
                     style: AppTextStyles.titleMedium
                         .copyWith(color: AppColors.forestGreen)),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../core/router/app_routes.dart';
 import '../core/theme/app_colors.dart';
 import '../widgets/shell_nav_item.dart';
 import '../providers/auth_provider.dart';
@@ -58,7 +59,31 @@ class _MobileLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: navigationShell,
+      body: Column(
+        children: [
+          // Persistent logout access — mobile admin has no drawer/sidebar,
+          // so without this there is no way to sign out at all on mobile.
+          SafeArea(
+            bottom: false,
+            child: Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 4, 4, 0),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.logout_rounded,
+                    color: AppColors.forestGreen,
+                    size: 22,
+                  ),
+                  tooltip: 'Log out',
+                  onPressed: () => _confirmLogout(context, ref),
+                ),
+              ),
+            ),
+          ),
+          Expanded(child: navigationShell),
+        ],
+      ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: AppColors.forestGreen,
@@ -70,10 +95,58 @@ class _MobileLayout extends StatelessWidget {
             height: 60,
             child: Row(
               children: [
-                ShellNavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, label: 'Dashboard', index: 0, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex), inactiveColor: Colors.white60, labelFontSize: 10),
-                ShellNavItem(icon: Icons.people_outline, activeIcon: Icons.people_rounded, label: 'Users', index: 1, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex), inactiveColor: Colors.white60, labelFontSize: 10),
-                ShellNavItem(icon: Icons.verified_outlined, activeIcon: Icons.verified_rounded, label: 'Vendors', index: 2, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex), inactiveColor: Colors.white60, labelFontSize: 10),
-                ShellNavItem(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart_rounded, label: 'Analytics', index: 3, currentIndex: navigationShell.currentIndex, onTap: (i) => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex), inactiveColor: Colors.white60, labelFontSize: 10),
+                ShellNavItem(
+                  icon: Icons.dashboard_outlined,
+                  activeIcon: Icons.dashboard_rounded,
+                  label: 'Dashboard',
+                  index: 0,
+                  currentIndex: navigationShell.currentIndex,
+                  onTap: (i) => navigationShell.goBranch(
+                    i,
+                    initialLocation: i == navigationShell.currentIndex,
+                  ),
+                  inactiveColor: Colors.white60,
+                  labelFontSize: 10,
+                ),
+                ShellNavItem(
+                  icon: Icons.people_outline,
+                  activeIcon: Icons.people_rounded,
+                  label: 'Users',
+                  index: 1,
+                  currentIndex: navigationShell.currentIndex,
+                  onTap: (i) => navigationShell.goBranch(
+                    i,
+                    initialLocation: i == navigationShell.currentIndex,
+                  ),
+                  inactiveColor: Colors.white60,
+                  labelFontSize: 10,
+                ),
+                ShellNavItem(
+                  icon: Icons.verified_outlined,
+                  activeIcon: Icons.verified_rounded,
+                  label: 'Vendors',
+                  index: 2,
+                  currentIndex: navigationShell.currentIndex,
+                  onTap: (i) => navigationShell.goBranch(
+                    i,
+                    initialLocation: i == navigationShell.currentIndex,
+                  ),
+                  inactiveColor: Colors.white60,
+                  labelFontSize: 10,
+                ),
+                ShellNavItem(
+                  icon: Icons.bar_chart_outlined,
+                  activeIcon: Icons.bar_chart_rounded,
+                  label: 'Analytics',
+                  index: 3,
+                  currentIndex: navigationShell.currentIndex,
+                  onTap: (i) => navigationShell.goBranch(
+                    i,
+                    initialLocation: i == navigationShell.currentIndex,
+                  ),
+                  inactiveColor: Colors.white60,
+                  labelFontSize: 10,
+                ),
               ],
             ),
           ),
@@ -83,14 +156,17 @@ class _MobileLayout extends StatelessWidget {
   }
 }
 
-
 // ── Sidebar ────────────────────────────────────────────────────────────────────
 
 class _AdminSidebar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onBranch;
   final WidgetRef ref;
-  const _AdminSidebar({required this.currentIndex, required this.onBranch, required this.ref});
+  const _AdminSidebar({
+    required this.currentIndex,
+    required this.onBranch,
+    required this.ref,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -128,22 +204,78 @@ class _AdminSidebar extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                _SidebarSection(label: 'OVERVIEW', children: [
-                  _SidebarItem(icon: Icons.dashboard_outlined, label: 'Dashboard', index: 0, currentIndex: currentIndex, onTap: onBranch),
-                ]),
-                _SidebarSection(label: 'PEOPLE', children: [
-                  _SidebarItem(icon: Icons.people_outline, label: 'Couples', index: 1, currentIndex: currentIndex, onTap: onBranch),
-                  _SidebarItem(icon: Icons.verified_outlined, label: 'Vendors', index: 2, currentIndex: currentIndex, onTap: onBranch),
-                ]),
-                _SidebarSection(label: 'PLATFORM', children: [
-                  _SidebarRouteItem(icon: Icons.flag_outlined, label: 'Reported listings', route: '/admin/moderation', context: context),
-                  _SidebarStaticItem(icon: Icons.category_outlined, label: 'Categories'),
-                  _SidebarStaticItem(icon: Icons.article_outlined, label: 'Invitation templates'),
-                  _SidebarItem(icon: Icons.bar_chart_outlined, label: 'Match algorithm', index: 3, currentIndex: currentIndex, onTap: onBranch),
-                ]),
-                _SidebarSection(label: 'SYSTEM', children: [
-                  _SidebarRouteItem(icon: Icons.settings_outlined, label: 'Settings', route: '/settings', context: context),
-                ]),
+                _SidebarSection(
+                  label: 'OVERVIEW',
+                  children: [
+                    _SidebarItem(
+                      icon: Icons.dashboard_outlined,
+                      label: 'Dashboard',
+                      index: 0,
+                      currentIndex: currentIndex,
+                      onTap: onBranch,
+                    ),
+                  ],
+                ),
+                _SidebarSection(
+                  label: 'PEOPLE',
+                  children: [
+                    _SidebarItem(
+                      icon: Icons.people_outline,
+                      label: 'Couples',
+                      index: 1,
+                      currentIndex: currentIndex,
+                      onTap: onBranch,
+                    ),
+                    _SidebarItem(
+                      icon: Icons.verified_outlined,
+                      label: 'Vendors',
+                      index: 2,
+                      currentIndex: currentIndex,
+                      onTap: onBranch,
+                    ),
+                  ],
+                ),
+                _SidebarSection(
+                  label: 'PLATFORM',
+                  children: [
+                    _SidebarRouteItem(
+                      icon: Icons.flag_outlined,
+                      label: 'Reported listings',
+                      route: AppRoutes.adminModeration,
+                      context: context,
+                    ),
+                    _SidebarRouteItem(
+                      icon: Icons.category_outlined,
+                      label: 'Categories',
+                      route: AppRoutes.adminCategories,
+                      context: context,
+                    ),
+                    _SidebarRouteItem(
+                      icon: Icons.article_outlined,
+                      label: 'Invitation templates',
+                      route: AppRoutes.adminInvitationTemplates,
+                      context: context,
+                    ),
+                    _SidebarItem(
+                      icon: Icons.bar_chart_outlined,
+                      label: 'Match algorithm',
+                      index: 3,
+                      currentIndex: currentIndex,
+                      onTap: onBranch,
+                    ),
+                  ],
+                ),
+                _SidebarSection(
+                  label: 'SYSTEM',
+                  children: [
+                    _SidebarRouteItem(
+                      icon: Icons.settings_outlined,
+                      label: 'Settings',
+                      route: '/settings',
+                      context: context,
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -152,15 +284,42 @@ class _AdminSidebar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
             child: TextButton.icon(
-              onPressed: () => ref.read(authProvider.notifier).logout(),
+              onPressed: () => _confirmLogout(context, ref),
               icon: const Icon(Icons.logout, color: Colors.white54, size: 18),
-              label: const Text('Log out', style: TextStyle(color: Colors.white54, fontSize: 14)),
+              label: const Text(
+                'Log out',
+                style: TextStyle(color: Colors.white54, fontSize: 14),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+void _confirmLogout(BuildContext context, WidgetRef ref) {
+  showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Log Out'),
+      content: const Text('Are you sure you want to log out?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(ctx).pop();
+            ref.read(authProvider.notifier).logout();
+          },
+          style: TextButton.styleFrom(foregroundColor: AppColors.error),
+          child: const Text('Log Out'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _LogoIcon extends StatelessWidget {
@@ -236,11 +395,17 @@ class _SidebarItem extends StatelessWidget {
         decoration: BoxDecoration(
           color: isActive ? Colors.white.withAlpha(20) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          border: isActive ? Border(left: BorderSide(color: AppColors.amber, width: 3)) : null,
+          border: isActive
+              ? Border(left: BorderSide(color: AppColors.amber, width: 3))
+              : null,
         ),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: isActive ? AppColors.amber : Colors.white70),
+            Icon(
+              icon,
+              size: 18,
+              color: isActive ? AppColors.amber : Colors.white70,
+            ),
             const SizedBox(width: 12),
             Text(
               label,
@@ -257,34 +422,18 @@ class _SidebarItem extends StatelessWidget {
   }
 }
 
-class _SidebarStaticItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _SidebarStaticItem({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext _) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: Colors.white70),
-          const SizedBox(width: 12),
-          Text(label, style: GoogleFonts.inter(fontSize: 14, color: Colors.white70)),
-        ],
-      ),
-    );
-  }
-}
-
 class _SidebarRouteItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final String route;
   final BuildContext context;
 
-  const _SidebarRouteItem({required this.icon, required this.label, required this.route, required this.context});
+  const _SidebarRouteItem({
+    required this.icon,
+    required this.label,
+    required this.route,
+    required this.context,
+  });
 
   @override
   Widget build(BuildContext _) {
@@ -297,7 +446,10 @@ class _SidebarRouteItem extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: Colors.white70),
             const SizedBox(width: 12),
-            Text(label, style: GoogleFonts.inter(fontSize: 14, color: Colors.white70)),
+            Text(
+              label,
+              style: GoogleFonts.inter(fontSize: 14, color: Colors.white70),
+            ),
           ],
         ),
       ),

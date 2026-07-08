@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -395,16 +396,21 @@ class _VendorMatchCard extends ConsumerWidget {
           // Photo area with match badge
           Stack(
             children: [
-              Container(
-                height: 180,
-                decoration: BoxDecoration(
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: Container(
+                  height: 180,
+                  width: double.infinity,
                   color: AppColors.amber.withAlpha(20),
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16)),
-                ),
-                child: const Center(
-                  child: Icon(Icons.camera_alt_outlined,
-                      size: 44, color: AppColors.amber),
+                  child: vendor.logoUrl != null
+                      ? Image.network(
+                          resolveMediaUrl(vendor.logoUrl!),
+                          fit: BoxFit.cover,
+                        )
+                      : const Center(
+                          child: Icon(Icons.camera_alt_outlined,
+                              size: 44, color: AppColors.amber),
+                        ),
                 ),
               ),
               if (vendor.isVerified)

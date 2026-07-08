@@ -27,28 +27,55 @@ class CoupleMessagesScreen extends ConsumerWidget {
                 children: [
                   const Text('💬', style: TextStyle(fontSize: 56)),
                   const SizedBox(height: 16),
-                  Text('No conversations yet', style: AppTextStyles.headlineMedium),
-                  Text('Send an inquiry to a vendor to start chatting',
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                      textAlign: TextAlign.center),
+                  Text(
+                    'No conversations yet',
+                    style: AppTextStyles.headlineMedium,
+                  ),
+                  Text(
+                    'Send an inquiry to a vendor to start chatting',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ],
               ),
             );
           }
           return ListView.separated(
             itemCount: convs.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (_, i) {
               final conv = convs[i];
               return ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                leading: WedAvatar(name: conv.vendorName ?? 'V', radius: 24),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                leading: WedAvatar(
+                  imageUrl: conv.vendorAvatarUrl,
+                  name: conv.vendorName ?? 'V',
+                  radius: 24,
+                ),
                 title: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(conv.vendorName ?? 'Vendor', style: AppTextStyles.titleMedium),
-                    if (conv.lastMessageAt != null)
-                      Text(_timeAgo(conv.lastMessageAt!), style: AppTextStyles.caption),
+                    Expanded(
+                      child: Text(
+                        conv.vendorName ?? 'Vendor',
+                        style: AppTextStyles.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (conv.lastMessageAt != null) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        _timeAgo(conv.lastMessageAt!),
+                        style: AppTextStyles.caption,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ],
                 ),
                 subtitle: Row(
@@ -60,7 +87,9 @@ class CoupleMessagesScreen extends ConsumerWidget {
                           color: conv.unreadCount > 0
                               ? AppColors.textPrimary
                               : AppColors.textSecondary,
-                          fontWeight: conv.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight: conv.unreadCount > 0
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -69,13 +98,22 @@ class CoupleMessagesScreen extends ConsumerWidget {
                     if (conv.unreadCount > 0)
                       Container(
                         margin: const EdgeInsets.only(left: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.secondary,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text('${conv.unreadCount}',
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                        child: Text(
+                          '${conv.unreadCount}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                   ],
                 ),

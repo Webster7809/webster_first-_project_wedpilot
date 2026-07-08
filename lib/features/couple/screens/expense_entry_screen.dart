@@ -32,7 +32,10 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
   String? _receiptFilename;
 
   Future<void> _pickReceipt() async {
-    final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
     if (file == null || !mounted) return;
     final bytes = await file.readAsBytes();
     setState(() {
@@ -55,17 +58,23 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
 
     final budget = ref.read(budgetProvider).data;
     if (budget == null) {
-      setState(() => _globalError = 'No active budget found. Please set up your budget first.');
+      setState(
+        () => _globalError =
+            'No active budget found. Please set up your budget first.',
+      );
       return;
     }
 
     // Check that the selected category exists in the budget
-    final categoryExists =
-        budget.categories.any((c) => c.categoryName == _selectedCategory);
+    final categoryExists = budget.categories.any(
+      (c) => c.categoryName == _selectedCategory,
+    );
     if (!categoryExists) {
-      setState(() =>
-          _globalError = '"$_selectedCategory" is not in your current budget. '
-              'Choose a different category or update your budget.');
+      setState(
+        () => _globalError =
+            '"$_selectedCategory" is not in your current budget. '
+            'Choose a different category or update your budget.',
+      );
       return;
     }
 
@@ -75,14 +84,18 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
       id: 'exp-${DateTime.now().millisecondsSinceEpoch}',
       budgetId: budget.id,
       categoryName: _selectedCategory,
-      vendorName: _vendorCtrl.text.trim().isEmpty ? null : _vendorCtrl.text.trim(),
+      vendorName: _vendorCtrl.text.trim().isEmpty
+          ? null
+          : _vendorCtrl.text.trim(),
       amount: double.parse(_amountCtrl.text.replaceAll(',', '')),
       description: _descCtrl.text.trim(),
       status: 'paid',
       createdAt: DateTime.now(),
     );
 
-    final error = await ref.read(budgetProvider.notifier).addExpense(
+    final error = await ref
+        .read(budgetProvider.notifier)
+        .addExpense(
           expense,
           receiptBytes: _receiptBytes,
           receiptFilename: _receiptFilename,
@@ -94,7 +107,11 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
     if (error != null) {
       setState(() => _globalError = error);
     } else {
-      showWedSnackBar(context, 'Expense recorded successfully.', type: SnackType.success);
+      showWedSnackBar(
+        context,
+        'Expense recorded successfully.',
+        type: SnackType.success,
+      );
       context.pop();
     }
   }
@@ -102,8 +119,9 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
   @override
   Widget build(BuildContext context) {
     final budget = ref.watch(budgetProvider).data;
-    final budgetCategories = budget?.categories.map((c) => c.categoryName).toList()
-        ?? AppConstants.vendorCategories;
+    final budgetCategories =
+        budget?.categories.map((c) => c.categoryName).toList() ??
+        AppConstants.vendorCategories;
 
     // Keep selected category valid when budget changes
     if (!budgetCategories.contains(_selectedCategory)) {
@@ -122,6 +140,7 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
         child: Form(
           key: _formKey,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Global error banner
@@ -131,18 +150,23 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
                   decoration: BoxDecoration(
                     color: AppColors.error.withAlpha(20),
                     borderRadius: BorderRadius.circular(10),
-                    border:
-                        Border.all(color: AppColors.error.withAlpha(80)),
+                    border: Border.all(color: AppColors.error.withAlpha(80)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.error_outline,
-                          color: AppColors.error, size: 18),
+                      const Icon(
+                        Icons.error_outline,
+                        color: AppColors.error,
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(_globalError!,
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: AppColors.error)),
+                        child: Text(
+                          _globalError!,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.error,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -157,13 +181,17 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
                 initialValue: _selectedCategory,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                 ),
                 items: budgetCategories
-                    .map((cat) =>
-                        DropdownMenuItem(value: cat, child: Text(cat)))
+                    .map(
+                      (cat) => DropdownMenuItem(value: cat, child: Text(cat)),
+                    )
                     .toList(),
                 onChanged: (v) => setState(() => _selectedCategory = v!),
                 validator: (v) =>
@@ -175,37 +203,43 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: selectedCat.isOverBudget
                         ? AppColors.error.withAlpha(15)
                         : selectedCat.isNearLimit
-                            ? AppColors.warning.withAlpha(15)
-                            : AppColors.success.withAlpha(15),
+                        ? AppColors.warning.withAlpha(15)
+                        : AppColors.success.withAlpha(15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         selectedCat.isOverBudget
                             ? '⚠️ Over budget!'
                             : selectedCat.isNearLimit
-                                ? '⚠️ Near limit'
-                                : '✅ On track',
+                            ? '⚠️ Near limit'
+                            : '✅ On track',
                         style: AppTextStyles.caption.copyWith(
                           color: selectedCat.isOverBudget
                               ? AppColors.error
                               : selectedCat.isNearLimit
-                                  ? AppColors.warning
-                                  : AppColors.success,
+                              ? AppColors.warning
+                              : AppColors.success,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Text(
                         '${budget!.currency} ${selectedCat.remainingAmount.toStringAsFixed(0)} remaining',
                         style: AppTextStyles.caption.copyWith(
-                            color: AppColors.textSecondary),
+                          color: AppColors.textSecondary,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -218,15 +252,25 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
                 label: 'Amount *',
                 hint: '0.00',
                 controller: _amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 prefixIcon: Icons.attach_money,
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Enter an amount.';
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Enter an amount.';
+                  }
                   final clean = v.replaceAll(',', '');
                   final parsed = double.tryParse(clean);
-                  if (parsed == null) return 'Enter a valid number.';
-                  if (parsed <= 0) return 'Amount must be greater than zero.';
-                  if (parsed > 100000000) return 'Amount is unrealistically large.';
+                  if (parsed == null) {
+                    return 'Enter a valid number.';
+                  }
+                  if (parsed <= 0) {
+                    return 'Amount must be greater than zero.';
+                  }
+                  if (parsed > 100000000) {
+                    return 'Amount is unrealistically large.';
+                  }
                   return null;
                 },
               ),
@@ -239,7 +283,9 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
                 controller: _descCtrl,
                 maxLines: 2,
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Description is required.';
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Description is required.';
+                  }
                   if (v.trim().length < 3) {
                     return 'Description must be at least 3 characters.';
                   }
@@ -260,20 +306,28 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
               // Receipt (optional)
               OutlinedButton.icon(
                 onPressed: _pickReceipt,
-                icon: Icon(_receiptBytes != null
-                    ? Icons.check_circle_outline_rounded
-                    : Icons.receipt_long_outlined),
-                label: Text(_receiptBytes != null
-                    ? 'Receipt attached'
-                    : 'Attach receipt (optional)'),
+                icon: Icon(
+                  _receiptBytes != null
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.receipt_long_outlined,
+                ),
+                label: Text(
+                  _receiptBytes != null
+                      ? 'Receipt attached'
+                      : 'Attach receipt (optional)',
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _receiptBytes != null
                       ? AppColors.success
                       : AppColors.textSecondary,
                   side: BorderSide(
-                    color: _receiptBytes != null ? AppColors.success : AppColors.divider,
+                    color: _receiptBytes != null
+                        ? AppColors.success
+                        : AppColors.divider,
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   minimumSize: const Size(double.infinity, 48),
                 ),
               ),
@@ -305,8 +359,10 @@ class _CategoryExpenseList extends ConsumerWidget {
   final String categoryName;
   final String currency;
 
-  const _CategoryExpenseList(
-      {required this.categoryName, required this.currency});
+  const _CategoryExpenseList({
+    required this.categoryName,
+    required this.currency,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -326,12 +382,13 @@ class _CategoryExpenseList extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Recent in $categoryName',
-                style: AppTextStyles.labelLarge),
-            Text('Tap to delete',
-                style: AppTextStyles.caption.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
-                )),
+            Text('Recent in $categoryName', style: AppTextStyles.labelLarge),
+            Text(
+              'Tap to delete',
+              style: AppTextStyles.caption.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -354,37 +411,49 @@ class _ExpenseRow extends ConsumerWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: ListTile(
         dense: true,
-        title: Text(expense.description,
-            style: AppTextStyles.bodySmall,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
+        title: Text(
+          expense.description,
+          style: AppTextStyles.bodySmall,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         subtitle: expense.vendorName != null
-            ? Text(expense.vendorName!,
+            ? Text(
+                expense.vendorName!,
                 style: AppTextStyles.caption.copyWith(
                   color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
-                ))
+                ),
+              )
             : null,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               '$currency ${expense.amount.toStringAsFixed(0)}',
-              style: AppTextStyles.bodySmall
-                  .copyWith(fontWeight: FontWeight.w600),
+              style: AppTextStyles.bodySmall.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(width: 4),
             IconButton(
-              icon: const Icon(Icons.delete_outline,
-                  size: 18, color: AppColors.error),
+              icon: const Icon(
+                Icons.delete_outline,
+                size: 18,
+                color: AppColors.error,
+              ),
               onPressed: () async {
-                final error =
-                    await ref.read(budgetProvider.notifier).removeExpense(expense.id);
+                final error = await ref
+                    .read(budgetProvider.notifier)
+                    .removeExpense(expense.id);
                 if (!context.mounted) return;
                 if (error != null) {
                   showWedSnackBar(context, error, type: SnackType.error);
                 } else {
-                  showWedSnackBar(context, 'Expense removed.',
-                      type: SnackType.info);
+                  showWedSnackBar(
+                    context,
+                    'Expense removed.',
+                    type: SnackType.info,
+                  );
                 }
               },
               tooltip: 'Remove expense',

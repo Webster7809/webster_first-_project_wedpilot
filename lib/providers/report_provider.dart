@@ -61,7 +61,7 @@ class ReportNotifier extends StateNotifier<ReportState> {
     final budget = _ref.read(budgetProvider).data;
     final guestRsvp = _ref.read(guestRsvpProvider);
     final tasks = _ref.read(taskProvider).data ?? [];
-    final vendors = _ref.read(allVendorsProvider).valueOrNull ?? [];
+    final vendors = _ref.read(wishlistedVendorsProvider).valueOrNull ?? [];
 
     final budgetReport =
         budget != null ? ReportService.generateBudgetReport(budget) : null;
@@ -109,7 +109,7 @@ class ReportNotifier extends StateNotifier<ReportState> {
   }
 
   void generateVendorReport() {
-    final vendors = _ref.read(allVendorsProvider).valueOrNull ?? [];
+    final vendors = _ref.read(wishlistedVendorsProvider).valueOrNull ?? [];
     final budget = _ref.read(budgetProvider).data;
     state = state.copyWith(
       vendorReport: ReportService.generateVendorReport(vendors, budget?.totalAmount),

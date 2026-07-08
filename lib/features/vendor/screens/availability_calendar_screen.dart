@@ -18,7 +18,13 @@ class AvailabilityCalendarScreen extends ConsumerStatefulWidget {
 
 class _AvailabilityCalendarScreenState
     extends ConsumerState<AvailabilityCalendarScreen> {
+  final DateTime _firstDay = DateTime.now();
+  final DateTime _lastDay = DateTime.now().add(const Duration(days: 730));
   DateTime _focusedDay = DateTime.now();
+
+  // Matches TableCalendar's rendered month/year navigation row height.
+  static const double _headerHeight = 64;
+  static const double _daysOfWeekHeight = 20;
 
   @override
   Widget build(BuildContext context) {
@@ -69,47 +75,63 @@ class _AvailabilityCalendarScreenState
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
               elevation: 2,
-              child: TableCalendar(
-                firstDay: DateTime.now(),
-                lastDay: DateTime.now().add(const Duration(days: 730)),
-                focusedDay: _focusedDay,
-                calendarFormat: CalendarFormat.month,
-                onDaySelected: (selected, focused) {
-                  setState(() => _focusedDay = focused);
-                  ref
-                      .read(vendorOwnProvider.notifier)
-                      .toggleBlockedDate(selected);
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Lower bound only guards against a degenerate (non-positive)
+                  // height on extremely short viewports — it must never force a
+                  // row height taller than what's actually available, or the
+                  // grid overflows.
+                  final rowHeight = ((constraints.maxHeight -
+                              _headerHeight -
+                              _daysOfWeekHeight) /
+                          6)
+                      .clamp(1.0, 52.0);
+                  return TableCalendar(
+                    firstDay: _firstDay,
+                    lastDay: _lastDay,
+                    focusedDay: _focusedDay,
+                    calendarFormat: CalendarFormat.month,
+                    daysOfWeekHeight: _daysOfWeekHeight,
+                    rowHeight: rowHeight,
+                    onDaySelected: (selected, focused) {
+                      setState(() => _focusedDay = focused);
+                      ref
+                          .read(vendorOwnProvider.notifier)
+                          .toggleBlockedDate(selected);
+                    },
+                    calendarBuilders: CalendarBuilders(
+                      defaultBuilder: (context, day, focusedDay) {
+                        if (isBlocked(day)) {
+                          return Container(
+                            margin: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withAlpha(38),
+                              shape: BoxShape.circle,
+                              border:
+                                  Border.all(color: AppColors.error, width: 1.5),
+                            ),
+                            child: Center(
+                              child: Text('${day.day}',
+                                  style: AppTextStyles.bodySmall
+                                      .copyWith(color: AppColors.error)),
+                            ),
+                          );
+                        }
+                        return null;
+                      },
+                    ),
+                    calendarStyle: CalendarStyle(
+                      selectedDecoration: const BoxDecoration(
+                          color: AppColors.amber, shape: BoxShape.circle),
+                      todayDecoration: BoxDecoration(
+                          color: AppColors.forestGreen, shape: BoxShape.circle),
+                    ),
+                    headerStyle: const HeaderStyle(
+                      formatButtonVisible: false,
+                      titleCentered: true,
+                    ),
+                  );
                 },
-                calendarBuilders: CalendarBuilders(
-                  defaultBuilder: (context, day, focusedDay) {
-                    if (isBlocked(day)) {
-                      return Container(
-                        margin: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withAlpha(38),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.error, width: 1.5),
-                        ),
-                        child: Center(
-                          child: Text('${day.day}',
-                              style: AppTextStyles.bodySmall
-                                  .copyWith(color: AppColors.error)),
-                        ),
-                      );
-                    }
-                    return null;
-                  },
-                ),
-                calendarStyle: CalendarStyle(
-                  selectedDecoration: const BoxDecoration(
-                      color: AppColors.amber, shape: BoxShape.circle),
-                  todayDecoration: BoxDecoration(
-                      color: AppColors.forestGreen, shape: BoxShape.circle),
-                ),
-                headerStyle: const HeaderStyle(
-                  formatButtonVisible: false,
-                  titleCentered: true,
-                ),
               ),
             ),
           ),

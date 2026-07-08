@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/vendor_provider.dart';
@@ -71,13 +72,15 @@ class _WishlistItem extends ConsumerWidget {
         margin: const EdgeInsets.only(bottom: 12),
         child: ListTile(
           contentPadding: const EdgeInsets.all(12),
-          leading: Container(
-            width: 56, height: 56,
-            decoration: BoxDecoration(
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: 56, height: 56,
               color: AppColors.primary.withAlpha(77),
-              borderRadius: BorderRadius.circular(10),
+              child: vendor.logoUrl != null
+                  ? Image.network(resolveMediaUrl(vendor.logoUrl!), fit: BoxFit.cover)
+                  : const Center(child: Text('📷', style: TextStyle(fontSize: 24))),
             ),
-            child: const Center(child: Text('📷', style: TextStyle(fontSize: 24))),
           ),
           title: Text(vendor.businessName, style: AppTextStyles.titleMedium),
           subtitle: Column(

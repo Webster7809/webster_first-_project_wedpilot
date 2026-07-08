@@ -28,10 +28,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
-    await ref.read(authProvider.notifier).login(
-          _emailCtrl.text.trim(),
-          _passCtrl.text,
-        );
+    await ref
+        .read(authProvider.notifier)
+        .login(_emailCtrl.text.trim(), _passCtrl.text);
     if (!mounted) return;
     final state = ref.read(authProvider);
     if (state.error != null) {
@@ -53,10 +52,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             final w = constraints.maxWidth;
             final isTablet = w >= 600;
             final isDesktop = w >= 900;
-            final maxWidth = isDesktop ? 450.0 : (isTablet ? 500.0 : double.infinity);
+            final maxWidth = isDesktop
+                ? 450.0
+                : (isTablet ? 500.0 : double.infinity);
 
             final content = Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _HeroSection(isDesktop: isDesktop),
                 _FormCard(
@@ -132,7 +134,11 @@ class _HeroSection extends StatelessWidget {
                           color: AppColors.amber,
                           borderRadius: BorderRadius.circular(13),
                         ),
-                        child: const Icon(Icons.favorite, color: Colors.white, size: 24),
+                        child: const Icon(
+                          Icons.favorite,
+                          color: Colors.white,
+                          size: 24,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Text(

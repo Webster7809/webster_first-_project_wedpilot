@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/admin_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/admin_provider.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
@@ -33,7 +35,64 @@ class _ContentModerationScreenState
 
   @override
   Widget build(BuildContext context) {
-    final adminState = ref.watch(adminProvider);
+    final flaggedReviews =
+        ref.watch(adminFlaggedReviewsProvider).valueOrNull ?? [];
+    final flaggedImages =
+        ref.watch(adminFlaggedImagesProvider).valueOrNull ?? [];
+    final flaggedMessages =
+        ref.watch(adminFlaggedMessagesProvider).valueOrNull ?? [];
+
+    Future<void> moderateReview(
+      String id,
+      String action,
+      String successMessage,
+    ) async {
+      final token = ref.read(authProvider.notifier).accessToken;
+      if (token == null) return;
+      try {
+        await AdminApiService.instance.moderateReview(
+          token,
+          id,
+          action: action,
+        );
+        ref.invalidate(adminFlaggedReviewsProvider);
+        if (context.mounted) {
+          showWedSnackBar(
+            context,
+            successMessage,
+            type: action == 'approve' ? SnackType.success : SnackType.error,
+          );
+        }
+      } on AdminApiException catch (e) {
+        if (context.mounted) {
+          showWedSnackBar(context, e.message, type: SnackType.error);
+        }
+      }
+    }
+
+    Future<void> moderateImage(
+      String id,
+      String action,
+      String successMessage,
+    ) async {
+      final token = ref.read(authProvider.notifier).accessToken;
+      if (token == null) return;
+      try {
+        await AdminApiService.instance.moderateImage(token, id, action: action);
+        ref.invalidate(adminFlaggedImagesProvider);
+        if (context.mounted) {
+          showWedSnackBar(
+            context,
+            successMessage,
+            type: action == 'approve' ? SnackType.success : SnackType.error,
+          );
+        }
+      } on AdminApiException catch (e) {
+        if (context.mounted) {
+          showWedSnackBar(context, e.message, type: SnackType.error);
+        }
+      }
+    }
 
     return Scaffold(
       backgroundColor: AppColors.adminPage,
@@ -44,8 +103,9 @@ class _ContentModerationScreenState
         shadowColor: AppColors.divider,
         title: Text(
           'Content Moderation',
-          style: AppTextStyles.headlineSmall
-              .copyWith(color: AppColors.textPrimary),
+          style: AppTextStyles.headlineSmall.copyWith(
+            color: AppColors.textPrimary,
+          ),
         ),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         bottom: TabBar(
@@ -54,18 +114,13 @@ class _ContentModerationScreenState
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: AppColors.adminIndigo,
           indicatorWeight: 2,
-          labelStyle:
-              AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600),
+          labelStyle: AppTextStyles.caption.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
           tabs: [
-            Tab(
-                text:
-                    'Reviews (${adminState.flaggedReviews.length})'),
-            Tab(
-                text:
-                    'Images (${adminState.flaggedImages.length})'),
-            Tab(
-                text:
-                    'Messages (${adminState.flaggedMessages.length})'),
+            Tab(text: 'Reviews (${flaggedReviews.length})'),
+            Tab(text: 'Images (${flaggedImages.length})'),
+            Tab(text: 'Messages (${flaggedMessages.length})'),
           ],
         ),
       ),
@@ -74,47 +129,24 @@ class _ContentModerationScreenState
         children: [
           // ── Reviews tab ──────────────────────────────────────
           _ReviewModerationList(
-            reviews: adminState.flaggedReviews,
-            onApprove: (id) {
-              ref.read(adminProvider.notifier).approveReview(id);
-              showWedSnackBar(context, 'Review approved',
-                  type: SnackType.success);
-            },
-            onReject: (id) {
-              ref.read(adminProvider.notifier).rejectReview(id);
-              showWedSnackBar(context, 'Review removed',
-                  type: SnackType.error);
-            },
+            reviews: flaggedReviews,
+            onApprove: (id) => moderateReview(id, 'approve', 'Review approved'),
+            onReject: (id) => moderateReview(id, 'reject', 'Review removed'),
           ),
 
           // ── Images tab ───────────────────────────────────────
           _ImageModerationList(
-            images: adminState.flaggedImages,
-            onApprove: (id) {
-              ref.read(adminProvider.notifier).approveImage(id);
-              showWedSnackBar(context, 'Image approved',
-                  type: SnackType.success);
-            },
-            onReject: (id) {
-              ref.read(adminProvider.notifier).rejectImage(id);
-              showWedSnackBar(context, 'Image removed',
-                  type: SnackType.error);
-            },
+            images: flaggedImages,
+            onApprove: (id) => moderateImage(id, 'approve', 'Image approved'),
+            onReject: (id) => moderateImage(id, 'reject', 'Image removed'),
           ),
 
           // ── Messages tab ─────────────────────────────────────
+          // Always empty today — no messaging system exists yet to flag from.
           _MessageModerationList(
-            messages: adminState.flaggedMessages,
-            onApprove: (id) {
-              ref.read(adminProvider.notifier).approveMessage(id);
-              showWedSnackBar(context, 'Message cleared',
-                  type: SnackType.success);
-            },
-            onReject: (id) {
-              ref.read(adminProvider.notifier).rejectMessage(id);
-              showWedSnackBar(context, 'Message removed',
-                  type: SnackType.error);
-            },
+            messages: flaggedMessages,
+            onApprove: (_) {},
+            onReject: (_) {},
           ),
         ],
       ),
@@ -142,8 +174,9 @@ class _EmptyModeration extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             message,
-            style: AppTextStyles.bodySmall
-                .copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
           ),
         ],
       ),
@@ -167,8 +200,10 @@ class _FlagChip extends StatelessWidget {
       ),
       child: Text(
         'Flagged: $reason',
-        style: AppTextStyles.caption
-            .copyWith(color: AppColors.error, fontWeight: FontWeight.w600),
+        style: AppTextStyles.caption.copyWith(
+          color: AppColors.error,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -223,8 +258,9 @@ class _ReviewModerationList extends StatelessWidget {
                   Expanded(
                     child: Text(
                       review.vendor,
-                      style: AppTextStyles.titleMedium
-                          .copyWith(fontWeight: FontWeight.w600),
+                      style: AppTextStyles.titleMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -247,8 +283,9 @@ class _ReviewModerationList extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 review.text,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 14),
               Row(
@@ -322,34 +359,51 @@ class _ImageModerationList extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Image placeholder
               ClipRRect(
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(16),
                   topRight: Radius.circular(16),
                 ),
                 child: Container(
-                  height: 120,
+                  height: 200,
                   width: double.infinity,
                   color: AppColors.adminNeutralBg,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.image_outlined,
-                        size: 36,
-                        color: AppColors.textHint,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        img.category,
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.textSecondary,
+                  child: img.url.isNotEmpty
+                      ? Image.network(
+                          img.thumbnailUrl ?? img.url,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Center(
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              size: 36,
+                              color: AppColors.textHint,
+                            ),
+                          ),
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            );
+                          },
+                        )
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.image_outlined,
+                              size: 36,
+                              color: AppColors.textHint,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              img.category,
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
               Padding(
@@ -363,8 +417,9 @@ class _ImageModerationList extends StatelessWidget {
                         Expanded(
                           child: Text(
                             img.vendor,
-                            style: AppTextStyles.titleMedium
-                                .copyWith(fontWeight: FontWeight.w600),
+                            style: AppTextStyles.titleMedium.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -453,9 +508,11 @@ class _MessageModerationList extends StatelessWidget {
                   Expanded(
                     child: Row(
                       children: [
-                        const Icon(Icons.person_outline,
-                            size: 14,
-                            color: AppColors.textSecondary),
+                        const Icon(
+                          Icons.person_outline,
+                          size: 14,
+                          color: AppColors.textSecondary,
+                        ),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
@@ -469,9 +526,11 @@ class _MessageModerationList extends StatelessWidget {
                         ),
                         const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 6),
-                          child: Icon(Icons.arrow_forward,
-                              size: 12,
-                              color: AppColors.textHint),
+                          child: Icon(
+                            Icons.arrow_forward,
+                            size: 12,
+                            color: AppColors.textHint,
+                          ),
                         ),
                         Flexible(
                           child: Text(

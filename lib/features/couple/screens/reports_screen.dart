@@ -45,8 +45,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Regenerate all reports',
-            onPressed: () =>
-                ref.read(reportProvider.notifier).generateAll(),
+            onPressed: () => ref.read(reportProvider.notifier).generateAll(),
           ),
         ],
         bottom: TabBar(
@@ -97,10 +96,7 @@ class _BudgetReportTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _ReportHeader(
-          title: 'Budget Report',
-          generatedAt: report!.generatedAt,
-        ),
+        _ReportHeader(title: 'Budget Report', generatedAt: report!.generatedAt),
 
         // Health banner
         _HealthBanner(isHealthy: s.isHealthy),
@@ -110,18 +106,25 @@ class _BudgetReportTab extends StatelessWidget {
         _SectionCard(
           title: 'Summary',
           children: [
-            _ReportRow('Total Budget', fmt.format(s.totalBudget),
-                bold: true),
-            _ReportRow('Total Spent', fmt.format(s.totalSpent),
-                valueColor: s.totalSpent > s.totalBudget
-                    ? AppColors.error
-                    : AppColors.textPrimary),
-            _ReportRow('Remaining', fmt.format(s.totalRemaining),
-                valueColor: s.totalRemaining < 0
-                    ? AppColors.error
-                    : AppColors.success),
-            _ReportRow('Spending %',
-                '${s.spendingPercent.toStringAsFixed(1)}%'),
+            _ReportRow('Total Budget', fmt.format(s.totalBudget), bold: true),
+            _ReportRow(
+              'Total Spent',
+              fmt.format(s.totalSpent),
+              valueColor: s.totalSpent > s.totalBudget
+                  ? AppColors.error
+                  : AppColors.textPrimary,
+            ),
+            _ReportRow(
+              'Remaining',
+              fmt.format(s.totalRemaining),
+              valueColor: s.totalRemaining < 0
+                  ? AppColors.error
+                  : AppColors.success,
+            ),
+            _ReportRow(
+              'Spending %',
+              '${s.spendingPercent.toStringAsFixed(1)}%',
+            ),
             _ReportRow('Expense records', '${s.expenseCount}'),
             _ReportRow('Budget categories', '${s.categoryCount}'),
           ],
@@ -140,8 +143,8 @@ class _BudgetReportTab extends StatelessWidget {
                 s.spendingPercent >= 100
                     ? AppColors.error
                     : s.spendingPercent >= 90
-                        ? AppColors.warning
-                        : AppColors.success,
+                    ? AppColors.warning
+                    : AppColors.success,
               ),
               minHeight: 12,
               borderRadius: BorderRadius.circular(6),
@@ -149,8 +152,9 @@ class _BudgetReportTab extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               '${s.spendingPercent.toStringAsFixed(1)}% of budget used',
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),
@@ -186,35 +190,49 @@ class _BudgetReportTab extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Text(c.categoryIcon,
-                              style: const TextStyle(fontSize: 16)),
-                          const SizedBox(width: 6),
-                          Text(c.categoryName,
-                              style: AppTextStyles.bodyMedium),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            fmt.format(c.spent),
-                            style: AppTextStyles.bodySmall.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: c.isOverBudget
-                                  ? AppColors.error
-                                  : AppColors.textPrimary,
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Text(
+                              c.categoryIcon,
+                              style: const TextStyle(fontSize: 16),
                             ),
-                          ),
-                          Text(
-                            'of ${fmt.format(c.allocated)}',
-                            style: AppTextStyles.caption.copyWith(
-                                color: AppColors.textSecondary),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                c.categoryName,
+                                style: AppTextStyles.bodyMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              fmt.format(c.spent),
+                              style: AppTextStyles.bodySmall.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: c.isOverBudget
+                                    ? AppColors.error
+                                    : AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              'of ${fmt.format(c.allocated)}',
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -226,8 +244,8 @@ class _BudgetReportTab extends StatelessWidget {
                       c.isOverBudget
                           ? AppColors.error
                           : c.isNearLimit
-                              ? AppColors.warning
-                              : AppColors.forestGreen,
+                          ? AppColors.warning
+                          : AppColors.forestGreen,
                     ),
                     minHeight: 6,
                     borderRadius: BorderRadius.circular(3),
@@ -238,7 +256,8 @@ class _BudgetReportTab extends StatelessWidget {
                       child: Text(
                         '${c.expenseCount} expense${c.expenseCount == 1 ? '' : 's'} recorded',
                         style: AppTextStyles.caption.copyWith(
-                            color: AppColors.textSecondary),
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
                 ],
@@ -254,9 +273,10 @@ class _BudgetReportTab extends StatelessWidget {
             title: 'Largest Expense',
             children: [
               _ReportRow(
-                  s.largestExpenseDescription!,
-                  fmt.format(s.largestExpenseAmount!),
-                  bold: true),
+                s.largestExpenseDescription!,
+                fmt.format(s.largestExpenseAmount!),
+                bold: true,
+              ),
             ],
           ),
         ],
@@ -292,28 +312,36 @@ class _RsvpReportTab extends StatelessWidget {
         Row(
           children: [
             Expanded(
-                child: _MiniStatCard(
-                    value: '${s.attending}',
-                    label: 'Attending',
-                    color: AppColors.success)),
+              child: _MiniStatCard(
+                value: '${s.attending}',
+                label: 'Attending',
+                color: AppColors.success,
+              ),
+            ),
             const SizedBox(width: 8),
             Expanded(
-                child: _MiniStatCard(
-                    value: '${s.declined}',
-                    label: 'Declined',
-                    color: AppColors.error)),
+              child: _MiniStatCard(
+                value: '${s.declined}',
+                label: 'Declined',
+                color: AppColors.error,
+              ),
+            ),
             const SizedBox(width: 8),
             Expanded(
-                child: _MiniStatCard(
-                    value: '${s.maybe}',
-                    label: 'Maybe',
-                    color: AppColors.warning)),
+              child: _MiniStatCard(
+                value: '${s.maybe}',
+                label: 'Maybe',
+                color: AppColors.warning,
+              ),
+            ),
             const SizedBox(width: 8),
             Expanded(
-                child: _MiniStatCard(
-                    value: '${s.pending}',
-                    label: 'Pending',
-                    color: AppColors.textSecondary)),
+              child: _MiniStatCard(
+                value: '${s.pending}',
+                label: 'Pending',
+                color: AppColors.textSecondary,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -321,15 +349,22 @@ class _RsvpReportTab extends StatelessWidget {
         _SectionCard(
           title: 'Attendance Details',
           children: [
-            _ReportRow('Total guests expected', '${s.totalAttending} people',
-                bold: true),
+            _ReportRow(
+              'Total guests expected',
+              '${s.totalAttending} people',
+              bold: true,
+            ),
             _ReportRow('Total invited', '${s.totalInvited} guests'),
             _ReportRow('Total in guest list', '${s.totalGuests} guests'),
             _ReportRow('Responses received', '${s.responded}'),
             _ReportRow(
-                'Response rate', '${s.responseRate.toStringAsFixed(1)}%'),
-            _ReportRow('Acceptance rate',
-                '${s.acceptanceRate.toStringAsFixed(1)}%'),
+              'Response rate',
+              '${s.responseRate.toStringAsFixed(1)}%',
+            ),
+            _ReportRow(
+              'Acceptance rate',
+              '${s.acceptanceRate.toStringAsFixed(1)}%',
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -341,24 +376,26 @@ class _RsvpReportTab extends StatelessWidget {
             LinearProgressIndicator(
               value: s.totalInvited > 0 ? s.responded / s.totalInvited : 0,
               backgroundColor: AppColors.divider,
-              valueColor:
-                  AlwaysStoppedAnimation<Color>(AppColors.forestGreen),
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.forestGreen),
               minHeight: 10,
               borderRadius: BorderRadius.circular(5),
             ),
             const SizedBox(height: 6),
             Text(
               '${s.responded} of ${s.totalInvited} guests responded',
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
             if (s.pending > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   '${s.pending} guest${s.pending == 1 ? '' : 's'} still pending',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.warning, fontWeight: FontWeight.w600),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.warning,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
           ],
@@ -379,14 +416,28 @@ class _RsvpReportTab extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(e.key, style: AppTextStyles.bodySmall),
-                        Text(
-                          '${e.value} guest${e.value == 1 ? '' : 's'} '
-                          '(${(pct * 100).toStringAsFixed(0)}%)',
-                          style: AppTextStyles.caption.copyWith(
-                              color: AppColors.textSecondary),
+                        Expanded(
+                          child: Text(
+                            e.key,
+                            style: AppTextStyles.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            '${e.value} guest${e.value == 1 ? '' : 's'} '
+                            '(${(pct * 100).toStringAsFixed(0)}%)',
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                          ),
                         ),
                       ],
                     ),
@@ -395,7 +446,8 @@ class _RsvpReportTab extends StatelessWidget {
                       value: pct,
                       backgroundColor: AppColors.divider,
                       valueColor: AlwaysStoppedAnimation<Color>(
-                          AppColors.forestGreen),
+                        AppColors.forestGreen,
+                      ),
                       minHeight: 6,
                       borderRadius: BorderRadius.circular(3),
                     ),
@@ -412,7 +464,10 @@ class _RsvpReportTab extends StatelessWidget {
           _SectionCard(
             title: 'Guest Relations',
             children: report!.relationBreakdown.entries.map((e) {
-              return _ReportRow(e.key, '${e.value} guest${e.value == 1 ? '' : 's'}');
+              return _ReportRow(
+                e.key,
+                '${e.value} guest${e.value == 1 ? '' : 's'}',
+              );
             }).toList(),
           ),
       ],
@@ -448,10 +503,11 @@ class _VendorReportTab extends StatelessWidget {
           children: [
             _ReportRow('Total vendors available', '${r.totalVendors}'),
             _ReportRow('Within-budget vendors', '${r.withinBudgetCount}'),
-            _ReportRow('Categories covered',
-                '${r.categoriesCovered.length}'),
-            _ReportRow('Average rating',
-                '${r.averageRating.toStringAsFixed(1)} / 5.0'),
+            _ReportRow('Categories covered', '${r.categoriesCovered.length}'),
+            _ReportRow(
+              'Average rating',
+              '${r.averageRating.toStringAsFixed(1)} / 5.0',
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -473,11 +529,10 @@ class _VendorReportTab extends StatelessWidget {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: [
-                              AppColors.warning,
-                              AppColors.textSecondary,
-                              AppColors.forestGreen,
-                            ][i]
-                            .withAlpha(40),
+                          AppColors.warning,
+                          AppColors.textSecondary,
+                          AppColors.forestGreen,
+                        ][i].withAlpha(40),
                         shape: BoxShape.circle,
                       ),
                       child: Text(
@@ -497,24 +552,34 @@ class _VendorReportTab extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(v.businessName,
-                              style: AppTextStyles.bodyMedium
-                                  .copyWith(fontWeight: FontWeight.w600)),
-                          Text(v.category,
-                              style: AppTextStyles.caption.copyWith(
-                                  color: AppColors.textSecondary)),
+                          Text(
+                            v.businessName,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            v.category,
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     Row(
                       children: [
-                        const Icon(Icons.star,
-                            size: 14, color: AppColors.warning),
+                        const Icon(
+                          Icons.star,
+                          size: 14,
+                          color: AppColors.warning,
+                        ),
                         const SizedBox(width: 3),
                         Text(
                           (v.rating ?? 0).toStringAsFixed(1),
                           style: AppTextStyles.bodySmall.copyWith(
-                              fontWeight: FontWeight.w600),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -560,7 +625,10 @@ class _TaskReportTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _ReportHeader(title: 'Task Progress Report', generatedAt: DateTime.now()),
+        _ReportHeader(
+          title: 'Task Progress Report',
+          generatedAt: DateTime.now(),
+        ),
         const SizedBox(height: 12),
 
         // Progress circle-style card
@@ -576,14 +644,16 @@ class _TaskReportTab extends StatelessWidget {
                       Text(
                         r.progressLabel,
                         style: AppTextStyles.displaySmall.copyWith(
-                            color: AppColors.forestGreen),
+                          color: AppColors.forestGreen,
+                        ),
                       ),
                       const SizedBox(height: 6),
                       LinearProgressIndicator(
                         value: r.overallProgress,
                         backgroundColor: AppColors.divider,
                         valueColor: AlwaysStoppedAnimation<Color>(
-                            AppColors.forestGreen),
+                          AppColors.forestGreen,
+                        ),
                         minHeight: 10,
                         borderRadius: BorderRadius.circular(5),
                       ),
@@ -594,13 +664,22 @@ class _TaskReportTab extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _ReportRow('Total tasks', '${r.totalTasks}'),
-            _ReportRow('Completed', '${r.completedTasks}',
-                valueColor: AppColors.success),
-            _ReportRow('Remaining', '${r.remainingTasks}',
-                valueColor:
-                    r.remainingTasks > 0 ? AppColors.warning : AppColors.success),
-            _ReportRow('Phases complete',
-                '${r.completedPhases} / ${r.totalPhases}'),
+            _ReportRow(
+              'Completed',
+              '${r.completedTasks}',
+              valueColor: AppColors.success,
+            ),
+            _ReportRow(
+              'Remaining',
+              '${r.remainingTasks}',
+              valueColor: r.remainingTasks > 0
+                  ? AppColors.warning
+                  : AppColors.success,
+            ),
+            _ReportRow(
+              'Phases complete',
+              '${r.completedPhases} / ${r.totalPhases}',
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -610,7 +689,8 @@ class _TaskReportTab extends StatelessWidget {
           _AlertBanner(
             color: AppColors.error,
             icon: Icons.schedule,
-            title: '${r.overdueTasks.length} overdue task${r.overdueTasks.length == 1 ? '' : 's'}',
+            title:
+                '${r.overdueTasks.length} overdue task${r.overdueTasks.length == 1 ? '' : 's'}',
             items: r.overdueTasks.map((t) => t.task).toList(),
           ),
           const SizedBox(height: 12),
@@ -641,9 +721,12 @@ class _TaskReportTab extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                        child: Text(e.key,
-                            style: AppTextStyles.bodySmall
-                                .copyWith(fontWeight: FontWeight.w500)),
+                        child: Text(
+                          e.key,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
                       Text(
                         '${(pct * 100).toStringAsFixed(0)}%',
@@ -651,7 +734,9 @@ class _TaskReportTab extends StatelessWidget {
                           color: pct == 1.0
                               ? AppColors.success
                               : AppColors.textSecondary,
-                          fontWeight: pct == 1.0 ? FontWeight.w700 : FontWeight.normal,
+                          fontWeight: pct == 1.0
+                              ? FontWeight.w700
+                              : FontWeight.normal,
                         ),
                       ),
                     ],
@@ -730,8 +815,12 @@ class _ReportRow extends StatelessWidget {
   final bool bold;
   final Color? valueColor;
 
-  const _ReportRow(this.label, this.value,
-      {this.bold = false, this.valueColor});
+  const _ReportRow(
+    this.label,
+    this.value, {
+    this.bold = false,
+    this.valueColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -741,9 +830,12 @@ class _ReportRow extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: Text(label,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary)),
+            child: Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
           Text(
             value,
@@ -762,8 +854,11 @@ class _MiniStatCard extends StatelessWidget {
   final String value;
   final String label;
   final Color color;
-  const _MiniStatCard(
-      {required this.value, required this.label, required this.color});
+  const _MiniStatCard({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -776,11 +871,16 @@ class _MiniStatCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(value,
-              style: AppTextStyles.headlineSmall.copyWith(color: color)),
+          Text(
+            value,
+            style: AppTextStyles.headlineSmall.copyWith(color: color),
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              style: AppTextStyles.caption, textAlign: TextAlign.center),
+          Text(
+            label,
+            style: AppTextStyles.caption,
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
@@ -794,7 +894,9 @@ class _HealthBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = isHealthy ? AppColors.success : AppColors.error;
-    final icon = isHealthy ? Icons.check_circle_outline : Icons.warning_amber_rounded;
+    final icon = isHealthy
+        ? Icons.check_circle_outline
+        : Icons.warning_amber_rounded;
     final msg = isHealthy
         ? 'Budget is on track — no categories over budget.'
         : 'Action needed — one or more categories have exceeded their allocation.';
@@ -811,9 +913,11 @@ class _HealthBanner extends StatelessWidget {
           Icon(icon, color: color, size: 20),
           const SizedBox(width: 10),
           Expanded(
-              child: Text(msg,
-                  style:
-                      AppTextStyles.bodySmall.copyWith(color: color))),
+            child: Text(
+              msg,
+              style: AppTextStyles.bodySmall.copyWith(color: color),
+            ),
+          ),
         ],
       ),
     );
@@ -849,30 +953,43 @@ class _AlertBanner extends StatelessWidget {
             children: [
               Icon(icon, color: color, size: 18),
               const SizedBox(width: 8),
-              Text(title,
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: color, fontWeight: FontWeight.w700)),
+              Text(
+                title,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
           if (items.isNotEmpty) ...[
             const SizedBox(height: 8),
-            ...items.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 3),
-                  child: Row(
-                    children: [
-                      Container(
-                          width: 5,
-                          height: 5,
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                              color: color, shape: BoxShape.circle)),
-                      Expanded(
-                          child: Text(item,
-                              style: AppTextStyles.caption.copyWith(
-                                  color: AppColors.textPrimary))),
-                    ],
-                  ),
-                )),
+            ...items.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 5,
+                      height: 5,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        item,
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ],
       ),
@@ -885,8 +1002,11 @@ class _NoDataState extends StatelessWidget {
   final String message;
   final String detail;
 
-  const _NoDataState(
-      {required this.icon, required this.message, required this.detail});
+  const _NoDataState({
+    required this.icon,
+    required this.message,
+    required this.detail,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -900,10 +1020,13 @@ class _NoDataState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(message, style: AppTextStyles.headlineMedium),
             const SizedBox(height: 8),
-            Text(detail,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary),
-                textAlign: TextAlign.center),
+            Text(
+              detail,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),

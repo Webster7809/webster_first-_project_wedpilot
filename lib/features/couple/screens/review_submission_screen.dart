@@ -72,10 +72,9 @@ class _ReviewSubmissionScreenState extends ConsumerState<ReviewSubmissionScreen>
   @override
   Widget build(BuildContext context) {
     final wishlistedIds = ref.watch(wishlistProvider);
+    final wishlistedVendors = ref.watch(wishlistedVendorsProvider).valueOrNull ?? [];
     final allVendors = ref.watch(allVendorsProvider).valueOrNull ?? [];
-    final vendorOptions = wishlistedIds.isEmpty
-        ? allVendors
-        : allVendors.where((v) => wishlistedIds.contains(v.id)).toList();
+    final vendorOptions = wishlistedIds.isEmpty ? allVendors : wishlistedVendors;
 
     return Scaffold(
       backgroundColor: AppColors.background,

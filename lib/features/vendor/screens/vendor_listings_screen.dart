@@ -51,11 +51,9 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
     final media = ref.read(vendorMediaProvider);
     final bytes = await file.readAsBytes();
     if (!mounted) return;
-    final error = await ref.read(vendorOwnProvider.notifier).addMedia(
-          bytes,
-          file.name,
-          isFeatured: media.isEmpty,
-        );
+    final error = await ref
+        .read(vendorOwnProvider.notifier)
+        .addMedia(bytes, file.name, isFeatured: media.isEmpty);
     if (error != null && mounted) {
       showWedSnackBar(context, error, type: SnackType.error);
     }
@@ -73,7 +71,9 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
   @override
   Widget build(BuildContext context) {
     if (ref.watch(vendorOwnProvider).status == ResourceStatus.initial) {
-      Future.microtask(() => ref.read(vendorOwnProvider.notifier).loadOwnVendorData());
+      Future.microtask(
+        () => ref.read(vendorOwnProvider.notifier).loadOwnVendorData(),
+      );
     }
     final services = ref.watch(vendorServicesProvider);
     final media = ref.watch(vendorMediaProvider);
@@ -84,9 +84,10 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
       appBar: AppBar(
         backgroundColor: AppColors.forestGreen,
         automaticallyImplyLeading: false,
-        title: Text('My Listings',
-            style: AppTextStyles.headlineMedium
-                .copyWith(color: Colors.white)),
+        title: Text(
+          'My Listings',
+          style: AppTextStyles.headlineMedium.copyWith(color: Colors.white),
+        ),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppColors.amber,
@@ -109,8 +110,7 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: const Text('Remove photo'),
-                  content:
-                      const Text('Remove this photo from your portfolio?'),
+                  content: const Text('Remove this photo from your portfolio?'),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
@@ -118,14 +118,18 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
                     ),
                     TextButton(
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: Text('Remove',
-                          style: TextStyle(color: AppColors.error)),
+                      child: Text(
+                        'Remove',
+                        style: TextStyle(color: AppColors.error),
+                      ),
                     ),
                   ],
                 ),
               );
               if (confirmed == true) {
-                final error = await ref.read(vendorOwnProvider.notifier).deleteMedia(id);
+                final error = await ref
+                    .read(vendorOwnProvider.notifier)
+                    .deleteMedia(id);
                 if (!context.mounted) return;
                 if (error != null) {
                   showWedSnackBar(context, error, type: SnackType.error);
@@ -138,11 +142,14 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.amber,
         foregroundColor: Colors.white,
-        onPressed:
-            isServicesTab ? () => _showAddServiceSheet() : _pickAndAddImage,
-        child: Icon(isServicesTab
-            ? Icons.add_rounded
-            : Icons.add_photo_alternate_outlined),
+        onPressed: isServicesTab
+            ? () => _showAddServiceSheet()
+            : _pickAndAddImage,
+        child: Icon(
+          isServicesTab
+              ? Icons.add_rounded
+              : Icons.add_photo_alternate_outlined,
+        ),
       ),
     );
   }
@@ -166,17 +173,24 @@ class _ServicesTab extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.storefront_outlined,
-                  size: 64, color: AppColors.forestGreen.withAlpha(80)),
+              Icon(
+                Icons.storefront_outlined,
+                size: 64,
+                color: AppColors.forestGreen.withAlpha(80),
+              ),
               const SizedBox(height: 16),
-              Text('No services yet',
-                  style: AppTextStyles.headlineSmall
-                      .copyWith(color: AppColors.forestGreen)),
+              Text(
+                'No services yet',
+                style: AppTextStyles.headlineSmall.copyWith(
+                  color: AppColors.forestGreen,
+                ),
+              ),
               const SizedBox(height: 8),
               Text(
                 'Tap + to add your first service package.',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -202,8 +216,7 @@ class _ServicesTab extends ConsumerWidget {
               context: context,
               builder: (ctx) => AlertDialog(
                 title: const Text('Delete service'),
-                content: Text(
-                    'Remove "${service.title}" from your listings?'),
+                content: Text('Remove "${service.title}" from your listings?'),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
@@ -211,14 +224,18 @@ class _ServicesTab extends ConsumerWidget {
                   ),
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, true),
-                    child: Text('Delete',
-                        style: TextStyle(color: AppColors.error)),
+                    child: Text(
+                      'Delete',
+                      style: TextStyle(color: AppColors.error),
+                    ),
                   ),
                 ],
               ),
             );
             if (confirmed == true) {
-              final error = await ref.read(vendorOwnProvider.notifier).deleteService(service.id);
+              final error = await ref
+                  .read(vendorOwnProvider.notifier)
+                  .deleteService(service.id);
               if (!context.mounted) return;
               if (error != null) {
                 showWedSnackBar(context, error, type: SnackType.error);
@@ -249,17 +266,24 @@ class _PortfolioTab extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.photo_library_outlined,
-                  size: 64, color: AppColors.forestGreen.withAlpha(80)),
+              Icon(
+                Icons.photo_library_outlined,
+                size: 64,
+                color: AppColors.forestGreen.withAlpha(80),
+              ),
               const SizedBox(height: 16),
-              Text('No portfolio photos',
-                  style: AppTextStyles.headlineSmall
-                      .copyWith(color: AppColors.forestGreen)),
+              Text(
+                'No portfolio photos',
+                style: AppTextStyles.headlineSmall.copyWith(
+                  color: AppColors.forestGreen,
+                ),
+              ),
               const SizedBox(height: 8),
               Text(
                 'Upload photos of your work to attract couples.',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -282,9 +306,8 @@ class _PortfolioTab extends ConsumerWidget {
         return _PortfolioTile(
           item: item,
           onDelete: () => onDeleteMedia(item.id),
-          onToggleFeatured: () => ref
-              .read(vendorOwnProvider.notifier)
-              .toggleFeaturedMedia(item.id),
+          onToggleFeatured: () =>
+              ref.read(vendorOwnProvider.notifier).toggleFeaturedMedia(item.id),
         );
       },
     );
@@ -331,29 +354,38 @@ class _ServiceCard extends StatelessWidget {
                 color: AppColors.forestGreen.withAlpha(15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.design_services_outlined,
-                  size: 22, color: AppColors.forestGreen),
+              child: const Icon(
+                Icons.design_services_outlined,
+                size: 22,
+                color: AppColors.forestGreen,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(service.title,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(fontWeight: FontWeight.w600),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    service.title,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 3),
                   Text(
                     'ZMW ${service.priceMin.toStringAsFixed(0)} – ${service.priceMax.toStringAsFixed(0)} / ${service.unit}',
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: service.isActive
                           ? AppColors.success.withAlpha(20)
@@ -374,8 +406,10 @@ class _ServiceCard extends StatelessWidget {
               ),
             ),
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert_rounded,
-                  color: AppColors.textSecondary),
+              icon: const Icon(
+                Icons.more_vert_rounded,
+                color: AppColors.textSecondary,
+              ),
               onSelected: (value) {
                 if (value == 'edit') onEdit();
                 if (value == 'toggle') onToggleActive();
@@ -386,12 +420,15 @@ class _ServiceCard extends StatelessWidget {
                 PopupMenuItem(
                   value: 'toggle',
                   child: Text(
-                      service.isActive ? 'Set as draft' : 'Set as active'),
+                    service.isActive ? 'Set as draft' : 'Set as active',
+                  ),
                 ),
                 PopupMenuItem(
                   value: 'delete',
-                  child: Text('Delete',
-                      style: TextStyle(color: AppColors.error)),
+                  child: Text(
+                    'Delete',
+                    style: TextStyle(color: AppColors.error),
+                  ),
                 ),
               ],
             ),
@@ -417,46 +454,63 @@ class _PortfolioTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onLongPress: onDelete,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.network(resolveMediaUrl(item.url),
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                      color: AppColors.creamDark,
-                      child: const Icon(Icons.broken_image_outlined,
-                          color: AppColors.textHint),
-                    )),
-            Positioned(
-              top: 4,
-              right: 4,
-              child: GestureDetector(
-                onTap: onToggleFeatured,
-                child: Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: item.isFeatured
-                        ? AppColors.amber
-                        : Colors.black.withAlpha(80),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    item.isFeatured
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    size: 16,
-                    color: Colors.white,
-                  ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(
+            resolveMediaUrl(item.url),
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: AppColors.creamDark,
+              child: const Icon(
+                Icons.broken_image_outlined,
+                color: AppColors.textHint,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: GestureDetector(
+              onTap: onToggleFeatured,
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: item.isFeatured
+                      ? AppColors.amber
+                      : Colors.black.withAlpha(80),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  item.isFeatured
+                      ? Icons.star_rounded
+                      : Icons.star_outline_rounded,
+                  size: 16,
+                  color: Colors.white,
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+          Positioned(
+            top: 4,
+            left: 4,
+            child: GestureDetector(
+              onTap: onDelete,
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(80),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close, size: 16, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -491,9 +545,11 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
     _titleCtrl = TextEditingController(text: s?.title ?? '');
     _descCtrl = TextEditingController(text: s?.description ?? '');
     _priceMinCtrl = TextEditingController(
-        text: s != null ? s.priceMin.toStringAsFixed(0) : '');
+      text: s != null ? s.priceMin.toStringAsFixed(0) : '',
+    );
     _priceMaxCtrl = TextEditingController(
-        text: s != null ? s.priceMax.toStringAsFixed(0) : '');
+      text: s != null ? s.priceMax.toStringAsFixed(0) : '',
+    );
     _unit = s?.unit ?? 'event';
   }
 
@@ -522,24 +578,30 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
     final notifier = ref.read(vendorOwnProvider.notifier);
 
     final error = widget.existing != null
-        ? await notifier.updateService(widget.existing!.copyWith(
-            title: _titleCtrl.text.trim(),
-            description:
-                _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-            priceMin: min,
-            priceMax: max,
-            unit: _unit,
-          ))
-        : await notifier.addService(VendorService(
-            id: const Uuid().v4(),
-            vendorId: vendorId,
-            title: _titleCtrl.text.trim(),
-            description:
-                _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-            priceMin: min,
-            priceMax: max,
-            unit: _unit,
-          ));
+        ? await notifier.updateService(
+            widget.existing!.copyWith(
+              title: _titleCtrl.text.trim(),
+              description: _descCtrl.text.trim().isEmpty
+                  ? null
+                  : _descCtrl.text.trim(),
+              priceMin: min,
+              priceMax: max,
+              unit: _unit,
+            ),
+          )
+        : await notifier.addService(
+            VendorService(
+              id: const Uuid().v4(),
+              vendorId: vendorId,
+              title: _titleCtrl.text.trim(),
+              description: _descCtrl.text.trim().isEmpty
+                  ? null
+                  : _descCtrl.text.trim(),
+              priceMin: min,
+              priceMax: max,
+              unit: _unit,
+            ),
+          );
 
     if (!mounted) return;
     if (error != null) {
@@ -580,8 +642,9 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
               const SizedBox(height: 20),
               Text(
                 isEdit ? 'Edit service' : 'New service',
-                style: AppTextStyles.headlineMedium
-                    .copyWith(color: AppColors.forestGreen),
+                style: AppTextStyles.headlineMedium.copyWith(
+                  color: AppColors.forestGreen,
+                ),
               ),
               const SizedBox(height: 20),
               WedTextField(
@@ -608,12 +671,13 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
                       hint: '0',
                       controller: _priceMinCtrl,
                       keyboardType: TextInputType.number,
-                      validator: (v) =>
-                          (v == null ||
-                                  v.trim().isEmpty ||
-                                  double.tryParse(v.trim()) == null)
-                              ? 'Required'
-                              : null,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (double.tryParse(v.trim()) == null) {
+                          return 'Numbers only';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -623,26 +687,31 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
                       hint: '0',
                       controller: _priceMaxCtrl,
                       keyboardType: TextInputType.number,
-                      validator: (v) =>
-                          (v == null ||
-                                  v.trim().isEmpty ||
-                                  double.tryParse(v.trim()) == null)
-                              ? 'Required'
-                              : null,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (double.tryParse(v.trim()) == null) {
+                          return 'Numbers only';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ],
               ),
               if (_priceError != null) ...[
                 const SizedBox(height: 4),
-                Text(_priceError!,
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.error)),
+                Text(
+                  _priceError!,
+                  style: AppTextStyles.caption.copyWith(color: AppColors.error),
+                ),
               ],
               const SizedBox(height: 16),
-              Text('Priced per',
-                  style: AppTextStyles.labelMedium
-                      .copyWith(color: AppColors.textSecondary)),
+              Text(
+                'Priced per',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
               const SizedBox(height: 8),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -657,8 +726,9 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
                         onSelected: (_) => setState(() => _unit = unit),
                         selectedColor: AppColors.forestGreen,
                         labelStyle: AppTextStyles.labelMedium.copyWith(
-                          color:
-                              selected ? Colors.white : AppColors.textPrimary,
+                          color: selected
+                              ? Colors.white
+                              : AppColors.textPrimary,
                         ),
                         side: BorderSide(
                           color: selected

@@ -223,6 +223,26 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
     }
   }
 
+  /// Clears the profile's logo. Goes through a dedicated endpoint rather than
+  /// `saveProfile(logoUrl: null)` — that method's `logoUrl ?? current.logoUrl`
+  /// merge would silently ignore a null and keep the existing logo.
+  Future<String?> removeLogo() async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    try {
+      final saved = await _service.removeLogo(token);
+      _ref.read(authProvider.notifier).setVendorProfile(saved);
+      state = state.copyWith(
+        data: state.data!.copyWith(profile: saved, services: saved.services, media: saved.media),
+      );
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+  }
+
   void updateNotifications(bool enabled) {
     final current = state.data;
     if (current == null) return;

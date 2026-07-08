@@ -1,14 +1,57 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/notification_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/format_utils.dart';
+import '../../../models/notification_model.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../providers/notification_provider.dart';
+import '../../../widgets/wed_snack_bar.dart';
 
-class NotificationsScreen extends StatelessWidget {
+class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
 
+  static (IconData, Color, Color) _presentation(String type) {
+    switch (type) {
+      case 'message':
+        return (Icons.chat_bubble_outline_rounded, AppColors.forestGreen, AppColors.adminGreenBg);
+      case 'budget_alert':
+        return (Icons.account_balance_wallet_outlined, AppColors.warning, AppColors.warningBg);
+      case 'vendor_verification':
+        return (Icons.verified_user_outlined, AppColors.success, AppColors.successBg);
+      default:
+        return (Icons.notifications_outlined, AppColors.amber, AppColors.adminAmberBg);
+    }
+  }
+
+  Future<void> _markRead(WidgetRef ref, BuildContext context, String notifId) async {
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    try {
+      await NotificationApiService.instance.markRead(token, notifId);
+      ref.invalidate(notificationsProvider);
+    } on NotificationApiException catch (e) {
+      if (context.mounted) showWedSnackBar(context, e.message, type: SnackType.error);
+    }
+  }
+
+  Future<void> _markAllRead(WidgetRef ref, BuildContext context) async {
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    try {
+      await NotificationApiService.instance.markAllRead(token);
+      ref.invalidate(notificationsProvider);
+    } on NotificationApiException catch (e) {
+      if (context.mounted) showWedSnackBar(context, e.message, type: SnackType.error);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final unread = _notifications.where((n) => !n.read).length;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notificationsAsync = ref.watch(notificationsProvider);
+    final notifications = notificationsAsync.valueOrNull ?? [];
+    final unread = notifications.where((n) => !n.isRead).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -16,129 +59,113 @@ class NotificationsScreen extends StatelessWidget {
         centerTitle: true,
         actions: [
           TextButton(
-            onPressed: () {},
+            onPressed: unread > 0 ? () => _markAllRead(ref, context) : null,
             child: Text(
               'Mark all read',
-              style: AppTextStyles.labelMedium.copyWith(color: AppColors.amber),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: unread > 0 ? AppColors.amber : AppColors.textHint,
+              ),
             ),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          if (unread > 0)
-            Container(
-              width: double.infinity,
-              color: AppColors.amber.withAlpha(20),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Text(
-                '$unread unread notification${unread == 1 ? '' : 's'}',
-                style: AppTextStyles.labelMedium.copyWith(color: AppColors.amber),
-              ),
-            ),
-          Expanded(
-            child: ListView.separated(
-              itemCount: _notifications.length,
-              separatorBuilder: (context, i) => Divider(
-                height: 1,
-                color: cs.outlineVariant,
-              ),
-              itemBuilder: (_, i) {
-                final n = _notifications[i];
-                return _NotificationTile(notification: n);
-              },
-            ),
+      body: notificationsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) => Center(
+          child: Text(
+            'Unable to load notifications.',
+            style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textSecondary),
           ),
-        ],
+        ),
+        data: (_) {
+          if (notifications.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.notifications_none_rounded,
+                      size: 56, color: AppColors.textHint),
+                  const SizedBox(height: 12),
+                  Text('No notifications yet', style: AppTextStyles.headlineMedium),
+                  const SizedBox(height: 6),
+                  Text(
+                    "We'll let you know when something needs your attention.",
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return Column(
+            children: [
+              if (unread > 0)
+                Container(
+                  width: double.infinity,
+                  color: AppColors.amber.withAlpha(20),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Text(
+                    '$unread unread notification${unread == 1 ? '' : 's'}',
+                    style: AppTextStyles.labelMedium.copyWith(color: AppColors.amber),
+                  ),
+                ),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: notifications.length,
+                  separatorBuilder: (context, i) => Divider(
+                    height: 1,
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                  itemBuilder: (_, i) {
+                    final n = notifications[i];
+                    return _NotificationTile(
+                      notification: n,
+                      presentation: _presentation(n.type),
+                      onTap: n.isRead ? null : () => _markRead(ref, context, n.id),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-class _NotifData {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final String title;
-  final String body;
-  final String time;
-  final bool read;
-
-  const _NotifData({
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.title,
-    required this.body,
-    required this.time,
-    required this.read,
-  });
-}
-
-const _notifications = [
-  _NotifData(
-    icon: Icons.chat_bubble_outline_rounded,
-    iconColor: AppColors.forestGreen,
-    iconBg: AppColors.adminGreenBg,
-    title: 'New message from Blossom Photography',
-    body: "Thank you for your inquiry! We'd love to work with you.",
-    time: '2h ago',
-    read: false,
-  ),
-  _NotifData(
-    icon: Icons.account_balance_wallet_outlined,
-    iconColor: AppColors.warning,
-    iconBg: AppColors.warningBg,
-    title: 'Budget alert',
-    body: 'Venue category is at 90% of your allocation.',
-    time: '5h ago',
-    read: false,
-  ),
-  _NotifData(
-    icon: Icons.star_outline_rounded,
-    iconColor: AppColors.amber,
-    iconBg: AppColors.adminAmberBg,
-    title: 'Vendor matched!',
-    body: 'We found 3 new photographers matching your budget and style.',
-    time: '1d ago',
-    read: true,
-  ),
-  _NotifData(
-    icon: Icons.verified_user_outlined,
-    iconColor: AppColors.success,
-    iconBg: AppColors.successBg,
-    title: 'Profile verified',
-    body: 'Your account has been fully verified.',
-    time: '2d ago',
-    read: true,
-  ),
-];
-
 class _NotificationTile extends StatelessWidget {
-  final _NotifData notification;
-  const _NotificationTile({required this.notification});
+  final NotificationModel notification;
+  final (IconData, Color, Color) presentation;
+  final VoidCallback? onTap;
+
+  const _NotificationTile({
+    required this.notification,
+    required this.presentation,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final n = notification;
+    final (icon, iconColor, iconBg) = presentation;
 
     return ListTile(
-      tileColor: n.read ? null : AppColors.secondary.withAlpha(10),
+      onTap: onTap,
+      tileColor: n.isRead ? null : AppColors.secondary.withAlpha(10),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       leading: Container(
         width: 44,
         height: 44,
-        decoration: BoxDecoration(
-          color: n.iconBg,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(n.icon, size: 20, color: n.iconColor),
+        decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+        child: Icon(icon, size: 20, color: iconColor),
       ),
       title: Text(
         n.title,
         style: AppTextStyles.titleMedium.copyWith(
-          fontWeight: n.read ? FontWeight.normal : FontWeight.w600,
+          fontWeight: n.isRead ? FontWeight.normal : FontWeight.w600,
           color: cs.onSurface,
         ),
       ),
@@ -154,12 +181,12 @@ class _NotificationTile extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            n.time,
+            fmtRelativeTime(n.sentAt),
             style: AppTextStyles.caption.copyWith(color: cs.onSurfaceVariant),
           ),
         ],
       ),
-      trailing: n.read
+      trailing: n.isRead
           ? null
           : Container(
               width: 8,

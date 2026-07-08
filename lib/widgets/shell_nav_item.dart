@@ -33,6 +33,7 @@ class ShellNavItem extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: () => onTap(index),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
@@ -41,12 +42,20 @@ class ShellNavItem extends StatelessWidget {
               color: isActive ? activeColor : inactiveColor,
             ),
             const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: labelFontSize,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                color: isActive ? activeColor : inactiveColor,
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: labelFontSize,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                    color: isActive ? activeColor : inactiveColor,
+                  ),
+                ),
               ),
             ),
           ],

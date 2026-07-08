@@ -60,6 +60,27 @@ final allVendorsProvider = FutureProvider<List<VendorProfile>>((ref) async {
   return VendorApiService.instance.fetchVendors(token);
 });
 
+// Resolves the couple's saved vendor IDs into full VendorProfile objects by
+// fetching each one individually — unlike allVendorsProvider, this isn't
+// subject to the directory endpoint's page cap, so it never silently drops
+// a saved vendor that falls outside the first page of results.
+final wishlistedVendorsProvider = FutureProvider<List<VendorProfile>>((ref) async {
+  final token = ref.watch(authProvider.notifier).accessToken;
+  final wishlistIds = ref.watch(wishlistProvider);
+  if (token == null || wishlistIds.isEmpty) return [];
+
+  final results = await Future.wait(
+    wishlistIds.map((id) async {
+      try {
+        return await VendorApiService.instance.fetchVendorDetail(token, id);
+      } catch (_) {
+        return null;
+      }
+    }),
+  );
+  return results.whereType<VendorProfile>().toList();
+});
+
 // ── Wishlist ────────────────────────────────────────────────────────────────
 //
 // Exposed as a plain List<String> (empty by default) rather than a

@@ -98,7 +98,7 @@ class Invitation {
 
 class RsvpResponse {
   final String id;
-  final String invitationId;
+  final String? invitationId;
   final String? guestId;
   final String guestName;
   final AttendingStatus attending;
@@ -110,7 +110,7 @@ class RsvpResponse {
 
   const RsvpResponse({
     required this.id,
-    required this.invitationId,
+    this.invitationId,
     this.guestId,
     required this.guestName,
     required this.attending,
@@ -123,7 +123,7 @@ class RsvpResponse {
 
   factory RsvpResponse.fromJson(Map<String, dynamic> json) => RsvpResponse(
         id: json['rsvp_id'] as String,
-        invitationId: json['invitation_id'] as String,
+        invitationId: json['invitation_id'] as String?,
         guestId: json['guest_id'] as String?,
         guestName: json['guest_name'] as String,
         attending: enumByName(AttendingStatus.values, json['attending'] as String?, AttendingStatus.maybe),
@@ -157,6 +157,8 @@ class Guest {
   final String? whatsappNumber;
   final String? relation;
   final bool isInvited;
+  final String? inviteToken;
+  final String? inviteUrl;
 
   const Guest({
     required this.id,
@@ -167,6 +169,8 @@ class Guest {
     this.whatsappNumber,
     this.relation,
     this.isInvited = false,
+    this.inviteToken,
+    this.inviteUrl,
   });
 
   factory Guest.fromJson(Map<String, dynamic> json) => Guest(
@@ -178,6 +182,8 @@ class Guest {
         whatsappNumber: json['whatsapp_number'] as String?,
         relation: json['relation'] as String?,
         isInvited: json['is_invited'] as bool? ?? false,
+        inviteToken: json['invite_token'] as String?,
+        inviteUrl: json['invite_url'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -189,5 +195,39 @@ class Guest {
         'whatsapp_number': whatsappNumber,
         'relation': relation,
         'is_invited': isInvited,
+        'invite_token': inviteToken,
+        'invite_url': inviteUrl,
       };
+}
+
+class GuestInvitation {
+  final Invitation invitation;
+  final String guestName;
+  final bool alreadyResponded;
+  final AttendingStatus? respondedAttending;
+  final int? respondedGuestCount;
+  final String? respondedMessage;
+
+  const GuestInvitation({
+    required this.invitation,
+    required this.guestName,
+    required this.alreadyResponded,
+    this.respondedAttending,
+    this.respondedGuestCount,
+    this.respondedMessage,
+  });
+
+  factory GuestInvitation.fromJson(Map<String, dynamic> json) {
+    final existing = json['existing_response'] as Map<String, dynamic>?;
+    return GuestInvitation(
+      invitation: Invitation.fromJson(json['invitation'] as Map<String, dynamic>),
+      guestName: (json['guest'] as Map<String, dynamic>)['name'] as String,
+      alreadyResponded: json['already_responded'] as bool? ?? false,
+      respondedAttending: existing != null
+          ? enumByName(AttendingStatus.values, existing['attending'] as String?, AttendingStatus.maybe)
+          : null,
+      respondedGuestCount: existing?['guest_count'] as int?,
+      respondedMessage: existing?['message'] as String?,
+    );
+  }
 }

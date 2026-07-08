@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -25,21 +26,25 @@ class CoupleDashboardScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final tasksState = ref.watch(taskProvider);
     final tasks = tasksState.data ?? [];
-    final wishlist = ref.watch(wishlistProvider);
-    final allVendorsAsync = ref.watch(allVendorsProvider);
-    final allVendors = allVendorsAsync.valueOrNull ?? [];
 
-    if (couple?.hasBudget == true && budgetState.status == ResourceStatus.initial) {
-      ref.read(budgetProvider.notifier).initializeBudgetForProfile(couple);
+    if (couple?.hasBudget == true &&
+        budgetState.status == ResourceStatus.initial) {
+      Future.microtask(
+        () => ref
+            .read(budgetProvider.notifier)
+            .initializeBudgetForProfile(couple),
+      );
     }
     if (tasksState.status == ResourceStatus.initial) {
       Future.microtask(() => ref.read(taskProvider.notifier).loadTasks());
     }
     if (ref.read(wishlistProvider.notifier).status == ResourceStatus.initial) {
-      Future.microtask(() => ref.read(wishlistProvider.notifier).loadWishlist());
+      Future.microtask(
+        () => ref.read(wishlistProvider.notifier).loadWishlist(),
+      );
     }
 
-    final shortlisted = allVendors.where((v) => wishlist.contains(v.id)).toList();
+    final shortlisted = ref.watch(wishlistedVendorsProvider).valueOrNull ?? [];
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -47,8 +52,9 @@ class CoupleDashboardScreen extends ConsumerWidget {
         slivers: [
           // ── App Bar ──────────────────────────────────────────────────────────
           SliverAppBar(
-            pinned: true,
-            floating: false,
+            pinned: false,
+            floating: true,
+            snap: true,
             backgroundColor: AppColors.cream,
             elevation: 0,
             scrolledUnderElevation: 0,
@@ -60,7 +66,9 @@ class CoupleDashboardScreen extends ConsumerWidget {
               children: [
                 Text(
                   'Welcome back',
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 Text(
                   _coupleDisplayName(user?.name, couple?.partnerName),
@@ -77,8 +85,11 @@ class CoupleDashboardScreen extends ConsumerWidget {
                 clipBehavior: Clip.none,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.notifications_outlined,
-                        color: AppColors.forestGreen, size: 26),
+                    icon: const Icon(
+                      Icons.notifications_outlined,
+                      color: AppColors.forestGreen,
+                      size: 26,
+                    ),
                     onPressed: () => context.push('/notifications'),
                   ),
                   Positioned(
@@ -94,6 +105,14 @@ class CoupleDashboardScreen extends ConsumerWidget {
                     ),
                   ),
                 ],
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.logout_rounded,
+                  color: AppColors.forestGreen,
+                  size: 26,
+                ),
+                onPressed: () => _confirmLogout(context, ref),
               ),
               const SizedBox(width: 4),
             ],
@@ -119,6 +138,8 @@ class CoupleDashboardScreen extends ConsumerWidget {
                         isTablet: isTablet,
                         onBudgetDetails: () => context.go('/couple/budget'),
                         onBudgetSetup: () => context.push('/couple/plan-setup'),
+                        onGuestsSetup: () =>
+                            context.push('/couple/invitations'),
                       ),
                       const SizedBox(height: 24),
 
@@ -153,14 +174,18 @@ class CoupleDashboardScreen extends ConsumerWidget {
                   if (isDesktop) {
                     return Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: AppDimensions.contentMaxWidth),
+                        constraints: const BoxConstraints(
+                          maxWidth: AppDimensions.contentMaxWidth,
+                        ),
                         child: content,
                       ),
                     );
                   }
 
                   return Padding(
-                    padding: EdgeInsets.symmetric(horizontal: isTablet ? 24.0 : 16.0),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isTablet ? 24.0 : 16.0,
+                    ),
                     child: content,
                   );
                 },
@@ -179,6 +204,30 @@ String _coupleDisplayName(String? name1, String? name2) {
   return '$name1 & $name2';
 }
 
+void _confirmLogout(BuildContext context, WidgetRef ref) {
+  showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Log Out'),
+      content: const Text('Are you sure you want to log out?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(ctx).pop();
+            ref.read(authProvider.notifier).logout();
+          },
+          style: TextButton.styleFrom(foregroundColor: AppColors.error),
+          child: const Text('Log Out'),
+        ),
+      ],
+    ),
+  );
+}
+
 // ── Responsive stat card grid ──────────────────────────────────────────────────
 
 class _StatCardsGrid extends ConsumerWidget {
@@ -187,6 +236,7 @@ class _StatCardsGrid extends ConsumerWidget {
   final bool isTablet;
   final VoidCallback onBudgetDetails;
   final VoidCallback onBudgetSetup;
+  final VoidCallback onGuestsSetup;
 
   const _StatCardsGrid({
     required this.couple,
@@ -194,18 +244,26 @@ class _StatCardsGrid extends ConsumerWidget {
     required this.isTablet,
     required this.onBudgetDetails,
     required this.onBudgetSetup,
+    required this.onGuestsSetup,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rsvpStats = ref.watch(rsvpStatsProvider);
-    final countdown = _CountdownCard(couple: couple);
+    if (ref.read(guestRsvpProvider.notifier).status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(guestRsvpProvider.notifier).load());
+    }
+    final countdown = _CountdownCard(
+      couple: couple,
+      onSetDate: () => context.push('/couple/plan-setup'),
+    );
     final budgetCard = budget != null
         ? _BudgetOverviewCard(budget: budget, onDetails: onBudgetDetails)
         : _SetupBudgetPrompt(onTap: onBudgetSetup);
     final rsvp = _RsvpCard(
       confirmed: rsvpStats.attending,
       total: rsvpStats.totalInvited,
+      onSetupGuests: onGuestsSetup,
     );
 
     if (isTablet) {
@@ -253,16 +311,34 @@ class _SectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title,
-            style: AppTextStyles.headlineSmall.copyWith(color: AppColors.forestGreen)),
-        if (actionLabel != null)
-          GestureDetector(
-            onTap: onAction,
-            child: Text(actionLabel!,
-                style: AppTextStyles.labelMedium.copyWith(color: AppColors.amber)),
+        Expanded(
+          child: Text(
+            title,
+            style: AppTextStyles.headlineSmall.copyWith(
+              color: AppColors.forestGreen,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
+        ),
+        if (actionLabel != null) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: GestureDetector(
+              onTap: onAction,
+              child: Text(
+                actionLabel!,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.amber,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -272,12 +348,24 @@ class _SectionRow extends StatelessWidget {
 
 class _CountdownCard extends StatelessWidget {
   final dynamic couple;
-  const _CountdownCard({this.couple});
+  final VoidCallback onSetDate;
+  const _CountdownCard({this.couple, required this.onSetDate});
 
   String _formatDate(DateTime d) {
     const months = [
-      '', 'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      '',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return '${d.day} ${months[d.month]} ${d.year}';
   }
@@ -285,10 +373,68 @@ class _CountdownCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasDate = couple?.hasWeddingDate == true;
-    final days = hasDate ? '${couple!.daysUntilWedding}' : '84';
-    final dateLabel = hasDate
-        ? _formatDate(couple!.weddingDate as DateTime)
-        : '12 September 2026';
+
+    if (!hasDate) {
+      return GestureDetector(
+        onTap: onSetDate,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: BoxDecoration(
+            color: AppColors.forestGreen,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.forestGreen.withAlpha(60),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.amber.withAlpha(40),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.calendar_month_outlined,
+                  color: AppColors.amber,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Set your wedding date',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'See your countdown once it\'s set',
+                      style: AppTextStyles.caption.copyWith(
+                        color: Colors.white.withAlpha(180),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.amber),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final days = '${couple!.daysUntilWedding}';
+    final dateLabel = _formatDate(couple!.weddingDate as DateTime);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -372,11 +518,14 @@ class _BudgetOverviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final total = budget.totalAmount as double;
     final spent = budget.totalSpent as double;
-    final categories = (budget.categories as List<dynamic>)
-        .where((c) => (c.spentAmount as double) > 0)
-        .toList()
-      ..sort((a, b) =>
-          (b.spentAmount as double).compareTo(a.spentAmount as double));
+    final categories =
+        (budget.categories as List<dynamic>)
+            .where((c) => (c.spentAmount as double) > 0)
+            .toList()
+          ..sort(
+            (a, b) =>
+                (b.spentAmount as double).compareTo(a.spentAmount as double),
+          );
 
     final unallocated = (total - spent).clamp(0.0, total);
 
@@ -393,14 +542,20 @@ class _BudgetOverviewCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Budget overview',
-                  style: AppTextStyles.titleMedium
-                      .copyWith(color: AppColors.forestGreen)),
+              Text(
+                'Budget overview',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.forestGreen,
+                ),
+              ),
               GestureDetector(
                 onTap: onDetails,
-                child: Text('Details',
-                    style: AppTextStyles.labelMedium
-                        .copyWith(color: AppColors.amber)),
+                child: Text(
+                  'Details',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.amber,
+                  ),
+                ),
               ),
             ],
           ),
@@ -418,8 +573,9 @@ class _BudgetOverviewCard extends StatelessWidget {
                 ),
                 TextSpan(
                   text: 'spent of ZMW ${total.toStringAsFixed(0)}',
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -427,10 +583,17 @@ class _BudgetOverviewCard extends StatelessWidget {
           const SizedBox(height: 10),
           _SegmentedBar(
             segments: [
-              ...categories.take(4).map((c) => _BarSegment(
-                    fraction: total > 0 ? (c.spentAmount as double) / total : 0,
-                    color: _catColors[c.categoryName] ?? AppColors.forestGreen,
-                  )),
+              ...categories
+                  .take(4)
+                  .map(
+                    (c) => _BarSegment(
+                      fraction: total > 0
+                          ? (c.spentAmount as double) / total
+                          : 0,
+                      color:
+                          _catColors[c.categoryName] ?? AppColors.forestGreen,
+                    ),
+                  ),
               if (unallocated > 0 && total > 0)
                 _BarSegment(
                   fraction: unallocated / total,
@@ -443,10 +606,15 @@ class _BudgetOverviewCard extends StatelessWidget {
             spacing: 14,
             runSpacing: 4,
             children: [
-              ...categories.take(4).map((c) => _LegendDot(
-                    label: c.categoryName as String,
-                    color: _catColors[c.categoryName] ?? AppColors.forestGreen,
-                  )),
+              ...categories
+                  .take(4)
+                  .map(
+                    (c) => _LegendDot(
+                      label: c.categoryName as String,
+                      color:
+                          _catColors[c.categoryName] ?? AppColors.forestGreen,
+                    ),
+                  ),
               const _LegendDot(label: 'Unallocated', color: Color(0xFFE0DDD6)),
             ],
           ),
@@ -507,8 +675,10 @@ class _LegendDot extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
-        Text(label,
-            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+        ),
       ],
     );
   }
@@ -541,21 +711,30 @@ class _SetupBudgetPrompt extends StatelessWidget {
                 color: AppColors.amber.withAlpha(26),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.account_balance_wallet_outlined,
-                  color: AppColors.amber, size: 20),
+              child: const Icon(
+                Icons.account_balance_wallet_outlined,
+                color: AppColors.amber,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Set up your budget',
-                      style: AppTextStyles.titleMedium
-                          .copyWith(color: AppColors.forestGreen)),
+                  Text(
+                    'Set up your budget',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: AppColors.forestGreen,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text('Let AI allocate across all categories',
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textSecondary)),
+                  Text(
+                    'Let AI allocate across all categories',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -572,10 +751,68 @@ class _SetupBudgetPrompt extends StatelessWidget {
 class _RsvpCard extends StatelessWidget {
   final int confirmed;
   final int total;
-  const _RsvpCard({required this.confirmed, required this.total});
+  final VoidCallback onSetupGuests;
+  const _RsvpCard({
+    required this.confirmed,
+    required this.total,
+    required this.onSetupGuests,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (total == 0) {
+      return GestureDetector(
+        onTap: onSetupGuests,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.amber.withAlpha(80)),
+            boxShadow: AppShadows.card,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.amber.withAlpha(26),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.people_alt_outlined,
+                  color: AppColors.amber,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Add your guest list',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.forestGreen,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Track RSVPs once you invite guests',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -630,14 +867,16 @@ class _RsvpCard extends StatelessWidget {
               children: [
                 Text(
                   '$confirmed of $total confirmed',
-                  style: AppTextStyles.titleMedium
-                      .copyWith(color: AppColors.forestGreen),
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.forestGreen,
+                  ),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   "Guests have RSVP'd to your invitation",
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -677,11 +916,18 @@ class _ShortlistScroll extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.favorite_border, color: AppColors.amber, size: 28),
+              const Icon(
+                Icons.favorite_border,
+                color: AppColors.amber,
+                size: 28,
+              ),
               const SizedBox(height: 8),
-              Text('Add vendors to your shortlist',
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.textSecondary)),
+              Text(
+                'Add vendors to your shortlist',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ],
           ),
         ),
@@ -696,10 +942,7 @@ class _ShortlistScroll extends StatelessWidget {
         separatorBuilder: (context, index) => const SizedBox(width: 10),
         itemBuilder: (_, i) {
           final v = vendors[i];
-          return _ShortlistCard(
-            vendor: v,
-            onTap: () => onTap(v.id as String),
-          );
+          return _ShortlistCard(vendor: v, onTap: () => onTap(v.id as String));
         },
       ),
     );
@@ -730,13 +973,19 @@ class _ShortlistCard extends StatelessWidget {
             Container(
               height: 88,
               color: AppColors.cream,
-              child: Center(
-                child: Icon(
-                  Icons.photo_camera_outlined,
-                  color: AppColors.amber.withAlpha(153),
-                  size: 28,
-                ),
-              ),
+              child: vendor.logoUrl != null
+                  ? Image.network(
+                      resolveMediaUrl(vendor.logoUrl as String),
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    )
+                  : Center(
+                      child: Icon(
+                        Icons.photo_camera_outlined,
+                        color: AppColors.amber.withAlpha(153),
+                        size: 28,
+                      ),
+                    ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
@@ -797,8 +1046,9 @@ class _ChecklistPreview extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Text(
                   'No tasks yet — tap to set up your checklist',
-                  style:
-                      AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
           ],
@@ -840,7 +1090,9 @@ class _ChecklistRow extends StatelessWidget {
               task.task as String,
               style: AppTextStyles.bodySmall.copyWith(
                 color: done ? AppColors.textSecondary : AppColors.textPrimary,
-                decoration: done ? TextDecoration.lineThrough : TextDecoration.none,
+                decoration: done
+                    ? TextDecoration.lineThrough
+                    : TextDecoration.none,
               ),
             ),
           ),

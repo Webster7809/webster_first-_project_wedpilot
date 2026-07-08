@@ -8,6 +8,8 @@ void showWedSnackBar(
   BuildContext context,
   String message, {
   SnackType type = SnackType.info,
+  String? actionLabel,
+  VoidCallback? onAction,
 }) {
   final colors = {
     SnackType.success: AppColors.success,
@@ -39,6 +41,13 @@ void showWedSnackBar(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       margin: const EdgeInsets.all(16),
       duration: const Duration(seconds: 3),
+      action: actionLabel != null && onAction != null
+          ? SnackBarAction(
+              label: actionLabel,
+              textColor: Colors.white,
+              onPressed: onAction,
+            )
+          : null,
     ),
   );
 }

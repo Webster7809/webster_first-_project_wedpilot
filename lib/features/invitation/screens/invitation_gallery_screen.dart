@@ -2,24 +2,48 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/share_helper.dart';
 import '../../../models/invitation.dart';
 import '../../../providers/invitation_provider.dart';
+import '../../../widgets/wed_snack_bar.dart';
 
 class InvitationGalleryScreen extends ConsumerWidget {
   const InvitationGalleryScreen({super.key});
 
-  void _createAndOpen(BuildContext context, WidgetRef ref) {
-    final id = ref
+  Future<void> _createAndOpen(BuildContext context, WidgetRef ref) async {
+    final id = await ref
         .read(invitationsProvider.notifier)
-        .create('elegant_classic', 'My Wedding Invitation');
+        .create('tpl-001', 'My Wedding Invitation');
+    if (!context.mounted) return;
+    if (id == null) {
+      showWedSnackBar(context, 'Could not create invitation. Please try again.', type: SnackType.error);
+      return;
+    }
     context.push('/couple/invitations/editor?id=$id');
+  }
+
+  void _share(BuildContext context, Invitation invitation) {
+    if (invitation.status != InvitationStatus.published || invitation.shareUrl == null) {
+      showWedSnackBar(context, 'Publish this invitation first to share it.', type: SnackType.info);
+      return;
+    }
+    shareWithFallback(
+      context,
+      text: 'You\'re invited to celebrate our wedding! 💍\n\n'
+          'View our invitation here: ${invitation.shareUrl}',
+      subject: 'Wedding Invitation',
+    );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final invitations = ref.watch(invitationsProvider);
+    if (ref.read(invitationsProvider.notifier).status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(invitationsProvider.notifier).loadInvitations());
+    }
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -103,7 +127,7 @@ class InvitationGalleryScreen extends ConsumerWidget {
                     invitation: invitations[i],
                     onEdit: () => context.push(
                         '/couple/invitations/editor?id=${invitations[i].id}'),
-                    onShare: () {},
+                    onShare: () => _share(context, invitations[i]),
                   ),
                   childCount: invitations.length,
                 ),

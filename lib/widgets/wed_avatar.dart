@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 
@@ -26,7 +27,7 @@ class WedAvatar extends StatelessWidget {
     if (imageUrl != null && imageUrl!.isNotEmpty) {
       return CircleAvatar(
         radius: radius,
-        backgroundImage: NetworkImage(imageUrl!),
+        backgroundImage: NetworkImage(resolveMediaUrl(imageUrl!)),
       );
     }
     return CircleAvatar(

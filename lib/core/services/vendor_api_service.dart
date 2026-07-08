@@ -163,6 +163,19 @@ class VendorApiService {
     }
   }
 
+  Future<VendorProfile> removeLogo(String accessToken) async {
+    try {
+      final response = await _dio.delete<Map<String, dynamic>>(
+        '/api/vendors/me/logo',
+        options: _auth(accessToken),
+      );
+      final data = response.data ?? {};
+      return VendorProfile.fromJson(data['vendor'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw VendorApiException(_extractError(e));
+    }
+  }
+
   // ── Services ─────────────────────────────────────────────────────────────────
 
   Future<VendorService> createService(String accessToken, VendorService service) async {

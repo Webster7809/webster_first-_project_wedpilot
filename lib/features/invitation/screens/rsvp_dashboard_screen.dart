@@ -1,7 +1,9 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/share_helper.dart';
 import '../../../models/invitation.dart';
 import '../../../providers/invitation_provider.dart';
 import '../../../widgets/wed_snack_bar.dart';
@@ -35,6 +37,9 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
   Widget build(BuildContext context) {
     final state = ref.watch(guestRsvpProvider);
     final stats = state.stats;
+    if (ref.read(guestRsvpProvider.notifier).status == ResourceStatus.initial) {
+      Future.microtask(() => ref.read(guestRsvpProvider.notifier).load());
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -65,6 +70,8 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
             onEditGuest: (g) => _showGuestForm(context, existing: g),
             onDeleteGuest: (id) => _confirmDeleteGuest(context, id),
             onSubmitRsvp: (g) => _showRsvpForm(context, g),
+            onShareInvite: (g) => _shareGuestInvite(context, g),
+            onResetRsvp: (rsvpId) => _resetGuestRsvp(context, rsvpId),
           ),
         ],
       ),
@@ -80,10 +87,10 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => _GuestFormSheet(
         existing: existing,
-        onSave: (name, email, phone, relation) {
+        onSave: (name, email, phone, relation) async {
           String? error;
           if (existing != null) {
-            error = ref.read(guestRsvpProvider.notifier).editGuest(
+            error = await ref.read(guestRsvpProvider.notifier).editGuest(
                   id: existing.id,
                   name: name,
                   email: email,
@@ -91,13 +98,14 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
                   relation: relation,
                 );
           } else {
-            error = ref.read(guestRsvpProvider.notifier).addGuest(
+            error = await ref.read(guestRsvpProvider.notifier).addGuest(
                   name: name,
                   email: email,
                   phone: phone,
                   relation: relation,
                 );
           }
+          if (!context.mounted) return;
           if (error != null) {
             showWedSnackBar(context, error, type: SnackType.error);
           } else {
@@ -124,10 +132,12 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
               onPressed: () => Navigator.pop(context),
               child: const Text('Cancel')),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              ref.read(guestRsvpProvider.notifier).deleteGuest(id);
-              showWedSnackBar(context, 'Guest removed.', type: SnackType.info);
+              await ref.read(guestRsvpProvider.notifier).deleteGuest(id);
+              if (context.mounted) {
+                showWedSnackBar(context, 'Guest removed.', type: SnackType.info);
+              }
             },
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Remove'),
@@ -151,23 +161,82 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
       builder: (_) => _RsvpFormSheet(
         guest: guest,
         existing: existing,
-        onSave: (status, count, meal, notes, message) {
+        onSave: (status, count, meal, notes, message) async {
           final error =
-              ref.read(guestRsvpProvider.notifier).submitRsvp(
+              await ref.read(guestRsvpProvider.notifier).submitRsvp(
                     guestId: guest.id,
-                    guestName: guest.name,
                     attending: status,
                     guestCount: count,
                     mealPreference: meal,
                     dietaryNotes: notes,
                     message: message,
+                    invitationId: widget.invitationId.isEmpty ? null : widget.invitationId,
                   );
+          if (!context.mounted) return;
           if (error != null) {
             showWedSnackBar(context, error, type: SnackType.error);
           } else {
             showWedSnackBar(context, 'RSVP recorded.', type: SnackType.success);
           }
         },
+      ),
+    );
+  }
+
+  Future<void> _shareGuestInvite(BuildContext context, Guest guest) async {
+    // If this guest's link already exists locally, share it synchronously
+    // (preserves the web share-sheet's user-gesture context); otherwise a
+    // network round trip to generate it is unavoidable first.
+    if (guest.inviteUrl != null) {
+      await shareWithFallback(
+        context,
+        text: 'You\'re invited to celebrate our wedding! 💍\n\n'
+            'View your personal invitation here: ${guest.inviteUrl}',
+        subject: 'Your Wedding Invitation',
+      );
+      return;
+    }
+
+    final updated = await ref.read(guestRsvpProvider.notifier).getGuestInviteLink(
+          guestId: guest.id,
+          invitationId: widget.invitationId,
+        );
+    if (!context.mounted) return;
+    if (updated?.inviteUrl == null) {
+      showWedSnackBar(context, 'Could not create this guest\'s invite link.', type: SnackType.error);
+      return;
+    }
+    await shareWithFallback(
+      context,
+      text: 'You\'re invited to celebrate our wedding! 💍\n\n'
+          'View your personal invitation here: ${updated!.inviteUrl}',
+      subject: 'Your Wedding Invitation',
+    );
+  }
+
+  void _resetGuestRsvp(BuildContext context, String rsvpId) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Reset RSVP'),
+        content: const Text(
+            'This clears their current response and unlocks their personal invite link so they can respond again. Continue?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref.read(guestRsvpProvider.notifier).deleteRsvp(rsvpId);
+              if (context.mounted) {
+                showWedSnackBar(context, 'RSVP reset.', type: SnackType.info);
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Reset'),
+          ),
+        ],
       ),
     );
   }
@@ -320,6 +389,8 @@ class _GuestListTab extends StatelessWidget {
   final ValueChanged<Guest> onEditGuest;
   final ValueChanged<String> onDeleteGuest;
   final ValueChanged<Guest> onSubmitRsvp;
+  final ValueChanged<Guest> onShareInvite;
+  final ValueChanged<String> onResetRsvp;
 
   const _GuestListTab({
     required this.guests,
@@ -328,6 +399,8 @@ class _GuestListTab extends StatelessWidget {
     required this.onEditGuest,
     required this.onDeleteGuest,
     required this.onSubmitRsvp,
+    required this.onShareInvite,
+    required this.onResetRsvp,
   });
 
   @override
@@ -377,6 +450,8 @@ class _GuestListTab extends StatelessWidget {
           onEdit: () => onEditGuest(g),
           onDelete: () => onDeleteGuest(g.id),
           onRsvp: () => onSubmitRsvp(g),
+          onShareInvite: () => onShareInvite(g),
+          onResetRsvp: rsvp != null ? () => onResetRsvp(rsvp.id) : null,
         );
       },
     );
@@ -389,6 +464,8 @@ class _GuestCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onRsvp;
+  final VoidCallback onShareInvite;
+  final VoidCallback? onResetRsvp;
 
   const _GuestCard({
     required this.guest,
@@ -396,6 +473,8 @@ class _GuestCard extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onRsvp,
+    required this.onShareInvite,
+    required this.onResetRsvp,
   });
 
   Color get _statusColor => switch (rsvp?.attending) {
@@ -461,6 +540,8 @@ class _GuestCard extends StatelessWidget {
             PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'rsvp') onRsvp();
+                if (v == 'share') onShareInvite();
+                if (v == 'reset') onResetRsvp?.call();
                 if (v == 'edit') onEdit();
                 if (v == 'delete') onDelete();
               },
@@ -472,6 +553,21 @@ class _GuestCard extends StatelessWidget {
                         title: Text('Record RSVP'),
                         contentPadding: EdgeInsets.zero,
                         dense: true)),
+                const PopupMenuItem(
+                    value: 'share',
+                    child: ListTile(
+                        leading: Icon(Icons.ios_share_outlined),
+                        title: Text('Share invite link'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true)),
+                if (rsvp != null)
+                  const PopupMenuItem(
+                      value: 'reset',
+                      child: ListTile(
+                          leading: Icon(Icons.restart_alt),
+                          title: Text('Reset RSVP'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true)),
                 const PopupMenuItem(
                     value: 'edit',
                     child: ListTile(

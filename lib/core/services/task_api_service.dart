@@ -62,7 +62,6 @@ class TaskApiService {
           'task': task.task,
           'due_date': task.dueDate?.toIso8601String(),
           'linked_vendor_id': task.linkedVendorId,
-          'linked_vendor_name': task.linkedVendorName,
         },
         options: _auth(accessToken),
       );

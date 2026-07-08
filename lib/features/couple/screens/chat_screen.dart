@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../models/messaging.dart';
+import '../../../models/user.dart';
 import '../../../providers/messaging_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_avatar.dart';
@@ -25,12 +27,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
-  void _send() {
+  Future<void> _send() async {
     final text = _msgCtrl.text.trim();
     if (text.isEmpty) return;
-    final userId = ref.read(currentUserProvider)?.id ?? 'profile-001';
-    ref.read(chatMessagesProvider(widget.convoId).notifier).sendMessage(userId, text);
     _msgCtrl.clear();
+    await ref.read(chatMessagesProvider(widget.convoId).notifier).sendMessage(text);
+    if (!mounted) return;
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(
@@ -44,22 +46,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final messages = ref.watch(chatMessagesProvider(widget.convoId));
-    final currentUserId = ref.watch(currentUserProvider)?.id ?? 'profile-001';
+    final messagesAsync = ref.watch(chatMessagesProvider(widget.convoId));
+    final currentUserId = ref.watch(currentUserProvider)?.id;
+    final currentUserRole = ref.watch(currentUserProvider)?.role;
+    final conversation = ref
+        .watch(conversationsProvider)
+        .valueOrNull
+        ?.where((c) => c.id == widget.convoId)
+        .firstOrNull;
+
+    final isVendorViewer = currentUserRole == UserRole.vendor;
+    final otherPartyName = (isVendorViewer ? conversation?.coupleName : conversation?.vendorName) ??
+        (isVendorViewer ? 'Couple' : 'Vendor');
+    final otherPartyAvatarUrl =
+        isVendorViewer ? conversation?.coupleAvatarUrl : conversation?.vendorAvatarUrl;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Row(
           children: [
-            const WedAvatar(name: 'Vendor', radius: 16),
+            WedAvatar(imageUrl: otherPartyAvatarUrl, name: otherPartyName, radius: 16),
             const SizedBox(width: 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Blossom Photography', style: TextStyle(fontSize: 15)),
-                Text('Usually replies within 2 hours',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                Text(otherPartyName, style: const TextStyle(fontSize: 15)),
               ],
             ),
           ],
@@ -68,15 +80,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              controller: _scrollCtrl,
-              padding: const EdgeInsets.all(16),
-              itemCount: messages.length,
-              itemBuilder: (_, i) {
-                final msg = messages[i];
-                final isMe = msg.senderId == currentUserId;
-                return _MessageBubble(message: msg, isMe: isMe);
-              },
+            child: messagesAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(
+                child: Text('Could not load messages.',
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+              ),
+              data: (messages) => ListView.builder(
+                controller: _scrollCtrl,
+                padding: const EdgeInsets.all(16),
+                itemCount: messages.length,
+                itemBuilder: (_, i) {
+                  final msg = messages[i];
+                  final isMe = msg.senderId == currentUserId;
+                  return _MessageBubble(message: msg, isMe: isMe);
+                },
+              ),
             ),
           ),
           const Divider(height: 1),
@@ -134,7 +153,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 }
 
 class _MessageBubble extends StatelessWidget {
-  final dynamic message;
+  final Message message;
   final bool isMe;
 
   const _MessageBubble({required this.message, required this.isMe});

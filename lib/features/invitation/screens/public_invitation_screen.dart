@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/constants/invitation_fonts.dart';
+import '../../../core/services/invitation_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../models/invitation.dart';
 
 class PublicInvitationScreen extends StatefulWidget {
-  final String shareToken;
-  const PublicInvitationScreen({super.key, required this.shareToken});
+  final String? shareToken;
+  final String? inviteToken;
+  const PublicInvitationScreen({super.key, this.shareToken, this.inviteToken})
+      : assert(shareToken != null || inviteToken != null);
 
   @override
   State<PublicInvitationScreen> createState() => _PublicInvitationScreenState();
@@ -16,8 +21,50 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _loading = true;
   bool _submitting = false;
   bool _submitted = false;
+  bool _alreadyResponded = false;
+  String? _guestName;
+  String? _error;
+  Invitation? _invitation;
+  AttendingStatus _attending = AttendingStatus.yes;
+
+  bool get _isGuestLink => widget.inviteToken != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInvitation();
+  }
+
+  Future<void> _loadInvitation() async {
+    try {
+      if (_isGuestLink) {
+        final result = await InvitationApiService.instance.fetchGuestInvitation(widget.inviteToken!);
+        if (!mounted) return;
+        setState(() {
+          _invitation = result?.invitation;
+          _guestName = result?.guestName;
+          _alreadyResponded = result?.alreadyResponded ?? false;
+          if (_guestName != null) _nameCtrl.text = _guestName!;
+          if (_alreadyResponded && result?.respondedAttending != null) {
+            _attending = result!.respondedAttending!;
+          }
+          _loading = false;
+        });
+      } else {
+        final invitation = await InvitationApiService.instance.fetchPublicInvitation(widget.shareToken!);
+        if (!mounted) return;
+        setState(() {
+          _invitation = invitation;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -28,13 +75,74 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _submitting = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (mounted) setState(() { _submitting = false; _submitted = true; });
+    setState(() { _submitting = true; _error = null; });
+    try {
+      if (_isGuestLink) {
+        await InvitationApiService.instance.submitGuestInviteRsvp(
+          widget.inviteToken!,
+          attending: _attending,
+          guestCount: 1,
+        );
+      } else {
+        await InvitationApiService.instance.submitPublicRsvp(
+          widget.shareToken!,
+          name: _nameCtrl.text.trim(),
+          email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+          attending: _attending,
+          guestCount: 1,
+        );
+      }
+      if (mounted) setState(() { _submitting = false; _submitted = true; });
+    } on InvitationApiException catch (e) {
+      if (!mounted) return;
+      if (e.message == 'You have already responded to this invitation.') {
+        // Rare double-submit race (e.g. double-tap): treat identically to
+        // having loaded in an already-responded state.
+        setState(() { _submitting = false; _alreadyResponded = true; });
+      } else {
+        setState(() { _submitting = false; _error = e.message; });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: AppColors.cream,
+        body: Center(child: CircularProgressIndicator(color: AppColors.forestGreen)),
+      );
+    }
+    if (_invitation == null) {
+      return Scaffold(
+        backgroundColor: AppColors.cream,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.mail_outline_rounded, size: 56, color: AppColors.textHint),
+                const SizedBox(height: 16),
+                Text('Invitation not found',
+                    style: AppTextStyles.headlineMedium.copyWith(color: AppColors.forestGreen)),
+                const SizedBox(height: 8),
+                Text(
+                  'This invitation link may have expired or is no longer available.',
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final data = _invitation!.customData;
+    final showSuccess = _submitted || _alreadyResponded;
+    final accentColor = _accentColorFrom(data);
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -47,28 +155,52 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildHeader(context),
-                    if (_submitted)
-                      _buildSuccess()
+                    _buildHeader(context, data, accentColor),
+                    if (showSuccess)
+                      _buildSuccess(data, justSubmitted: _submitted)
                     else
-                      _buildBody(),
+                      _buildBody(data, accentColor),
                   ],
                 ),
               ),
             ),
-            if (!_submitted) _buildBottomBar(context),
+            if (!showSuccess) _buildBottomBar(context, accentColor),
           ],
         ),
       ),
     );
   }
 
+  // Reflects the couple's actual accent color choice from the editor, so the
+  // guest-facing page matches the card they designed instead of always
+  // showing a fixed generic color.
+  Color _accentColorFrom(Map<String, dynamic> data) {
+    final value = data['accentColor'] as int?;
+    return value != null ? Color(value) : AppColors.amber;
+  }
+
   // ── Dark green full-bleed header ──────────────────────────────────────────
 
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: AppColors.forestGreen,
+  Widget _buildHeader(BuildContext context, Map<String, dynamic> data, Color accentColor) {
+    final coupleName = (data['coupleName'] as String?) ?? 'the happy couple';
+    final date = data['date'] as String?;
+    final time = data['time'] as String?;
+    final backgroundImageUrl = data['backgroundImageUrl'] as String?;
+    final hasPhoto = backgroundImageUrl != null && backgroundImageUrl.isNotEmpty;
+
+    // Reflects the couple's actual font choice from the editor. Over a photo,
+    // force white text (matching the editor's own photo-mode preview) since
+    // the accent color alone isn't guaranteed to stay legible against an
+    // arbitrary background image.
+    final fontIndex = data['fontIndex'] as int?;
+    final nameFont = (fontIndex != null && fontIndex >= 0 && fontIndex < invitationFontOptions.length)
+        ? invitationFontOptions[fontIndex]
+        : null;
+    final nameColor = hasPhoto ? Colors.white : accentColor;
+    final nameStyle = nameFont?.style(32, nameColor) ??
+        GoogleFonts.playfairDisplay(fontSize: 32, fontWeight: FontWeight.w700, color: nameColor);
+
+    final content = Padding(
       padding: EdgeInsets.fromLTRB(
         24, MediaQuery.of(context).padding.top + 28, 24, 36),
       child: Column(
@@ -85,91 +217,103 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 14),
-          Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: 'Chanda',
-                  style: GoogleFonts.playfairDisplay(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.amber,
-                  ),
-                ),
-                TextSpan(
-                  text: ' & ',
-                  style: GoogleFonts.playfairDisplay(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-                TextSpan(
-                  text: 'Mwila',
-                  style: GoogleFonts.playfairDisplay(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.amber,
-                  ),
-                ),
-              ],
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 14),
           Text(
-            'Saturday, 12 September 2026',
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
+            coupleName,
+            style: nameStyle,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 4),
-          Text(
-            '6:00 PM',
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: Colors.white.withAlpha(204),
+          if (date != null && date.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              date,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
-          ),
+          ],
+          if (time != null && time.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              time,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: Colors.white.withAlpha(204),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ],
       ),
+    );
+
+    if (!hasPhoto) {
+      return Container(width: double.infinity, color: AppColors.forestGreen, child: content);
+    }
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Image.network(
+            resolveInvitationMediaUrl(backgroundImageUrl),
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => Container(color: AppColors.forestGreen),
+          ),
+        ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [accentColor.withAlpha(115), Colors.black.withAlpha(140)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ),
+        content,
+      ],
     );
   }
 
   // ── Info cards + RSVP form ────────────────────────────────────────────────
 
-  Widget _buildBody() {
+  Widget _buildBody(Map<String, dynamic> data, Color accentColor) {
+    final venue = data['venue'] as String?;
+    final dressCode = data['dressCode'] as String?;
+    final receptionVenue = data['receptionVenue'] as String?;
+    final rsvpBy = data['rsvpBy'] as String?;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _InfoCard(
-            icon: Icons.location_on_outlined,
-            label: 'Venue',
-            value: 'Mukuba Gardens, Ndola',
-          ),
-          const SizedBox(height: 12),
-          _InfoCard(
-            icon: Icons.checkroom_outlined,
-            label: 'Dress code',
-            value: 'Formal or traditional attire',
-          ),
-          const SizedBox(height: 12),
-          _InfoCard(
-            icon: Icons.local_shipping_outlined,
-            label: 'Parking',
-            value: 'Available (80 spaces reserved)',
-          ),
-          const SizedBox(height: 16),
+          if (venue != null && venue.isNotEmpty) ...[
+            _InfoCard(icon: Icons.location_on_outlined, label: 'Venue', value: venue),
+            const SizedBox(height: 12),
+          ],
+          if (dressCode != null && dressCode.isNotEmpty) ...[
+            _InfoCard(icon: Icons.checkroom_outlined, label: 'Dress code', value: dressCode),
+            const SizedBox(height: 12),
+          ],
+          if (receptionVenue != null && receptionVenue.isNotEmpty) ...[
+            _InfoCard(icon: Icons.celebration_outlined, label: 'Reception', value: receptionVenue),
+            const SizedBox(height: 16),
+          ],
           _RsvpFormCard(
             formKey: _formKey,
             nameCtrl: _nameCtrl,
             emailCtrl: _emailCtrl,
+            rsvpBy: rsvpBy,
+            attending: _attending,
+            onAttendingChanged: (v) => setState(() => _attending = v),
+            error: _error,
+            showEmailField: !_isGuestLink,
+            readOnlyName: _isGuestLink,
+            accentColor: accentColor,
           ),
         ],
       ),
@@ -178,7 +322,8 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
 
   // ── Success state ─────────────────────────────────────────────────────────
 
-  Widget _buildSuccess() {
+  Widget _buildSuccess(Map<String, dynamic> data, {required bool justSubmitted}) {
+    final coupleName = (data['coupleName'] as String?) ?? 'We';
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 48, 24, 32),
       child: Column(
@@ -186,7 +331,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           const Text('🎊', style: TextStyle(fontSize: 72)),
           const SizedBox(height: 20),
           Text(
-            'Thank You!',
+            justSubmitted ? 'Thank You!' : 'You\'ve already responded',
             style: GoogleFonts.playfairDisplay(
               fontSize: 28,
               fontWeight: FontWeight.w700,
@@ -196,7 +341,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Your RSVP has been received.\nChanda & Mwila look forward to celebrating with you!',
+            'Your RSVP has been received.\n$coupleName look forward to celebrating with you!',
             style: AppTextStyles.bodyMedium.copyWith(
               color: AppColors.textSecondary,
               height: 1.6,
@@ -210,7 +355,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
 
   // ── Sticky bottom bar ─────────────────────────────────────────────────────
 
-  Widget _buildBottomBar(BuildContext context) {
+  Widget _buildBottomBar(BuildContext context, Color accentColor) {
     return Container(
       padding: EdgeInsets.fromLTRB(
           16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
@@ -224,68 +369,39 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          // Save draft
-          Expanded(
-            child: OutlinedButton(
-              onPressed: _submitting ? null : () {},
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.divider, width: 1.5),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-              ),
-              child: Text(
-                'Save draft',
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ),
+      child: ElevatedButton(
+        onPressed: _submitting ? null : _submit,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: accentColor,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: accentColor.withAlpha(153),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
           ),
-          const SizedBox(width: 12),
-          // Submit RSVP
-          Expanded(
-            child: ElevatedButton(
-              onPressed: _submitting ? null : _submit,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.amber,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: AppColors.amber.withAlpha(153),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 0,
-              ),
-              child: _submitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Submit RSVP',
-                          style: GoogleFonts.inter(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.arrow_forward_rounded, size: 18),
-                      ],
+          elevation: 0,
+        ),
+        child: _submitting
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Submit RSVP',
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
                     ),
-            ),
-          ),
-        ],
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.arrow_forward_rounded, size: 18),
+                ],
+              ),
       ),
     );
   }
@@ -357,11 +473,25 @@ class _RsvpFormCard extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController nameCtrl;
   final TextEditingController emailCtrl;
+  final String? rsvpBy;
+  final AttendingStatus attending;
+  final ValueChanged<AttendingStatus> onAttendingChanged;
+  final String? error;
+  final bool showEmailField;
+  final bool readOnlyName;
+  final Color accentColor;
 
   const _RsvpFormCard({
     required this.formKey,
     required this.nameCtrl,
     required this.emailCtrl,
+    required this.rsvpBy,
+    required this.attending,
+    required this.onAttendingChanged,
+    required this.error,
+    this.showEmailField = true,
+    this.readOnlyName = false,
+    this.accentColor = AppColors.forestGreen,
   });
 
   @override
@@ -379,7 +509,7 @@ class _RsvpFormCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'RSVP by 1 August 2026',
+              (rsvpBy != null && rsvpBy!.isNotEmpty) ? 'RSVP by $rsvpBy' : 'RSVP',
               style: GoogleFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -391,23 +521,30 @@ class _RsvpFormCard extends StatelessWidget {
             const SizedBox(height: 8),
             TextFormField(
               controller: nameCtrl,
+              enabled: !readOnlyName,
               textCapitalization: TextCapitalization.words,
               decoration: _fieldDec('Full name'),
               validator: (v) =>
                   (v?.trim().isEmpty ?? true) ? 'Name is required' : null,
             ),
-            const SizedBox(height: 14),
-            _FormLabel('Your email'),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              decoration: _fieldDec('Email address (optional)'),
-            ),
+            if (showEmailField) ...[
+              const SizedBox(height: 14),
+              _FormLabel('Your email'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: _fieldDec('Email address (optional)'),
+              ),
+            ],
             const SizedBox(height: 14),
             _FormLabel('Will you attend?'),
             const SizedBox(height: 8),
-            _AttendRow(),
+            _AttendRow(value: attending, onChanged: onAttendingChanged, accentColor: accentColor),
+            if (error != null) ...[
+              const SizedBox(height: 12),
+              Text(error!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+            ],
           ],
         ),
       ),
@@ -455,28 +592,21 @@ class _FormLabel extends StatelessWidget {
   }
 }
 
-class _AttendRow extends StatefulWidget {
-  const _AttendRow();
-
-  @override
-  State<_AttendRow> createState() => _AttendRowState();
-}
-
-class _AttendRowState extends State<_AttendRow> {
-  String _value = 'yes';
+class _AttendRow extends StatelessWidget {
+  final AttendingStatus value;
+  final ValueChanged<AttendingStatus> onChanged;
+  final Color accentColor;
+  const _AttendRow({required this.value, required this.onChanged, required this.accentColor});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _Chip(label: 'Going ✅', value: 'yes', selected: _value,
-            onTap: (v) => setState(() => _value = v)),
+        _Chip(label: 'Going ✅', status: AttendingStatus.yes, selected: value, onTap: onChanged, accentColor: accentColor),
         const SizedBox(width: 8),
-        _Chip(label: 'Maybe 🤔', value: 'maybe', selected: _value,
-            onTap: (v) => setState(() => _value = v)),
+        _Chip(label: 'Maybe 🤔', status: AttendingStatus.maybe, selected: value, onTap: onChanged, accentColor: accentColor),
         const SizedBox(width: 8),
-        _Chip(label: 'No ❌', value: 'no', selected: _value,
-            onTap: (v) => setState(() => _value = v)),
+        _Chip(label: 'No ❌', status: AttendingStatus.no, selected: value, onTap: onChanged, accentColor: accentColor),
       ],
     );
   }
@@ -484,33 +614,35 @@ class _AttendRowState extends State<_AttendRow> {
 
 class _Chip extends StatelessWidget {
   final String label;
-  final String value;
-  final String selected;
-  final ValueChanged<String> onTap;
+  final AttendingStatus status;
+  final AttendingStatus selected;
+  final ValueChanged<AttendingStatus> onTap;
+  final Color accentColor;
 
   const _Chip({
     required this.label,
-    required this.value,
+    required this.status,
     required this.selected,
     required this.onTap,
+    required this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isSelected = value == selected;
+    final isSelected = status == selected;
     return Expanded(
       child: GestureDetector(
-        onTap: () => onTap(value),
+        onTap: () => onTap(status),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: isSelected
-                ? AppColors.forestGreen.withAlpha(23)
+                ? accentColor.withAlpha(23)
                 : AppColors.surface,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? AppColors.forestGreen : AppColors.divider,
+              color: isSelected ? accentColor : AppColors.divider,
               width: isSelected ? 1.5 : 1,
             ),
           ),
@@ -519,7 +651,7 @@ class _Chip extends StatelessWidget {
             style: GoogleFonts.inter(
               fontSize: 11,
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              color: isSelected ? AppColors.forestGreen : AppColors.textSecondary,
+              color: isSelected ? accentColor : AppColors.textSecondary,
             ),
             textAlign: TextAlign.center,
           ),

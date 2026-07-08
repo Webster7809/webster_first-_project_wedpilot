@@ -23,6 +23,16 @@ String fmtCompact(num amount) {
   return amount.round().toString();
 }
 
+/// "2h ago", "3d ago", "just now" — relative to [DateTime.now()].
+String fmtRelativeTime(DateTime d) {
+  final diff = DateTime.now().difference(d);
+  if (diff.inMinutes < 1) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  return fmtDate(d);
+}
+
 /// "14 September 2026"
 String fmtDate(DateTime d) {
   const months = [

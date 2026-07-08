@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:dio/dio.dart';
@@ -61,6 +62,57 @@ class CoupleProfileService {
       );
       final data = response.data ?? {};
       return CoupleProfile.fromJson(data['profile'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw CoupleProfileApiException(_extractError(e));
+    }
+  }
+
+  Future<CoupleProfile> uploadPhoto(
+    String accessToken, {
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    try {
+      final form = FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: filename),
+      });
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/couple/profile/photo',
+        data: form,
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+      final data = response.data ?? {};
+      return CoupleProfile.fromJson(data['profile'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw CoupleProfileApiException(_extractError(e));
+    }
+  }
+
+  Future<CoupleProfile> removePhoto(String accessToken) async {
+    try {
+      final response = await _dio.delete<Map<String, dynamic>>(
+        '/api/couple/profile/photo',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+      final data = response.data ?? {};
+      return CoupleProfile.fromJson(data['profile'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw CoupleProfileApiException(_extractError(e));
+    }
+  }
+
+  /// Reports the AI matcher's current top pick per category so the backend
+  /// can persist it and notify the couple only when a pick is new or changed.
+  Future<void> syncVendorMatches(
+    String accessToken,
+    List<Map<String, dynamic>> matches,
+  ) async {
+    try {
+      await _dio.post(
+        '/api/couple/vendor-matches',
+        data: {'matches': matches},
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
     } on DioException catch (e) {
       throw CoupleProfileApiException(_extractError(e));
     }

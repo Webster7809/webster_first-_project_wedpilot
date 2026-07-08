@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/admin_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/format_utils.dart';
 import '../../../providers/admin_provider.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_avatar.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
@@ -17,10 +20,12 @@ class UserManagementScreen extends ConsumerStatefulWidget {
 class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   String _filter = 'All';
   final _searchCtrl = TextEditingController();
+  final _searchFocus = FocusNode();
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -29,36 +34,50 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     final actionLabel = user.isSuspended ? 'Unsuspend' : 'Suspend';
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('$actionLabel account?'),
         content: Text(
           user.isSuspended
               ? '${user.name} will be restored to active status.'
               : '${user.name} will no longer be able to log in.',
         ),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ref.read(adminProvider.notifier).toggleSuspendUser(user.id);
-              showWedSnackBar(
-                context,
-                '${user.name} ${action}ed.',
-                type: user.isSuspended ? SnackType.success : SnackType.warning,
-              );
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              final token = ref.read(authProvider.notifier).accessToken;
+              if (token == null) return;
+              try {
+                await AdminApiService.instance.setUserSuspended(
+                  token,
+                  user.id,
+                  !user.isSuspended,
+                );
+                ref.invalidate(adminUsersProvider);
+                if (context.mounted) {
+                  showWedSnackBar(
+                    context,
+                    '${user.name} ${action}ed.',
+                    type: user.isSuspended
+                        ? SnackType.success
+                        : SnackType.warning,
+                  );
+                }
+              } on AdminApiException catch (e) {
+                if (context.mounted) {
+                  showWedSnackBar(context, e.message, type: SnackType.error);
+                }
+              }
             },
             child: Text(
               actionLabel,
               style: TextStyle(
-                color: user.isSuspended
-                    ? AppColors.success
-                    : AppColors.warning,
+                color: user.isSuspended ? AppColors.success : AppColors.warning,
               ),
             ),
           ),
@@ -70,29 +89,42 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   void _confirmDelete(BuildContext context, AdminUser user) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete account?'),
         content: Text(
-            'This will permanently remove ${user.name}. This cannot be undone.'),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          'This will permanently remove ${user.name}. This cannot be undone.',
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ref.read(adminProvider.notifier).deleteUser(user.id);
-              showWedSnackBar(
-                context,
-                '${user.name} deleted.',
-                type: SnackType.error,
-              );
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              final token = ref.read(authProvider.notifier).accessToken;
+              if (token == null) return;
+              try {
+                await AdminApiService.instance.deleteUser(token, user.id);
+                ref.invalidate(adminUsersProvider);
+                if (context.mounted) {
+                  showWedSnackBar(
+                    context,
+                    '${user.name} deleted.',
+                    type: SnackType.error,
+                  );
+                }
+              } on AdminApiException catch (e) {
+                if (context.mounted) {
+                  showWedSnackBar(context, e.message, type: SnackType.error);
+                }
+              }
             },
-            child: const Text('Delete',
-                style: TextStyle(color: AppColors.error)),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: AppColors.error),
+            ),
           ),
         ],
       ),
@@ -102,10 +134,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   void _showUserDetails(BuildContext context, AdminUser user) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text(user.name),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -121,12 +152,12 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
               value: user.isSuspended ? 'Suspended' : 'Active',
             ),
             const SizedBox(height: 8),
-            _ProfileRow(label: 'Joined', value: user.joined),
+            _ProfileRow(label: 'Joined', value: fmtRelativeTime(user.joinedAt)),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Close'),
           ),
         ],
@@ -136,13 +167,13 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final users = ref.watch(adminProvider).users;
+    final users = ref.watch(adminUsersProvider).valueOrNull ?? [];
 
     final filtered = users.where((u) {
-      final matchesFilter =
-          _filter == 'All' || u.role == _filter.toLowerCase();
+      final matchesFilter = _filter == 'All' || u.role == _filter.toLowerCase();
       final query = _searchCtrl.text.toLowerCase();
-      final matchesSearch = query.isEmpty ||
+      final matchesSearch =
+          query.isEmpty ||
           u.name.toLowerCase().contains(query) ||
           u.email.toLowerCase().contains(query);
       return matchesFilter && matchesSearch;
@@ -158,8 +189,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         shadowColor: AppColors.divider,
         title: Text(
           'User Management',
-          style: AppTextStyles.headlineSmall
-              .copyWith(color: AppColors.textPrimary),
+          style: AppTextStyles.headlineSmall.copyWith(
+            color: AppColors.textPrimary,
+          ),
         ),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         actions: [
@@ -168,8 +200,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
             child: Center(
               child: Text(
                 '${users.length} users',
-                style: AppTextStyles.caption
-                    .copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           ),
@@ -186,29 +219,51 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
               children: [
                 TextField(
                   controller: _searchCtrl,
+                  focusNode: _searchFocus,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     hintText: 'Search by name or email…',
-                    hintStyle: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textHint),
-                    prefixIcon: const Icon(Icons.search,
-                        size: 20, color: AppColors.textSecondary),
+                    hintStyle: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textHint,
+                    ),
+                    prefixIcon: IconButton(
+                      onPressed: () => _searchFocus.requestFocus(),
+                      icon: const Icon(
+                        Icons.search,
+                        size: 20,
+                        color: AppColors.textSecondary,
+                      ),
+                      splashRadius: 20,
+                    ),
+                    suffixIcon: _searchCtrl.text.isNotEmpty
+                        ? IconButton(
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() {});
+                              _searchFocus.requestFocus();
+                            },
+                            icon: const Icon(
+                              Icons.clear,
+                              size: 20,
+                              color: AppColors.textSecondary,
+                            ),
+                            splashRadius: 20,
+                          )
+                        : null,
                     filled: true,
                     fillColor: AppColors.adminPage,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
                     ),
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
                 const SizedBox(height: 10),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children:
-                        ['All', 'Couple', 'Vendor', 'Admin'].map((f) {
+                    children: ['All', 'Couple', 'Vendor', 'Admin'].map((f) {
                       final selected = _filter == f;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
@@ -216,7 +271,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                           onTap: () => setState(() => _filter = f),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 7),
+                              horizontal: 14,
+                              vertical: 7,
+                            ),
                             decoration: BoxDecoration(
                               color: selected
                                   ? AppColors.adminIndigo
@@ -253,15 +310,23 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.person_search_rounded,
-                            size: 56, color: AppColors.textHint),
+                        const Icon(
+                          Icons.person_search_rounded,
+                          size: 56,
+                          color: AppColors.textHint,
+                        ),
                         const SizedBox(height: 12),
-                        Text('No users found',
-                            style: AppTextStyles.headlineMedium),
+                        Text(
+                          'No users found',
+                          style: AppTextStyles.headlineMedium,
+                        ),
                         const SizedBox(height: 6),
-                        Text('Try adjusting your search or filter.',
-                            style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textSecondary)),
+                        Text(
+                          'Try adjusting your search or filter.',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                       ],
                     ),
                   )
@@ -269,21 +334,31 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: filtered.length,
                     separatorBuilder: (_, _) => const Divider(
-                        height: 1, color: AppColors.adminNeutralBg),
+                      height: 1,
+                      color: AppColors.adminNeutralBg,
+                    ),
                     itemBuilder: (ctx, i) {
                       final user = filtered[i];
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 6),
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
                         leading: ColorFiltered(
                           colorFilter: user.isSuspended
                               ? const ColorFilter.mode(
-                                  Colors.grey, BlendMode.saturation)
+                                  Colors.grey,
+                                  BlendMode.saturation,
+                                )
                               : const ColorFilter.mode(
                                   Colors.transparent,
-                                  BlendMode.multiply),
+                                  BlendMode.multiply,
+                                ),
                           child: WedAvatar(
-                              name: user.name, radius: 22),
+                            imageUrl: user.photoUrl,
+                            name: user.name,
+                            radius: 22,
+                          ),
                         ),
                         title: Row(
                           children: [
@@ -300,42 +375,46 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                             if (user.isSuspended)
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: AppColors.adminRedBg,
-                                  borderRadius:
-                                      BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
                                   'Suspended',
                                   style: AppTextStyles.caption.copyWith(
-                                      color: AppColors.error,
-                                      fontWeight: FontWeight.w600),
+                                    color: AppColors.error,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                           ],
                         ),
                         subtitle: Text(
-                          '${user.email}  ·  Joined ${user.joined}',
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.textSecondary),
+                          '${user.email}  ·  Joined ${fmtRelativeTime(user.joinedAt)}',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _RoleBadge(role: user.role),
                             PopupMenuButton<String>(
-                              icon: const Icon(Icons.more_vert,
-                                  size: 18,
-                                  color: AppColors.textSecondary),
+                              icon: const Icon(
+                                Icons.more_vert,
+                                size: 18,
+                                color: AppColors.textSecondary,
+                              ),
                               onSelected: (action) {
                                 switch (action) {
                                   case 'view':
                                     _showUserDetails(context, user);
                                     break;
                                   case 'suspend':
-                                    _confirmToggleSuspend(
-                                        context, user);
+                                    _confirmToggleSuspend(context, user);
                                     break;
                                   case 'delete':
                                     _confirmDelete(context, user);
@@ -349,16 +428,17 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                                 ),
                                 PopupMenuItem(
                                   value: 'suspend',
-                                  child: Text(user.isSuspended
-                                      ? 'Unsuspend Account'
-                                      : 'Suspend Account'),
+                                  child: Text(
+                                    user.isSuspended
+                                        ? 'Unsuspend Account'
+                                        : 'Suspend Account',
+                                  ),
                                 ),
                                 const PopupMenuItem(
                                   value: 'delete',
                                   child: Text(
                                     'Delete Account',
-                                    style: TextStyle(
-                                        color: AppColors.error),
+                                    style: TextStyle(color: AppColors.error),
                                   ),
                                 ),
                               ],
@@ -382,10 +462,10 @@ class _RoleBadge extends StatelessWidget {
   const _RoleBadge({required this.role});
 
   Color get _color => switch (role) {
-        'admin' => AppColors.adminIndigo,
-        'vendor' => AppColors.adminBlue,
-        _ => AppColors.adminGreen,
-      };
+    'admin' => AppColors.adminIndigo,
+    'vendor' => AppColors.adminBlue,
+    _ => AppColors.adminGreen,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -398,8 +478,10 @@ class _RoleBadge extends StatelessWidget {
       ),
       child: Text(
         role[0].toUpperCase() + role.substring(1),
-        style: AppTextStyles.caption
-            .copyWith(color: _color, fontWeight: FontWeight.w600),
+        style: AppTextStyles.caption.copyWith(
+          color: _color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -421,8 +503,9 @@ class _ProfileRow extends StatelessWidget {
           width: 56,
           child: Text(
             label,
-            style: AppTextStyles.caption
-                .copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textSecondary,
+            ),
           ),
         ),
         const SizedBox(width: 8),

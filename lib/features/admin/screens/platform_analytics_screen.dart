@@ -1,89 +1,81 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../providers/admin_provider.dart';
 import '../../../widgets/wed_card.dart';
 
 enum _DateRange { week, month, year }
 
-class PlatformAnalyticsScreen extends StatefulWidget {
+class PlatformAnalyticsScreen extends ConsumerStatefulWidget {
   const PlatformAnalyticsScreen({super.key});
 
   @override
-  State<PlatformAnalyticsScreen> createState() =>
+  ConsumerState<PlatformAnalyticsScreen> createState() =>
       _PlatformAnalyticsScreenState();
 }
 
-class _PlatformAnalyticsScreenState extends State<PlatformAnalyticsScreen> {
+class _PlatformAnalyticsScreenState extends ConsumerState<PlatformAnalyticsScreen> {
   _DateRange _range = _DateRange.year;
 
-  List<double> get _chartValues => switch (_range) {
-        _DateRange.week => [
-            12,
-            19,
-            8,
-            24,
-            16,
-            30,
-            22
-          ],
-        _DateRange.month => [
-            45,
-            62,
-            58,
-            71
-          ],
-        _DateRange.year => [
-            10,
-            18,
-            24,
-            35,
-            40,
-            52,
-            58,
-            65,
-            72,
-            78,
-            84,
-            92
-          ],
-      };
+  List<String> get _weekLabels {
+    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final now = DateTime.now();
+    return List.generate(7, (i) {
+      final day = now.subtract(Duration(days: 6 - i));
+      return names[day.weekday - 1];
+    });
+  }
 
-  List<String> get _chartLabels => switch (_range) {
-        _DateRange.week => [
-            'Mon',
-            'Tue',
-            'Wed',
-            'Thu',
-            'Fri',
-            'Sat',
-            'Sun'
-          ],
-        _DateRange.month => ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-        _DateRange.year => [
-            'Jan',
-            'Feb',
-            'Mar',
-            'Apr',
-            'May',
-            'Jun',
-            'Jul',
-            'Aug',
-            'Sep',
-            'Oct',
-            'Nov',
-            'Dec'
-          ],
-      };
+  List<String> get _yearLabels {
+    const names = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final now = DateTime.now();
+    return List.generate(12, (i) {
+      final monthsAgo = 11 - i;
+      final month = DateTime(now.year, now.month - monthsAgo, 1);
+      return names[month.month - 1];
+    });
+  }
 
   String get _rangeLabel => switch (_range) {
         _DateRange.week => 'Last 7 days',
-        _DateRange.month => 'Last 30 days',
+        _DateRange.month => 'Last 4 weeks',
         _DateRange.year => 'Last 12 months',
       };
 
   @override
   Widget build(BuildContext context) {
+    final analytics = ref.watch(adminAnalyticsProvider).valueOrNull;
+    final overview = ref.watch(adminOverviewProvider).valueOrNull;
+
+    final chartValues = (switch (_range) {
+          _DateRange.week => analytics?.userGrowthWeek,
+          _DateRange.month => analytics?.userGrowthMonth,
+          _DateRange.year => analytics?.userGrowthYear,
+        } ??
+        const [])
+        .map((v) => v.toDouble())
+        .toList();
+    final chartLabels = switch (_range) {
+      _DateRange.week => _weekLabels,
+      _DateRange.month => const ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+      _DateRange.year => _yearLabels,
+    };
+
+    final newSignupsThisWeek =
+        analytics?.userGrowthWeek.fold<int>(0, (a, b) => a + b) ?? 0;
+    final totalUsers = (overview?.activeCouples ?? 0) + (overview?.registeredVendors ?? 0);
+    final tiers = analytics?.vendorTierDistribution ?? const {'free': 0, 'pro': 0, 'premium': 0};
+    final totalVendorsForTiers = tiers.values.fold<int>(0, (a, b) => a + b);
+    final topCategories = analytics?.topCategories ?? const [];
+    final maxCategoryCount = topCategories.isEmpty
+        ? 1
+        : topCategories.map((c) => c.count).reduce((a, b) => a > b ? a : b);
+
     return Scaffold(
       backgroundColor: AppColors.adminPage,
       appBar: AppBar(
@@ -155,15 +147,24 @@ class _PlatformAnalyticsScreenState extends State<PlatformAnalyticsScreen> {
                 const SizedBox(height: 20),
                 SizedBox(
                   height: 180,
-                  child: BarChart(
+                  child: chartValues.every((v) => v == 0)
+                      ? Center(
+                          child: Text(
+                            'No signups in this period yet.',
+                            style: AppTextStyles.bodySmall
+                                .copyWith(color: AppColors.textSecondary),
+                          ),
+                        )
+                      : BarChart(
                     BarChartData(
                       gridData: FlGridData(
                         show: true,
                         drawVerticalLine: false,
                         horizontalInterval:
-                            (_chartValues.reduce((a, b) => a > b ? a : b) /
+                            (chartValues.reduce((a, b) => a > b ? a : b) /
                                     4)
-                                .ceilToDouble(),
+                                .ceilToDouble()
+                                .clamp(1.0, double.infinity),
                         getDrawingHorizontalLine: (_) => const FlLine(
                           color: AppColors.adminNeutralBg,
                           strokeWidth: 1,
@@ -178,13 +179,13 @@ class _PlatformAnalyticsScreenState extends State<PlatformAnalyticsScreen> {
                             getTitlesWidget: (value, _) {
                               final i = value.toInt();
                               if (i < 0 ||
-                                  i >= _chartLabels.length) {
+                                  i >= chartLabels.length) {
                                 return const SizedBox.shrink();
                               }
                               return Padding(
                                 padding: const EdgeInsets.only(top: 6),
                                 child: Text(
-                                  _chartLabels[i],
+                                  chartLabels[i],
                                   style: AppTextStyles.caption.copyWith(
                                     color: AppColors.textSecondary,
                                     fontSize: 9,
@@ -203,12 +204,12 @@ class _PlatformAnalyticsScreenState extends State<PlatformAnalyticsScreen> {
                       ),
                       borderData: FlBorderData(show: false),
                       barGroups: List.generate(
-                        _chartValues.length,
+                        chartValues.length,
                         (i) => BarChartGroupData(
                           x: i,
                           barRods: [
                             BarChartRodData(
-                              toY: _chartValues[i],
+                              toY: chartValues[i],
                               color: AppColors.secondary,
                               width: _range == _DateRange.year
                                   ? 14
@@ -230,116 +231,129 @@ class _PlatformAnalyticsScreenState extends State<PlatformAnalyticsScreen> {
 
           // ── Metric Cards ───────────────────────────────────────
           Row(
-            children: const [
+            children: [
               Expanded(
                 child: _MetricCard(
                   title: 'Total Users',
-                  value: '4,829',
-                  subtitle: '+247 this week',
+                  value: totalUsers.toString(),
+                  subtitle: '+$newSignupsThisWeek this week',
                   positive: true,
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: _MetricCard(
                   title: 'Active Vendors',
-                  value: '312',
-                  subtitle: '+18 this week',
+                  value: (overview?.registeredVendors ?? 0).toString(),
+                  subtitle: '${overview?.pendingVendorsCount ?? 0} pending review',
                   positive: true,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: const [
+          const Row(
+            children: [
               Expanded(
                 child: _MetricCard(
                   title: 'Monthly Revenue',
-                  value: r'$18,420',
-                  subtitle: '+12% vs last month',
+                  value: '—',
+                  subtitle: 'Coming soon — no payment system yet',
                   positive: true,
+                  comingSoon: true,
                 ),
               ),
               SizedBox(width: 12),
               Expanded(
                 child: _MetricCard(
                   title: 'Avg Session',
-                  value: '8.4 min',
-                  subtitle: '+1.2 min vs last month',
+                  value: '—',
+                  subtitle: 'Coming soon — usage tracking planned',
                   positive: true,
+                  comingSoon: true,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
 
-          // ── Revenue by Plan ────────────────────────────────────
+          // ── Vendor Tier Distribution ────────────────────────────
           WedCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Revenue by Plan',
+                Text('Vendor Tier Distribution',
                     style: AppTextStyles.headlineSmall),
                 const SizedBox(height: 16),
-                SizedBox(
-                  height: 160,
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 2,
-                      centerSpaceRadius: 32,
-                      sections: [
-                        PieChartSectionData(
-                          value: 60,
-                          color: AppColors.secondary,
-                          title: '60%',
-                          titleStyle: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          radius: 56,
-                        ),
-                        PieChartSectionData(
-                          value: 35,
-                          color: AppColors.goldPremium,
-                          title: '35%',
-                          titleStyle: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          radius: 56,
-                        ),
-                        PieChartSectionData(
-                          value: 5,
-                          color: AppColors.adminNeutralBg,
-                          title: '5%',
-                          titleStyle: AppTextStyles.caption
-                              .copyWith(color: AppColors.textSecondary),
-                          radius: 56,
-                        ),
-                      ],
+                if (totalVendorsForTiers == 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        'No vendors registered yet.',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textSecondary),
+                      ),
+                    ),
+                  )
+                else ...[
+                  SizedBox(
+                    height: 160,
+                    child: PieChart(
+                      PieChartData(
+                        sectionsSpace: 2,
+                        centerSpaceRadius: 32,
+                        sections: [
+                          if ((tiers['free'] ?? 0) > 0)
+                            PieChartSectionData(
+                              value: (tiers['free'] ?? 0).toDouble(),
+                              color: AppColors.adminNeutralBg,
+                              title: '${tiers['free']}',
+                              titleStyle: AppTextStyles.caption
+                                  .copyWith(color: AppColors.textSecondary),
+                              radius: 56,
+                            ),
+                          if ((tiers['pro'] ?? 0) > 0)
+                            PieChartSectionData(
+                              value: (tiers['pro'] ?? 0).toDouble(),
+                              color: AppColors.secondary,
+                              title: '${tiers['pro']}',
+                              titleStyle: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              radius: 56,
+                            ),
+                          if ((tiers['premium'] ?? 0) > 0)
+                            PieChartSectionData(
+                              value: (tiers['premium'] ?? 0).toDouble(),
+                              color: AppColors.goldPremium,
+                              title: '${tiers['premium']}',
+                              titleStyle: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              radius: 56,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    _PieLegend(
-                        color: AppColors.secondary, label: 'Pro'),
-                    SizedBox(width: 20),
-                    _PieLegend(
-                        color: AppColors.goldPremium,
-                        label: 'Premium'),
-                    SizedBox(width: 20),
-                    _PieLegend(
-                        color: AppColors.adminNeutralBg,
-                        label: 'Free'),
-                  ],
-                ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      _PieLegend(color: AppColors.adminNeutralBg, label: 'Free'),
+                      SizedBox(width: 20),
+                      _PieLegend(color: AppColors.secondary, label: 'Pro'),
+                      SizedBox(width: 20),
+                      _PieLegend(color: AppColors.goldPremium, label: 'Premium'),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -350,25 +364,28 @@ class _PlatformAnalyticsScreenState extends State<PlatformAnalyticsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
-              children: const [
-                Text('Top Categories by Inquiries',
+              children: [
+                const Text('Top Categories by Inquiries',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     )),
-                SizedBox(height: 14),
-                _CategoryBar(
-                    label: 'Photography', value: 89, max: 89),
-                SizedBox(height: 10),
-                _CategoryBar(label: 'Venue', value: 76, max: 89),
-                SizedBox(height: 10),
-                _CategoryBar(
-                    label: 'Catering', value: 64, max: 89),
-                SizedBox(height: 10),
-                _CategoryBar(
-                    label: 'Floristry', value: 41, max: 89),
-                SizedBox(height: 10),
-                _CategoryBar(label: 'Music', value: 33, max: 89),
+                const SizedBox(height: 14),
+                if (topCategories.isEmpty)
+                  Text(
+                    'No inquiries have been sent yet.',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.textSecondary),
+                  )
+                else
+                  for (int i = 0; i < topCategories.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 10),
+                    _CategoryBar(
+                      label: topCategories[i].category,
+                      value: topCategories[i].count,
+                      max: maxCategoryCount,
+                    ),
+                  ],
               ],
             ),
           ),
@@ -425,12 +442,14 @@ class _MetricCard extends StatelessWidget {
   final String value;
   final String subtitle;
   final bool positive;
+  final bool comingSoon;
 
   const _MetricCard({
     required this.title,
     required this.value,
     required this.subtitle,
     required this.positive,
+    this.comingSoon = false,
   });
 
   @override
@@ -461,28 +480,31 @@ class _MetricCard extends StatelessWidget {
           Text(
             value,
             style: AppTextStyles.headlineMedium.copyWith(
-                color: AppColors.textPrimary,
+                color: comingSoon ? AppColors.textHint : AppColors.textPrimary,
                 fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Row(
             children: [
-              Icon(
-                positive
-                    ? Icons.trending_up_rounded
-                    : Icons.trending_down_rounded,
-                size: 12,
-                color:
-                    positive ? AppColors.success : AppColors.error,
-              ),
-              const SizedBox(width: 3),
+              if (!comingSoon)
+                Icon(
+                  positive
+                      ? Icons.trending_up_rounded
+                      : Icons.trending_down_rounded,
+                  size: 12,
+                  color:
+                      positive ? AppColors.success : AppColors.error,
+                ),
+              if (!comingSoon) const SizedBox(width: 3),
               Flexible(
                 child: Text(
                   subtitle,
                   style: AppTextStyles.caption.copyWith(
-                    color: positive
-                        ? AppColors.success
-                        : AppColors.error,
+                    color: comingSoon
+                        ? AppColors.textHint
+                        : positive
+                            ? AppColors.success
+                            : AppColors.error,
                     fontSize: 10,
                   ),
                   overflow: TextOverflow.ellipsis,

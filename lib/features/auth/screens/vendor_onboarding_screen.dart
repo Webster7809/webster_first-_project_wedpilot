@@ -95,7 +95,9 @@ class _VendorOnboardingScreenState
 
   bool get _isCustomCategorySelected =>
       _selectedCategory != null &&
-      !_categories.any((c) => c.$1.toLowerCase() == _selectedCategory!.toLowerCase());
+      !_categories.any(
+        (c) => c.$1.toLowerCase() == _selectedCategory!.toLowerCase(),
+      );
 
   void _addCustomCategory() {
     final raw = _customCategoryCtrl.text.trim();
@@ -134,13 +136,21 @@ class _VendorOnboardingScreenState
 
   Future<void> _submit() async {
     if (_selectedCategory == null || _selectedCategory!.isEmpty) {
-      showWedSnackBar(context, 'Select a vendor category to continue.', type: SnackType.error);
+      showWedSnackBar(
+        context,
+        'Select a vendor category to continue.',
+        type: SnackType.error,
+      );
       setState(() => _step = 0);
       return;
     }
     final businessName = _titleCtrl.text.trim();
     if (businessName.isEmpty) {
-      showWedSnackBar(context, 'Add a listing title to continue.', type: SnackType.error);
+      showWedSnackBar(
+        context,
+        'Add a listing title to continue.',
+        type: SnackType.error,
+      );
       setState(() => _step = 1);
       return;
     }
@@ -151,12 +161,22 @@ class _VendorOnboardingScreenState
       businessName: businessName,
       category: _selectedCategory!,
       description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-      location: _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
+      location: _locationCtrl.text.trim().isEmpty
+          ? null
+          : _locationCtrl.text.trim(),
       phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-      whatsapp: _whatsappCtrl.text.trim().isEmpty ? null : _whatsappCtrl.text.trim(),
-      contactEmail: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-      address: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
-      instagramHandle: _instagramCtrl.text.trim().isEmpty ? null : _instagramCtrl.text.trim(),
+      whatsapp: _whatsappCtrl.text.trim().isEmpty
+          ? null
+          : _whatsappCtrl.text.trim(),
+      contactEmail: _emailCtrl.text.trim().isEmpty
+          ? null
+          : _emailCtrl.text.trim(),
+      address: _addressCtrl.text.trim().isEmpty
+          ? null
+          : _addressCtrl.text.trim(),
+      instagramHandle: _instagramCtrl.text.trim().isEmpty
+          ? null
+          : _instagramCtrl.text.trim(),
     );
 
     if (!mounted) return;
@@ -196,7 +216,9 @@ class _VendorOnboardingScreenState
 
   Future<void> _pickCoverPhoto() async {
     final file = await _picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 80);
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
     if (file == null || !mounted) return;
     final bytes = await file.readAsBytes();
     setState(() => _coverPhotoBytes = bytes);
@@ -205,7 +227,9 @@ class _VendorOnboardingScreenState
   Future<void> _addGalleryPhoto() async {
     if (_galleryBytes.length >= 6) return;
     final file = await _picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 80);
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
     if (file == null || !mounted) return;
     final bytes = await file.readAsBytes();
     setState(() => _galleryBytes.add(bytes));
@@ -241,7 +265,10 @@ class _VendorOnboardingScreenState
                       child: Center(
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 500),
-                          child: _buildStep(),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [_buildStep()],
+                          ),
                         ),
                       ),
                     ),
@@ -271,7 +298,10 @@ class _VendorOnboardingScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        WizardSectionLabel(icon: Icons.grid_view_outlined, label: 'Vendor category'),
+        WizardSectionLabel(
+          icon: Icons.grid_view_outlined,
+          label: 'Vendor category',
+        ),
         const SizedBox(height: 12),
         GridView.count(
           crossAxisCount: 2,
@@ -288,7 +318,9 @@ class _VendorOnboardingScreenState
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.amber.withAlpha(30) : AppColors.surface,
+                  color: isSelected
+                      ? AppColors.amber.withAlpha(30)
+                      : AppColors.surface,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: isSelected ? AppColors.amber : AppColors.divider,
@@ -310,7 +342,9 @@ class _VendorOnboardingScreenState
                       child: Icon(
                         icon,
                         size: 22,
-                        color: isSelected ? Colors.white : AppColors.forestGreen,
+                        color: isSelected
+                            ? Colors.white
+                            : AppColors.forestGreen,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -343,7 +377,11 @@ class _VendorOnboardingScreenState
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.check_circle_rounded, size: 14, color: AppColors.forestGreen),
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 14,
+                  color: AppColors.forestGreen,
+                ),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
@@ -359,7 +397,11 @@ class _VendorOnboardingScreenState
                 const SizedBox(width: 6),
                 GestureDetector(
                   onTap: _clearCustomCategory,
-                  child: const Icon(Icons.close_rounded, size: 14, color: AppColors.forestGreen),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    size: 14,
+                    color: AppColors.forestGreen,
+                  ),
                 ),
               ],
             ),
@@ -374,10 +416,14 @@ class _VendorOnboardingScreenState
                 controller: _customCategoryCtrl,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _addCustomCategory(),
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Add another vendor type, e.g. Hair & Makeup',
-                  hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+                  hintStyle: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textHint,
+                  ),
                   filled: true,
                   fillColor: AppColors.surface,
                   border: OutlineInputBorder(
@@ -390,9 +436,15 @@ class _VendorOnboardingScreenState
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
+                    borderSide: const BorderSide(
+                      color: AppColors.amber,
+                      width: 1.5,
+                    ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ),
@@ -414,10 +466,15 @@ class _VendorOnboardingScreenState
         const SizedBox(height: 6),
         Text(
           "Don't see your category? Add your own — you can only pick one.",
-          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.textSecondary,
+          ),
         ),
         const SizedBox(height: 24),
-        WizardSectionLabel(icon: Icons.location_on_outlined, label: 'Where are you based?'),
+        WizardSectionLabel(
+          icon: Icons.location_on_outlined,
+          label: 'Where are you based?',
+        ),
         const SizedBox(height: 10),
         TextField(
           controller: _locationCtrl,
@@ -440,7 +497,10 @@ class _VendorOnboardingScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        WizardSectionLabel(icon: Icons.camera_alt_outlined, label: 'Portfolio photos'),
+        WizardSectionLabel(
+          icon: Icons.camera_alt_outlined,
+          label: 'Portfolio photos',
+        ),
         const SizedBox(height: 12),
         _DashedUploadArea(
           onTap: _pickCoverPhoto,
@@ -467,7 +527,11 @@ class _VendorOnboardingScreenState
               : Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.upload_rounded, size: 32, color: AppColors.amber),
+                    const Icon(
+                      Icons.upload_rounded,
+                      size: 32,
+                      color: AppColors.amber,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'Upload cover photo',
@@ -479,7 +543,9 @@ class _VendorOnboardingScreenState
                     const SizedBox(height: 4),
                     Text(
                       'JPG or PNG, up to 10MB',
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -488,48 +554,60 @@ class _VendorOnboardingScreenState
         // Gallery row
         Row(
           children: [
-            ...List.generate(_galleryBytes.take(3).length, (i) => Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.memory(_galleryBytes[i], fit: BoxFit.cover),
-                      ),
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: _RemovePhotoButton(
-                          onTap: () => _removeGalleryPhoto(i),
-                          size: 18,
+            ...List.generate(
+              _galleryBytes.take(3).length,
+              (i) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.memory(
+                            _galleryBytes[i],
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            )),
-            // Fill remaining slots up to 3 with placeholders
-            ...List.generate(3 - _galleryBytes.take(3).length, (_) => Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.amber.withAlpha(20),
-                      borderRadius: BorderRadius.circular(10),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: _RemovePhotoButton(
+                            onTap: () => _removeGalleryPhoto(i),
+                            size: 18,
+                          ),
+                        ),
+                      ],
                     ),
-                    child: const Icon(Icons.camera_alt_outlined,
-                        color: AppColors.amber, size: 24),
                   ),
                 ),
               ),
-            )),
+            ),
+            // Fill remaining slots up to 3 with placeholders
+            ...List.generate(
+              3 - _galleryBytes.take(3).length,
+              (_) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.amber.withAlpha(20),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt_outlined,
+                        color: AppColors.amber,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             // Add button (hidden once 6 picked)
             if (_galleryBytes.length < 6)
               Expanded(
@@ -543,8 +621,11 @@ class _VendorOnboardingScreenState
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: AppColors.divider),
                       ),
-                      child: const Icon(Icons.add_rounded,
-                          color: AppColors.textHint, size: 28),
+                      child: const Icon(
+                        Icons.add_rounded,
+                        color: AppColors.textHint,
+                        size: 28,
+                      ),
                     ),
                   ),
                 ),
@@ -554,7 +635,9 @@ class _VendorOnboardingScreenState
         const SizedBox(height: 8),
         Text(
           'Add at least 4 photos — listings with 6+ photos get 3x more inquiries',
-          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.textSecondary,
+          ),
         ),
         const SizedBox(height: 24),
         WizardSectionLabel(icon: Icons.edit_outlined, label: 'Listing title'),
@@ -565,7 +648,10 @@ class _VendorOnboardingScreenState
           decoration: _fieldDec('Mukuba Gardens — Open Air Venue'),
         ),
         const SizedBox(height: 20),
-        WizardSectionLabel(icon: Icons.grid_view_outlined, label: 'Description'),
+        WizardSectionLabel(
+          icon: Icons.grid_view_outlined,
+          label: 'Description',
+        ),
         const SizedBox(height: 10),
         TextField(
           controller: _descCtrl,
@@ -601,8 +687,11 @@ class _VendorOnboardingScreenState
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.verified_user_outlined,
-                  size: 20, color: AppColors.success),
+              const Icon(
+                Icons.verified_user_outlined,
+                size: 20,
+                color: AppColors.success,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text.rich(
@@ -618,8 +707,9 @@ class _VendorOnboardingScreenState
                       TextSpan(
                         text:
                             'get a trust badge and rank higher in match results. We may call to confirm these details.',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.textSecondary),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -639,7 +729,9 @@ class _VendorOnboardingScreenState
         ),
         const SizedBox(height: 20),
         WizardSectionLabel(
-            icon: Icons.chat_bubble_outline_rounded, label: 'WhatsApp number'),
+          icon: Icons.chat_bubble_outline_rounded,
+          label: 'WhatsApp number',
+        ),
         const SizedBox(height: 10),
         _IconField(
           controller: _whatsappCtrl,
@@ -658,7 +750,9 @@ class _VendorOnboardingScreenState
         ),
         const SizedBox(height: 20),
         WizardSectionLabel(
-            icon: Icons.location_on_outlined, label: 'Physical address'),
+          icon: Icons.location_on_outlined,
+          label: 'Physical address',
+        ),
         const SizedBox(height: 10),
         _IconField(
           controller: _addressCtrl,
@@ -739,7 +833,9 @@ class _VendorOnboardingScreenState
                   WedButton(
                     label: 'Go to dashboard',
                     onPressed: () {
-                      ref.read(authProvider.notifier).completeVendorOnboarding();
+                      ref
+                          .read(authProvider.notifier)
+                          .completeVendorOnboarding();
                       context.go('/vendor/dashboard');
                     },
                     variant: WedButtonVariant.primaryDark,
@@ -756,25 +852,24 @@ class _VendorOnboardingScreenState
   }
 
   InputDecoration _fieldDec(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-        filled: true,
-        fillColor: AppColors.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
-      );
+    hintText: hint,
+    hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+    filled: true,
+    fillColor: AppColors.surface,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: AppColors.divider),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: AppColors.divider),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+  );
 }
 
 // ── Icon-prefix field ─────────────────────────────────────────────────────────
@@ -801,8 +896,7 @@ class _IconField extends StatelessWidget {
       decoration: InputDecoration(
         prefixIcon: Icon(icon, size: 20, color: AppColors.textSecondary),
         hintText: hint,
-        hintStyle:
-            AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
         filled: true,
         fillColor: AppColors.surface,
         border: OutlineInputBorder(
@@ -815,11 +909,12 @@ class _IconField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: AppColors.amber, width: 1.5),
+          borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 17,
+        ),
       ),
     );
   }
@@ -844,7 +939,11 @@ class _RemovePhotoButton extends StatelessWidget {
           color: AppColors.forestGreen.withAlpha(200),
           shape: BoxShape.circle,
         ),
-        child: Icon(Icons.close_rounded, size: size * 0.65, color: AppColors.textOnPrimary),
+        child: Icon(
+          Icons.close_rounded,
+          size: size * 0.65,
+          color: AppColors.textOnPrimary,
+        ),
       ),
     );
   }
@@ -890,7 +989,14 @@ class _DashBorderPainter extends CustomPainter {
 
     final path = Path()
       ..addRRect(
-          RRect.fromLTRBR(0, 0, size.width, size.height, const Radius.circular(radius)));
+        RRect.fromLTRBR(
+          0,
+          0,
+          size.width,
+          size.height,
+          const Radius.circular(radius),
+        ),
+      );
 
     final dashPath = _dashPath(path, dashWidth, dashSpace);
     canvas.drawPath(dashPath, paint);

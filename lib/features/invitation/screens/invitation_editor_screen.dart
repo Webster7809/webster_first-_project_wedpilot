@@ -1,81 +1,21 @@
-﻿import 'dart:math' show min;
+﻿import 'dart:async' show unawaited;
+import 'dart:math' show min;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:share_plus/share_plus.dart';
+import '../../../core/constants/invitation_fonts.dart';
+import '../../../core/services/invitation_api_service.dart' show resolveInvitationMediaUrl;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/share_helper.dart';
+import '../../../models/invitation.dart';
 import '../../../providers/invitation_provider.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
-
-// ─── Font options ───────────────────────────────────────────────────────────
-
-class _FontOption {
-  final String label;
-  final String category;
-  final TextStyle Function(double size, Color color) style;
-  const _FontOption(this.label, this.category, this.style);
-}
-
-final _fontOptions = <_FontOption>[
-  _FontOption('Great Vibes', 'Script',
-      (s, c) => GoogleFonts.greatVibes(fontSize: s, color: c)),
-  _FontOption('Sacramento', 'Script',
-      (s, c) => GoogleFonts.sacramento(fontSize: s, color: c)),
-  _FontOption('Dancing Script', 'Script',
-      (s, c) => GoogleFonts.dancingScript(
-          fontSize: s, color: c, fontWeight: FontWeight.w700)),
-  _FontOption('Pinyon Script', 'Script',
-      (s, c) => GoogleFonts.pinyonScript(fontSize: s, color: c)),
-  _FontOption('Alex Brush', 'Script',
-      (s, c) => GoogleFonts.alexBrush(fontSize: s, color: c)),
-  _FontOption('Allura', 'Script',
-      (s, c) => GoogleFonts.allura(fontSize: s, color: c)),
-  _FontOption('Tangerine', 'Script',
-      (s, c) => GoogleFonts.tangerine(
-          fontSize: s, color: c, fontWeight: FontWeight.w700)),
-  _FontOption('Parisienne', 'Script',
-      (s, c) => GoogleFonts.parisienne(fontSize: s, color: c)),
-  _FontOption('Playfair Display', 'Serif',
-      (s, c) => GoogleFonts.playfairDisplay(
-          fontSize: s, color: c, fontWeight: FontWeight.bold)),
-  _FontOption('Cormorant Garamond', 'Serif',
-      (s, c) => GoogleFonts.cormorantGaramond(
-          fontSize: s, color: c, fontWeight: FontWeight.w600)),
-  _FontOption('Cinzel', 'Serif',
-      (s, c) =>
-          GoogleFonts.cinzel(fontSize: s, color: c, fontWeight: FontWeight.w700)),
-  _FontOption('EB Garamond', 'Serif',
-      (s, c) => GoogleFonts.ebGaramond(
-          fontSize: s, color: c, fontWeight: FontWeight.w600)),
-  _FontOption('Lora', 'Serif',
-      (s, c) =>
-          GoogleFonts.lora(fontSize: s, color: c, fontWeight: FontWeight.w600)),
-  _FontOption('Bodoni Moda', 'Serif',
-      (s, c) => GoogleFonts.bodoniModa(
-          fontSize: s, color: c, fontWeight: FontWeight.w700)),
-  _FontOption('Montserrat', 'Modern',
-      (s, c) => GoogleFonts.montserrat(
-          fontSize: s, color: c, fontWeight: FontWeight.w600)),
-  _FontOption('Raleway', 'Modern',
-      (s, c) => GoogleFonts.raleway(
-          fontSize: s, color: c, fontWeight: FontWeight.w600)),
-  _FontOption('Josefin Sans', 'Modern',
-      (s, c) => GoogleFonts.josefinSans(
-          fontSize: s, color: c, fontWeight: FontWeight.w600)),
-  _FontOption('Lobster', 'Decorative',
-      (s, c) => GoogleFonts.lobster(fontSize: s, color: c)),
-  _FontOption('Pacifico', 'Decorative',
-      (s, c) => GoogleFonts.pacifico(fontSize: s, color: c)),
-  _FontOption('Libre Baskerville', 'Decorative',
-      (s, c) => GoogleFonts.libreBaskerville(
-          fontSize: s, color: c, fontWeight: FontWeight.bold)),
-];
 
 // ─── Colour palette ─────────────────────────────────────────────────────────
 
@@ -170,6 +110,9 @@ class _InvitationEditorScreenState
   int _selectedFont = 0;
   double _fontSize = 24.0;
   Uint8List? _backgroundImageBytes;
+  // Persisted URL for a previously-uploaded photo — set once the picked
+  // bytes above have been uploaded, or loaded back from a saved invitation.
+  String? _backgroundImageUrl;
 
   // Editor panel & image transform state
   int _selectedTab = 0; // 0=Photo 1=Text 2=Font 3=Color 4=Layout
@@ -212,11 +155,12 @@ class _InvitationEditorScreenState
     final fontIndex = data['fontIndex'] as int?;
     final colorValue = data['accentColor'] as int?;
     final fs = data['fontSize'] as double?;
-    if (fontIndex != null && fontIndex < _fontOptions.length) {
+    if (fontIndex != null && fontIndex < invitationFontOptions.length) {
       _selectedFont = fontIndex;
     }
     if (colorValue != null) _accentColor = Color(colorValue);
     if (fs != null) _fontSize = fs.clamp(18.0, 48.0);
+    _backgroundImageUrl = data['backgroundImageUrl'] as String?;
   }
 
   @override
@@ -254,6 +198,7 @@ class _InvitationEditorScreenState
         'fontIndex': _selectedFont,
         'accentColor': _accentColor.toARGB32(),
         'fontSize': _fontSize,
+        'backgroundImageUrl': _backgroundImageUrl,
       };
 
   void _saveEdits() {
@@ -269,23 +214,55 @@ class _InvitationEditorScreenState
           type: SnackType.info);
       return;
     }
-    final notifier = ref.read(invitationsProvider.notifier);
-    notifier.updateCustomData(widget.invitationId!, _buildCustomData());
-    notifier.publish(widget.invitationId!);
-
+    final coupleName =
+        _nameCtrl.text.trim().isNotEmpty ? _nameCtrl.text.trim() : 'Us';
     final invitation = ref
         .read(invitationsProvider)
         .where((i) => i.id == widget.invitationId)
         .firstOrNull;
 
-    final shareUrl = invitation?.shareUrl ??
-        'https://wedpilot.app/i/${invitation?.shareToken ?? ''}';
-    final coupleName =
-        _nameCtrl.text.trim().isNotEmpty ? _nameCtrl.text.trim() : 'Us';
+    if (invitation != null &&
+        invitation.status == InvitationStatus.published &&
+        invitation.shareUrl != null) {
+      // Already published: share synchronously first so the web share sheet
+      // still has the tap's user-gesture context, then save any pending
+      // field edits in the background — a slightly stale customData save
+      // has no bearing on the link that's being shared.
+      await shareWithFallback(
+        context,
+        text: 'You\'re invited to celebrate our wedding! 💍\n\n'
+            'View our invitation here: ${invitation.shareUrl}',
+        subject: 'Wedding Invitation – $coupleName',
+      );
+      unawaited(ref
+          .read(invitationsProvider.notifier)
+          .updateCustomData(widget.invitationId!, _buildCustomData()));
+      return;
+    }
 
-    await Share.share(
-      'You\'re invited to celebrate our wedding! 💍\n\n'
-      'View our invitation here: $shareUrl',
+    // First-time publish: there's no known share link yet, so a network
+    // round trip is unavoidable before there's anything to share — the web
+    // gesture is necessarily lost here on this one-time path only.
+    final notifier = ref.read(invitationsProvider.notifier);
+    await notifier.updateCustomData(widget.invitationId!, _buildCustomData());
+    await notifier.publish(widget.invitationId!);
+    if (!mounted) return;
+
+    final updated = ref
+        .read(invitationsProvider)
+        .where((i) => i.id == widget.invitationId)
+        .firstOrNull;
+    // Defensive fallback for the rare case the server didn't return a
+    // shareUrl even after a successful publish — build one from wherever
+    // this app instance is actually being served, rather than guessing a
+    // domain that may not exist.
+    final shareUrl = updated?.shareUrl ??
+        '${Uri.base.origin}/#/i/${updated?.shareToken ?? ''}';
+
+    await shareWithFallback(
+      context,
+      text: 'You\'re invited to celebrate our wedding! 💍\n\n'
+          'View our invitation here: $shareUrl',
       subject: 'Wedding Invitation – $coupleName',
     );
   }
@@ -298,6 +275,7 @@ class _InvitationEditorScreenState
       final bytes = await file.readAsBytes();
       if (!mounted) return;
       setState(() => _backgroundImageBytes = bytes);
+      await _uploadBackgroundImage(bytes, file.name);
     } catch (e) {
       if (!mounted) return;
       showWedSnackBar(
@@ -317,7 +295,10 @@ class _InvitationEditorScreenState
       );
       if (result == null || !mounted) return;
       final bytes = result.files.single.bytes;
-      if (bytes != null) setState(() => _backgroundImageBytes = bytes);
+      if (bytes != null) {
+        setState(() => _backgroundImageBytes = bytes);
+        await _uploadBackgroundImage(bytes, result.files.single.name);
+      }
     } catch (e) {
       if (!mounted) return;
       showWedSnackBar(
@@ -328,8 +309,29 @@ class _InvitationEditorScreenState
     }
   }
 
+  // Persists the picked photo server-side so it survives beyond this
+  // editing session (previously it only ever lived in memory and vanished
+  // on reload). The in-memory bytes above already give an instant preview;
+  // this just makes sure a real URL exists to save/share afterward.
+  Future<void> _uploadBackgroundImage(Uint8List bytes, String filename) async {
+    if (widget.invitationId == null) return;
+    final url = await ref
+        .read(invitationsProvider.notifier)
+        .uploadPhoto(widget.invitationId!, bytes, filename);
+    if (!mounted) return;
+    if (url != null) {
+      setState(() => _backgroundImageUrl = url);
+    } else {
+      showWedSnackBar(
+        context,
+        'Photo could not be uploaded, so it may not appear once shared. Please try again.',
+        type: SnackType.warning,
+      );
+    }
+  }
+
   void _showImageSourceSheet() {
-    final hasPhoto = _backgroundImageBytes != null;
+    final hasPhoto = _backgroundImageBytes != null || _backgroundImageUrl != null;
     showModalBottomSheet(
       context: context,
       useSafeArea: true,
@@ -396,7 +398,10 @@ class _InvitationEditorScreenState
                 GestureDetector(
                   onTap: () {
                     Navigator.pop(sheetCtx);
-                    setState(() => _backgroundImageBytes = null);
+                    setState(() {
+                      _backgroundImageBytes = null;
+                      _backgroundImageUrl = null;
+                    });
                   },
                   child: Text(
                     'Remove Photo',
@@ -763,7 +768,7 @@ class _InvitationEditorScreenState
 
   // ── Photo tab: camera / gallery / files picker ────────────────────────────
   Widget _buildPhotoTabContent(ThemeData theme) {
-    final hasPhoto = _backgroundImageBytes != null;
+    final hasPhoto = _backgroundImageBytes != null || _backgroundImageUrl != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       child: Column(
@@ -917,7 +922,10 @@ class _InvitationEditorScreenState
             ),
             const SizedBox(height: 16),
             GestureDetector(
-              onTap: () => setState(() => _backgroundImageBytes = null),
+              onTap: () => setState(() {
+                      _backgroundImageBytes = null;
+                      _backgroundImageUrl = null;
+                    }),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
@@ -1035,9 +1043,10 @@ class _InvitationEditorScreenState
         giftType: _giftTypeCtrl.text,
         color: _accentColor,
         cardBgColor: _cardBgColor,
-        fontOption: _fontOptions[_selectedFont],
+        fontOption: invitationFontOptions[_selectedFont],
         fontSize: _fontSize,
         backgroundImageBytes: _backgroundImageBytes,
+        backgroundImageUrl: _backgroundImageUrl,
         imageScale: _imageScale,
         imageOffset: _imageOffset,
         onPhotoTap: _showImageSourceSheet,
@@ -1149,9 +1158,9 @@ class _InvitationEditorScreenState
 
   // ── Font content ──────────────────────────────────────────────────────────
   Widget _buildFontContent(ThemeData theme) {
-    final groups = <String, List<(int, _FontOption)>>{};
-    for (int i = 0; i < _fontOptions.length; i++) {
-      final f = _fontOptions[i];
+    final groups = <String, List<(int, InvitationFontOption)>>{};
+    for (int i = 0; i < invitationFontOptions.length; i++) {
+      final f = invitationFontOptions[i];
       groups.putIfAbsent(f.category, () => []).add((i, f));
     }
     final displayName = _nameCtrl.text.trim().isEmpty
@@ -1441,9 +1450,10 @@ class _InvitationPreview extends StatefulWidget {
       contact, dressCode, message, churchTheme, churchTime, giftType;
   final Color color;
   final Color cardBgColor;
-  final _FontOption fontOption;
+  final InvitationFontOption fontOption;
   final double fontSize;
   final Uint8List? backgroundImageBytes;
+  final String? backgroundImageUrl;
   final double imageScale;
   final Offset imageOffset;
   final VoidCallback onPhotoTap;
@@ -1469,6 +1479,7 @@ class _InvitationPreview extends StatefulWidget {
     required this.fontSize,
     required this.onPhotoTap,
     this.backgroundImageBytes,
+    this.backgroundImageUrl,
     this.imageScale = 1.0,
     this.imageOffset = Offset.zero,
     this.onImageTransform,
@@ -1515,7 +1526,7 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
 
   @override
   Widget build(BuildContext context) {
-    final hasPhoto = widget.backgroundImageBytes != null;
+    final hasPhoto = widget.backgroundImageBytes != null || widget.backgroundImageUrl != null;
 
     return Stack(
       fit: StackFit.expand,
@@ -1581,11 +1592,17 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
                     scale: _displayScale,
                     alignment: Alignment.center,
                     child: SizedBox.expand(
-                      child: Image.memory(
-                        widget.backgroundImageBytes!,
-                        fit: BoxFit.fitWidth,
-                        alignment: Alignment.center,
-                      ),
+                      child: widget.backgroundImageBytes != null
+                          ? Image.memory(
+                              widget.backgroundImageBytes!,
+                              fit: BoxFit.fitWidth,
+                              alignment: Alignment.center,
+                            )
+                          : Image.network(
+                              resolveInvitationMediaUrl(widget.backgroundImageUrl!),
+                              fit: BoxFit.fitWidth,
+                              alignment: Alignment.center,
+                            ),
                     ),
                   ),
                 ),
@@ -2075,7 +2092,7 @@ class _FontGroupHeader extends StatelessWidget {
 }
 
 class _FontCard extends StatelessWidget {
-  final _FontOption font;
+  final InvitationFontOption font;
   final bool isSelected;
   final Color accentColor;
   final String previewText;

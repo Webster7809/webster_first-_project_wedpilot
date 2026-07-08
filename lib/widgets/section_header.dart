@@ -17,20 +17,32 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: AppTextStyles.headlineSmall),
+        Expanded(
+          child: Text(
+            title,
+            style: AppTextStyles.headlineSmall,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
         if (actionLabel != null)
-          TextButton(
-            onPressed: onAction,
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(
-              actionLabel!,
-              style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary),
+          Flexible(
+            child: TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                actionLabel!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.secondary,
+                ),
+              ),
             ),
           ),
       ],

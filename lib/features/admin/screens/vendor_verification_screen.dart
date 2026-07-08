@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/admin_api_service.dart';
+import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/format_utils.dart';
 import '../../../providers/admin_provider.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
@@ -11,7 +15,7 @@ class VendorVerificationScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final vendors = ref.watch(adminProvider).pendingVendors;
+    final vendors = ref.watch(adminPendingVendorsProvider).valueOrNull ?? [];
 
     return Scaffold(
       backgroundColor: AppColors.adminPage,
@@ -89,28 +93,37 @@ class VendorVerificationScreen extends ConsumerWidget {
                 final vendor = vendors[i];
                 return _VerificationCard(
                   vendor: vendor,
-                  onApprove: () {
-                    ref
-                        .read(adminProvider.notifier)
-                        .approveVendor(vendor.id);
-                    if (context.mounted) {
-                      showWedSnackBar(
-                        context,
-                        '${vendor.name} approved!',
-                        type: SnackType.success,
-                      );
+                  onApprove: () async {
+                    final token = ref.read(authProvider.notifier).accessToken;
+                    if (token == null) return;
+                    try {
+                      await AdminApiService.instance.setVendorVerification(token, vendor.id, status: 'verified');
+                      ref.invalidate(adminPendingVendorsProvider);
+                      ref.invalidate(adminOverviewProvider);
+                      if (context.mounted) {
+                        showWedSnackBar(context, '${vendor.name} approved!', type: SnackType.success);
+                      }
+                    } on AdminApiException catch (e) {
+                      if (context.mounted) showWedSnackBar(context, e.message, type: SnackType.error);
                     }
                   },
-                  onReject: () {
-                    ref
-                        .read(adminProvider.notifier)
-                        .rejectVendor(vendor.id);
-                    if (context.mounted) {
-                      showWedSnackBar(
-                        context,
-                        '${vendor.name} rejected.',
-                        type: SnackType.error,
+                  onReject: (reason) async {
+                    final token = ref.read(authProvider.notifier).accessToken;
+                    if (token == null) return;
+                    try {
+                      await AdminApiService.instance.setVendorVerification(
+                        token,
+                        vendor.id,
+                        status: 'rejected',
+                        note: reason,
                       );
+                      ref.invalidate(adminPendingVendorsProvider);
+                      ref.invalidate(adminOverviewProvider);
+                      if (context.mounted) {
+                        showWedSnackBar(context, '${vendor.name} rejected.', type: SnackType.error);
+                      }
+                    } on AdminApiException catch (e) {
+                      if (context.mounted) showWedSnackBar(context, e.message, type: SnackType.error);
                     }
                   },
                 );
@@ -125,7 +138,7 @@ class VendorVerificationScreen extends ConsumerWidget {
 class _VerificationCard extends StatefulWidget {
   final AdminVendor vendor;
   final VoidCallback onApprove;
-  final VoidCallback onReject;
+  final ValueChanged<String?> onReject;
 
   const _VerificationCard({
     required this.vendor,
@@ -217,7 +230,7 @@ class _VerificationCardState extends State<_VerificationCard> {
               variant: WedButtonVariant.destructive,
               onPressed: () {
                 Navigator.pop(ctx);
-                widget.onReject();
+                widget.onReject(ctrl.text.trim().isEmpty ? null : ctrl.text.trim());
               },
             ),
           ],
@@ -251,15 +264,17 @@ class _VerificationCardState extends State<_VerificationCard> {
             // ── Header row ──────────────────────────────────────
             Row(
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 44,
+                    height: 44,
                     color: AppColors.adminAmberBg,
-                    borderRadius: BorderRadius.circular(12),
+                    child: v.logoUrl != null
+                        ? Image.network(resolveMediaUrl(v.logoUrl!), fit: BoxFit.cover)
+                        : const Icon(Icons.storefront_outlined,
+                            color: AppColors.adminAmber, size: 22),
                   ),
-                  child: const Icon(Icons.storefront_outlined,
-                      color: AppColors.adminAmber, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -274,7 +289,7 @@ class _VerificationCardState extends State<_VerificationCard> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${v.category} · Submitted ${v.submitted}',
+                        '${v.category} · Submitted ${fmtRelativeTime(v.submittedAt)}',
                         style: AppTextStyles.caption
                             .copyWith(color: AppColors.textSecondary),
                       ),
@@ -301,15 +316,15 @@ class _VerificationCardState extends State<_VerificationCard> {
             ),
             const SizedBox(height: 12),
 
-            // ── Docs row + expand toggle ─────────────────────────
+            // ── Expand toggle ─────────────────────────────────────
             Row(
               children: [
-                const Icon(Icons.description_outlined,
+                const Icon(Icons.storefront_outlined,
                     size: 15, color: AppColors.textSecondary),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '${v.docs} documents submitted',
+                    v.location ?? 'No location provided',
                     style: AppTextStyles.bodySmall
                         .copyWith(color: AppColors.textSecondary),
                   ),
@@ -354,14 +369,12 @@ class _VerificationCardState extends State<_VerificationCard> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _DetailRow(
-                        icon: Icons.email_outlined, text: v.email),
+                        icon: Icons.email_outlined,
+                        text: v.email ?? 'No email on file'),
                     const SizedBox(height: 8),
                     _DetailRow(
-                        icon: Icons.phone_outlined, text: v.phone),
-                    const SizedBox(height: 8),
-                    _DetailRow(
-                        icon: Icons.location_on_outlined,
-                        text: v.location),
+                        icon: Icons.phone_outlined,
+                        text: v.phone ?? 'No phone on file'),
                   ],
                 ),
               ),

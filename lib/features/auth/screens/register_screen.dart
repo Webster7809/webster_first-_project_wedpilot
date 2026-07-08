@@ -54,13 +54,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     final name = _role == UserRole.couple
         ? _partner1Ctrl.text.trim()
         : _businessNameCtrl.text.trim();
-    await ref.read(authProvider.notifier).register(
+    await ref
+        .read(authProvider.notifier)
+        .register(
           name,
           _emailCtrl.text.trim(),
           _passCtrl.text,
           _role,
-          partner2Name:
-              _role == UserRole.couple ? _partner2Ctrl.text.trim() : null,
+          partner2Name: _role == UserRole.couple
+              ? _partner2Ctrl.text.trim()
+              : null,
           phone: _phoneCtrl.text.trim(),
         );
     if (!mounted) return;
@@ -74,8 +77,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     }
   }
 
-  String? _required(String? v) =>
-      (v == null || v.isEmpty) ? 'Required' : null;
+  String? _required(String? v) => (v == null || v.isEmpty) ? 'Required' : null;
 
   @override
   Widget build(BuildContext context) {
@@ -91,8 +93,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
             final isDesktop = w >= 900;
 
             // Responsive card max-width
-            final cardMaxWidth =
-                isDesktop ? 650.0 : (!isPhone ? 550.0 : w * 0.9);
+            final cardMaxWidth = isDesktop
+                ? 650.0
+                : (!isPhone ? 550.0 : w * 0.9);
 
             return SingleChildScrollView(
               padding: const EdgeInsets.symmetric(vertical: 32),
@@ -100,6 +103,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: cardMaxWidth),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // ── Brand header ──────────────────────────────────────
@@ -117,8 +121,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                     color: AppColors.amber,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: const Icon(Icons.favorite,
-                                      color: Colors.white, size: 22),
+                                  child: const Icon(
+                                    Icons.favorite,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
                                 ),
                                 const SizedBox(width: 10),
                                 Text(
@@ -173,7 +180,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               Container(
                                 decoration: const BoxDecoration(
                                   border: Border(
-                                    bottom: BorderSide(color: AppColors.divider),
+                                    bottom: BorderSide(
+                                      color: AppColors.divider,
+                                    ),
                                   ),
                                 ),
                                 child: TabBar(
@@ -182,15 +191,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                   dividerColor: Colors.transparent,
                                   indicator: const UnderlineTabIndicator(
                                     borderSide: BorderSide(
-                                        color: AppColors.forestGreen, width: 2),
+                                      color: AppColors.forestGreen,
+                                      width: 2,
+                                    ),
                                   ),
                                   labelColor: AppColors.forestGreen,
                                   unselectedLabelColor: AppColors.textHint,
                                   labelStyle: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600),
-                                  unselectedLabelStyle:
-                                      GoogleFonts.inter(fontSize: 14),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  unselectedLabelStyle: GoogleFonts.inter(
+                                    fontSize: 14,
+                                  ),
                                   tabs: const [
                                     Tab(text: "I'm a couple"),
                                     Tab(text: "I'm a vendor"),
@@ -202,14 +215,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               // ── Name field(s) ──────────────────────────────
                               if (_role == UserRole.couple) ...[
                                 if (isPhone) ...[
-                                  WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
+                                  WedTextField(
+                                    borderRadius: 16,
+                                    fillColor: AppColors.inputFillAlt,
                                     hint: 'Partner 1',
                                     controller: _partner1Ctrl,
                                     validator: _required,
                                     prefixIcon: Icons.person_outline,
                                   ),
                                   const SizedBox(height: 20),
-                                  WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
+                                  WedTextField(
+                                    borderRadius: 16,
+                                    fillColor: AppColors.inputFillAlt,
                                     hint: 'Partner 2',
                                     controller: _partner2Ctrl,
                                     validator: _required,
@@ -221,7 +238,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                         CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
-                                        child: WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
+                                        child: WedTextField(
+                                          borderRadius: 16,
+                                          fillColor: AppColors.inputFillAlt,
                                           hint: 'Partner 1',
                                           controller: _partner1Ctrl,
                                           validator: _required,
@@ -230,7 +249,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                       ),
                                       Padding(
                                         padding: const EdgeInsets.only(
-                                            top: 18, left: 10, right: 10),
+                                          top: 18,
+                                          left: 10,
+                                          right: 10,
+                                        ),
                                         child: Text(
                                           '&',
                                           style: GoogleFonts.playfairDisplay(
@@ -241,7 +263,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                         ),
                                       ),
                                       Expanded(
-                                        child: WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
+                                        child: WedTextField(
+                                          borderRadius: 16,
+                                          fillColor: AppColors.inputFillAlt,
                                           hint: 'Partner 2',
                                           controller: _partner2Ctrl,
                                           validator: _required,
@@ -252,7 +276,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                   ),
                                 ],
                               ] else ...[
-                                WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
+                                WedTextField(
+                                  borderRadius: 16,
+                                  fillColor: AppColors.inputFillAlt,
                                   hint: 'Business name',
                                   controller: _businessNameCtrl,
                                   validator: _required,
@@ -261,7 +287,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               ],
                               const SizedBox(height: 20),
 
-                              WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
+                              WedTextField(
+                                borderRadius: 16,
+                                fillColor: AppColors.inputFillAlt,
                                 hint: 'Phone number',
                                 controller: _phoneCtrl,
                                 keyboardType: TextInputType.phone,
@@ -270,7 +298,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               ),
                               const SizedBox(height: 20),
 
-                              WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
+                              WedTextField(
+                                borderRadius: 16,
+                                fillColor: AppColors.inputFillAlt,
                                 hint: 'Email address',
                                 controller: _emailCtrl,
                                 keyboardType: TextInputType.emailAddress,
@@ -283,7 +313,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               ),
                               const SizedBox(height: 20),
 
-                              WedTextField(borderRadius: 16, fillColor: AppColors.inputFillAlt,
+                              WedTextField(
+                                borderRadius: 16,
+                                fillColor: AppColors.inputFillAlt,
                                 hint: 'Password',
                                 controller: _passCtrl,
                                 isPassword: true,
@@ -315,18 +347,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                   textAlign: TextAlign.center,
                                   text: TextSpan(
                                     style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        color: AppColors.textHint),
+                                      fontSize: 11,
+                                      color: AppColors.textHint,
+                                    ),
                                     children: const [
                                       TextSpan(
-                                          text:
-                                              "By continuing you agree to WedPilot's "),
+                                        text:
+                                            "By continuing you agree to WedPilot's ",
+                                      ),
                                       TextSpan(
                                         text: 'Terms of Service',
                                         style: TextStyle(
                                           color: AppColors.forestGreen,
-                                          decoration:
-                                              TextDecoration.underline,
+                                          decoration: TextDecoration.underline,
                                           decorationColor:
                                               AppColors.forestGreen,
                                         ),
@@ -336,8 +369,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                         text: 'Privacy Policy',
                                         style: TextStyle(
                                           color: AppColors.forestGreen,
-                                          decoration:
-                                              TextDecoration.underline,
+                                          decoration: TextDecoration.underline,
                                           decorationColor:
                                               AppColors.forestGreen,
                                         ),
@@ -359,7 +391,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                           child: RichText(
                             text: TextSpan(
                               style: GoogleFonts.inter(
-                                  fontSize: 14, color: Colors.white60),
+                                fontSize: 14,
+                                color: Colors.white60,
+                              ),
                               children: const [
                                 TextSpan(text: 'Already planning with us? '),
                                 TextSpan(

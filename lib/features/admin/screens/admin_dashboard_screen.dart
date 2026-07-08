@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/router/app_routes.dart';
+import '../../../core/services/admin_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_dimensions.dart';
+import '../../../core/utils/format_utils.dart';
 import '../../../providers/admin_provider.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 // ── Category helpers ──────────────────────────────────────────────────────────
@@ -92,15 +95,26 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         .where((v) =>
             v.name.toLowerCase().contains(_searchQuery) ||
             v.category.toLowerCase().contains(_searchQuery) ||
-            v.location.toLowerCase().contains(_searchQuery))
+            (v.location ?? '').toLowerCase().contains(_searchQuery))
         .toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final adminState = ref.watch(adminProvider);
+    final overview = ref.watch(adminOverviewProvider).valueOrNull ??
+        const AdminOverview(
+          activeCouples: 0,
+          registeredVendors: 0,
+          pendingVendorsCount: 0,
+          verificationRate: 100,
+          invitationsSentThisWeek: 0,
+        );
+    final pendingVendors = ref.watch(adminPendingVendorsProvider).valueOrNull ?? [];
+    final flaggedReviews = ref.watch(adminFlaggedReviewsProvider).valueOrNull ?? [];
+    final flaggedImages = ref.watch(adminFlaggedImagesProvider).valueOrNull ?? [];
+    final totalFlaggedItems = flaggedReviews.length + flaggedImages.length;
     final isWide = MediaQuery.sizeOf(context).width >= AppDimensions.tabletMin;
-    final filteredVendors = _filtered(adminState.pendingVendors);
+    final filteredVendors = _filtered(pendingVendors);
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -193,9 +207,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ── Flagged content alert ────────────────────────────
-            if (adminState.totalFlaggedItems > 0) ...[
+            if (totalFlaggedItems > 0) ...[
               _FlaggedContentBanner(
-                count: adminState.totalFlaggedItems,
+                count: totalFlaggedItems,
                 onReview: () => context.push(AppRoutes.adminModeration),
               ),
               const SizedBox(height: 20),
@@ -210,14 +224,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     icon: Icons.people_alt_outlined,
                     iconBg: AppColors.adminGreenBg,
                     iconColor: AppColors.adminGreen,
-                    trend:
-                        '${adminState.users.where((u) => u.role == 'couple').length} total',
+                    trend: '${overview.activeCouples} total',
                     trendColor: AppColors.adminGreen,
-                    value: adminState.users
-                        .where(
-                            (u) => u.role == 'couple' && !u.isSuspended)
-                        .length
-                        .toString(),
+                    value: overview.activeCouples.toString(),
                     label: 'Active couples',
                     onTap: () => context.go(AppRoutes.adminUsers),
                   ),
@@ -225,12 +234,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     icon: Icons.list_alt_outlined,
                     iconBg: AppColors.adminIndigoBg,
                     iconColor: AppColors.adminIndigo,
-                    trend: '${adminState.pendingVendors.length} pending',
+                    trend: '${overview.pendingVendorsCount} pending',
                     trendColor: AppColors.adminGreen,
-                    value: adminState.users
-                        .where((u) => u.role == 'vendor')
-                        .length
-                        .toString(),
+                    value: overview.registeredVendors.toString(),
                     label: 'Registered vendors',
                     onTap: () => context.go(AppRoutes.adminVendors),
                   ),
@@ -238,9 +244,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     icon: Icons.verified_user_outlined,
                     iconBg: AppColors.adminAmberBg,
                     iconColor: AppColors.adminAmber,
-                    trend: '${adminState.pendingVendors.length} pending',
+                    trend: '${overview.pendingVendorsCount} pending',
                     trendColor: AppColors.amber,
-                    value: '${adminState.verificationRate}%',
+                    value: '${overview.verificationRate}%',
                     label: 'Vendor verification rate',
                     onTap: () => context.go(AppRoutes.adminVendors),
                   ),
@@ -250,7 +256,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     iconColor: AppColors.adminBlue,
                     trend: 'this week',
                     trendColor: AppColors.adminBlue,
-                    value: adminState.invitationsSentThisWeek.toString(),
+                    value: overview.invitationsSentThisWeek.toString(),
                     label: 'Invitations sent',
                   ),
                 ];
@@ -290,28 +296,34 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 );
                 final queue = _VerificationQueuePanel(
                   vendors: filteredVendors,
-                  onApprove: (id) {
-                    final vendor = adminState.pendingVendors
-                        .firstWhere((v) => v.id == id);
-                    ref.read(adminProvider.notifier).approveVendor(id);
-                    if (context.mounted) {
-                      showWedSnackBar(
-                        context,
-                        '${vendor.name} approved!',
-                        type: SnackType.success,
-                      );
+                  onApprove: (id) async {
+                    final vendor = pendingVendors.firstWhere((v) => v.id == id);
+                    final token = ref.read(authProvider.notifier).accessToken;
+                    if (token == null) return;
+                    try {
+                      await AdminApiService.instance.setVendorVerification(token, id, status: 'verified');
+                      ref.invalidate(adminPendingVendorsProvider);
+                      ref.invalidate(adminOverviewProvider);
+                      if (context.mounted) {
+                        showWedSnackBar(context, '${vendor.name} approved!', type: SnackType.success);
+                      }
+                    } on AdminApiException catch (e) {
+                      if (context.mounted) showWedSnackBar(context, e.message, type: SnackType.error);
                     }
                   },
-                  onReject: (id) {
-                    final vendor = adminState.pendingVendors
-                        .firstWhere((v) => v.id == id);
-                    ref.read(adminProvider.notifier).rejectVendor(id);
-                    if (context.mounted) {
-                      showWedSnackBar(
-                        context,
-                        '${vendor.name} rejected.',
-                        type: SnackType.error,
-                      );
+                  onReject: (id) async {
+                    final vendor = pendingVendors.firstWhere((v) => v.id == id);
+                    final token = ref.read(authProvider.notifier).accessToken;
+                    if (token == null) return;
+                    try {
+                      await AdminApiService.instance.setVendorVerification(token, id, status: 'rejected');
+                      ref.invalidate(adminPendingVendorsProvider);
+                      ref.invalidate(adminOverviewProvider);
+                      if (context.mounted) {
+                        showWedSnackBar(context, '${vendor.name} rejected.', type: SnackType.error);
+                      }
+                    } on AdminApiException catch (e) {
+                      if (context.mounted) showWedSnackBar(context, e.message, type: SnackType.error);
                     }
                   },
                 );
@@ -347,7 +359,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     showSearch(
       context: context,
       delegate: _VendorSearchDelegate(
-        vendors: ref.read(adminProvider).pendingVendors,
+        vendors: ref.read(adminPendingVendorsProvider).valueOrNull ?? [],
         onSelect: (_) => context.go(AppRoutes.adminVendors),
       ),
     );
@@ -372,7 +384,7 @@ class _VendorSearchDelegate extends SearchDelegate<String> {
         .where((v) =>
             v.name.toLowerCase().contains(q) ||
             v.category.toLowerCase().contains(q) ||
-            v.location.toLowerCase().contains(q))
+            (v.location ?? '').toLowerCase().contains(q))
         .toList();
   }
 
@@ -723,7 +735,7 @@ class _RecentSignupsPanel extends StatelessWidget {
                         Expanded(
                           flex: 3,
                           child: Text(
-                            v.location,
+                            v.location ?? '—',
                             style: AppTextStyles.bodySmall
                                 .copyWith(color: AppColors.textSecondary),
                             overflow: TextOverflow.ellipsis,
@@ -859,7 +871,7 @@ class _VerificationQueuePanel extends StatelessWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${v.category} · ${v.submitted}',
+                                '${v.category} · ${fmtRelativeTime(v.submittedAt)}',
                                 style: AppTextStyles.caption.copyWith(
                                   color: AppColors.textSecondary,
                                 ),

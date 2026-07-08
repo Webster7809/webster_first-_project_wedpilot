@@ -327,6 +327,29 @@ class VendorMedia {
       };
 }
 
+/// One named slot of the AI's justification for a vendor pick — mirrors how
+/// Claude Code labels each step of its work instead of a single run-on
+/// explanation. [label] is always one of [ReasoningStep.knownLabels].
+class ReasoningStep {
+  final String label;
+  final String text;
+
+  const ReasoningStep({required this.label, required this.text});
+
+  static const budgetFit = 'Budget fit';
+  static const availability = 'Availability';
+  static const styleMatch = 'Style match';
+  static const verdict = 'Verdict';
+  static const knownLabels = [budgetFit, availability, styleMatch, verdict];
+
+  factory ReasoningStep.fromJson(Map<String, dynamic> json) => ReasoningStep(
+        label: json['label'] as String? ?? '',
+        text: json['text'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {'label': label, 'text': text};
+}
+
 class VendorMatch {
   final String vendorId;
   final VendorProfile vendor;
@@ -336,6 +359,7 @@ class VendorMatch {
   final double locationScore;
   final double availabilityScore;
   final String? reasoning;
+  final List<ReasoningStep> reasoningSteps;
   final int rankInCategory;
   final int totalInCategory;
 
@@ -348,6 +372,7 @@ class VendorMatch {
     required this.locationScore,
     required this.availabilityScore,
     this.reasoning,
+    this.reasoningSteps = const [],
     required this.rankInCategory,
     required this.totalInCategory,
   });

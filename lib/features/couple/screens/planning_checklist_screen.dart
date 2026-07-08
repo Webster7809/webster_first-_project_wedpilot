@@ -718,19 +718,47 @@ class _EmptyStateState extends ConsumerState<_EmptyState> {
     final showStarterOption = widget.filterPhase == 'All';
     return LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: constraints.maxHeight),
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('✅', style: TextStyle(fontSize: 52)),
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppColors.success,
+                        AppColors.success.withAlpha(200),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.success.withAlpha(70),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.task_alt_rounded,
+                    size: 44,
+                    color: Colors.white,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Text(
                   widget.filterPhase == 'All'
                       ? 'No tasks yet'
                       : 'No tasks in "${widget.filterPhase}"',
                   style: AppTextStyles.headlineMedium,
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -743,11 +771,19 @@ class _EmptyStateState extends ConsumerState<_EmptyState> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
-                WedButton(
-                  label: 'Add Task',
-                  onPressed: widget.onAdd,
-                  icon: Icons.add,
-                  borderRadius: 30,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: WedButton(
+                        label: 'Add Task',
+                        onPressed: widget.onAdd,
+                        icon: Icons.add,
+                        borderRadius: 30,
+                        width: 220,
+                      ),
+                    ),
+                  ],
                 ),
                 if (showStarterOption) ...[
                   const SizedBox(height: 12),

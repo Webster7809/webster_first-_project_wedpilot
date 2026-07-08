@@ -126,13 +126,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
     bool needsOnboarding;
 
     if (user.role == UserRole.couple) {
-      coupleProfile = await _fetchCoupleProfileGracefully(result.accessToken);
-      if (coupleProfile != null) _coupleProfiles[user.id] = coupleProfile;
-      needsOnboarding = coupleProfile == null;
+      try {
+        coupleProfile = await CoupleProfileService.instance.fetchProfile(result.accessToken);
+        if (coupleProfile != null) _coupleProfiles[user.id] = coupleProfile;
+        needsOnboarding = coupleProfile == null;
+      } catch (_) {
+        // Couldn't confirm profile status (network/server hiccup) — do NOT
+        // treat this the same as "definitely no profile", or a returning
+        // couple would incorrectly get bounced into onboarding.
+        needsOnboarding = false;
+      }
     } else if (user.role == UserRole.vendor) {
-      vendorProfile = await _fetchVendorProfileGracefully(result.accessToken);
-      if (vendorProfile != null) _vendorProfiles[user.id] = vendorProfile;
-      needsOnboarding = forceOnboarding || vendorProfile == null;
+      try {
+        vendorProfile = await VendorApiService.instance.fetchMyProfile(result.accessToken);
+        if (vendorProfile != null) _vendorProfiles[user.id] = vendorProfile;
+        needsOnboarding = forceOnboarding || vendorProfile == null;
+      } catch (_) {
+        needsOnboarding = forceOnboarding;
+      }
     } else {
       needsOnboarding = false;
     }
@@ -146,29 +157,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
-  /// Fetches the couple's saved profile, treating any network/server failure
-  /// the same as "no profile yet" rather than blocking login/restore.
-  Future<CoupleProfile?> _fetchCoupleProfileGracefully(String accessToken) async {
-    try {
-      return await CoupleProfileService.instance.fetchProfile(accessToken);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Fetches the vendor's saved profile, treating any network/server failure
-  /// the same as "no profile yet" rather than blocking login/restore. This is
-  /// the source of truth for whether a vendor still needs onboarding — an
-  /// existing vendor with a saved profile always skips straight to their
-  /// dashboard, on any device.
-  Future<VendorProfile?> _fetchVendorProfileGracefully(String accessToken) async {
-    try {
-      return await VendorApiService.instance.fetchMyProfile(accessToken);
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// Restores a session on app cold-start after the stored access token was
   /// validated against the backend (see sessionRestoreProvider).
   Future<void> restoreSession(User user, {required String accessToken}) async {
@@ -178,13 +166,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
     bool needsOnboarding;
 
     if (user.role == UserRole.couple) {
-      coupleProfile = await _fetchCoupleProfileGracefully(accessToken);
-      if (coupleProfile != null) _coupleProfiles[user.id] = coupleProfile;
-      needsOnboarding = coupleProfile == null;
+      try {
+        coupleProfile = await CoupleProfileService.instance.fetchProfile(accessToken);
+        if (coupleProfile != null) _coupleProfiles[user.id] = coupleProfile;
+        needsOnboarding = coupleProfile == null;
+      } catch (_) {
+        // Couldn't confirm profile status (network/server hiccup) — do NOT
+        // treat this the same as "definitely no profile", or a returning
+        // couple would incorrectly get bounced into onboarding on every
+        // cold app start until the request happens to succeed.
+        needsOnboarding = false;
+      }
     } else if (user.role == UserRole.vendor) {
-      vendorProfile = await _fetchVendorProfileGracefully(accessToken);
-      if (vendorProfile != null) _vendorProfiles[user.id] = vendorProfile;
-      needsOnboarding = vendorProfile == null;
+      try {
+        vendorProfile = await VendorApiService.instance.fetchMyProfile(accessToken);
+        if (vendorProfile != null) _vendorProfiles[user.id] = vendorProfile;
+        needsOnboarding = vendorProfile == null;
+      } catch (_) {
+        needsOnboarding = false;
+      }
     } else {
       needsOnboarding = false;
     }
@@ -254,6 +254,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final userId = state.user?.id;
     if (userId != null) _vendorProfiles[userId] = profile;
     state = state.copyWith(vendorProfile: profile);
+  }
+
+  /// Called once a couple's photo has been saved to the backend, so the rest
+  /// of the app sees it immediately without a refetch.
+  void setCoupleProfile(CoupleProfile profile) {
+    final userId = state.user?.id;
+    if (userId != null) _coupleProfiles[userId] = profile;
+    state = state.copyWith(coupleProfile: profile);
   }
 
   Future<void> forgotPassword(String email) async {
