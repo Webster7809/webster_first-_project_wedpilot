@@ -179,6 +179,7 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 initialValue: _selectedCategory,
+                isExpanded: true,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -190,7 +191,14 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
                 ),
                 items: budgetCategories
                     .map(
-                      (cat) => DropdownMenuItem(value: cat, child: Text(cat)),
+                      (cat) => DropdownMenuItem(
+                        value: cat,
+                        child: Text(
+                          cat,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     )
                     .toList(),
                 onChanged: (v) => setState(() => _selectedCategory = v!),
@@ -382,7 +390,15 @@ class _CategoryExpenseList extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Recent in $categoryName', style: AppTextStyles.labelLarge),
+            Expanded(
+              child: Text(
+                'Recent in $categoryName',
+                style: AppTextStyles.labelLarge,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
             Text(
               'Tap to delete',
               style: AppTextStyles.caption.copyWith(
@@ -428,10 +444,14 @@ class _ExpenseRow extends ConsumerWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              '$currency ${expense.amount.toStringAsFixed(0)}',
-              style: AppTextStyles.bodySmall.copyWith(
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                '$currency ${expense.amount.toStringAsFixed(0)}',
+                style: AppTextStyles.bodySmall.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: 4),

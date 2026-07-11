@@ -386,24 +386,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
                       // ── Login link ────────────────────────────────────────
                       Center(
-                        child: GestureDetector(
-                          onTap: () => context.go('/login'),
-                          child: RichText(
-                            text: TextSpan(
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                color: Colors.white60,
-                              ),
-                              children: const [
-                                TextSpan(text: 'Already planning with us? '),
-                                TextSpan(
-                                  text: 'Log in',
-                                  style: TextStyle(
-                                    color: AppColors.amber,
-                                    fontWeight: FontWeight.w700,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () => context.go('/login'),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                              child: RichText(
+                                text: TextSpan(
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    color: Colors.white60,
                                   ),
+                                  children: const [
+                                    TextSpan(text: 'Already planning with us? '),
+                                    TextSpan(
+                                      text: 'Log in',
+                                      style: TextStyle(
+                                        color: AppColors.amber,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
                           ),
                         ),

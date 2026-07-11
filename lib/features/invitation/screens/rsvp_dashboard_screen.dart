@@ -8,6 +8,30 @@ import '../../../models/invitation.dart';
 import '../../../providers/invitation_provider.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
+/// Soft, flat shadowed container used throughout this screen instead of
+/// Material's default [Card] elevation, matching the rest of the app's
+/// (invitation gallery, dashboards) card treatment.
+class _SoftCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsets padding;
+  const _SoftCard({required this.child, this.padding = const EdgeInsets.all(16)});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: AppColors.cardShadow, blurRadius: 8, offset: Offset(0, 2)),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
 class RsvpDashboardScreen extends ConsumerStatefulWidget {
   final String invitationId;
   const RsvpDashboardScreen({super.key, required this.invitationId});
@@ -42,7 +66,11 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
     }
 
     return Scaffold(
+      backgroundColor: AppColors.cream,
       appBar: AppBar(
+        backgroundColor: AppColors.forestGreen,
+        foregroundColor: Colors.white,
+        elevation: 0,
         title: const Text('RSVP Dashboard'),
         actions: [
           IconButton(
@@ -50,9 +78,14 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
             tooltip: 'Add guest',
             onPressed: () => _showGuestForm(context),
           ),
+          const SizedBox(width: 4),
         ],
         bottom: TabBar(
           controller: _tabs,
+          indicatorColor: AppColors.amber,
+          indicatorWeight: 3,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
           tabs: const [
             Tab(text: 'Overview'),
             Tab(text: 'Guest List'),
@@ -134,8 +167,11 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              await ref.read(guestRsvpProvider.notifier).deleteGuest(id);
-              if (context.mounted) {
+              final error = await ref.read(guestRsvpProvider.notifier).deleteGuest(id);
+              if (!context.mounted) return;
+              if (error != null) {
+                showWedSnackBar(context, error, type: SnackType.error);
+              } else {
                 showWedSnackBar(context, 'Guest removed.', type: SnackType.info);
               }
             },
@@ -255,7 +291,7 @@ class _OverviewTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Stat cards
+        // Stat cards — 2x2 grid instead of a cramped single row
         Row(
           children: [
             Expanded(
@@ -263,19 +299,23 @@ class _OverviewTab extends StatelessWidget {
                     value: '${stats.attending}',
                     label: 'Attending',
                     color: AppColors.success)),
-            const SizedBox(width: 8),
+            const SizedBox(width: 12),
             Expanded(
                 child: _StatCard(
                     value: '${stats.declined}',
                     label: 'Declined',
                     color: AppColors.error)),
-            const SizedBox(width: 8),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
             Expanded(
                 child: _StatCard(
                     value: '${stats.maybe}',
                     label: 'Maybe',
                     color: AppColors.warning)),
-            const SizedBox(width: 8),
+            const SizedBox(width: 12),
             Expanded(
                 child: _StatCard(
                     value: '${stats.pending}',
@@ -283,97 +323,95 @@ class _OverviewTab extends StatelessWidget {
                     color: AppColors.textSecondary)),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
 
         // Guest count + rates
-        Card(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Attendance Summary', style: AppTextStyles.headlineSmall),
-                const SizedBox(height: 12),
-                _InfoRow(
-                    label: 'Total guests attending',
-                    value: '${stats.totalAttending} people'),
-                _InfoRow(
-                    label: 'Total invited',
-                    value: '${stats.totalInvited} guests'),
-                _InfoRow(
-                    label: 'Response rate',
-                    value:
-                        '${stats.responseRate.toStringAsFixed(0)}%'),
-                _InfoRow(
-                    label: 'Acceptance rate',
-                    value:
-                        '${stats.acceptanceRate.toStringAsFixed(0)}%'),
-              ],
-            ),
+        _SoftCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Attendance Summary', style: AppTextStyles.headlineSmall),
+              const SizedBox(height: 12),
+              _InfoRow(
+                  label: 'Total guests attending',
+                  value: '${stats.totalAttending} people'),
+              _InfoRow(
+                  label: 'Total invited',
+                  value: '${stats.totalInvited} guests'),
+              _InfoRow(
+                  label: 'Response rate',
+                  value: '${stats.responseRate.toStringAsFixed(0)}%'),
+              _InfoRow(
+                  label: 'Acceptance rate',
+                  value: '${stats.acceptanceRate.toStringAsFixed(0)}%'),
+            ],
           ),
         ),
         const SizedBox(height: 16),
 
         // Response progress bar
-        Card(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Response Rate', style: AppTextStyles.headlineSmall),
-                    Text(
-                      '${stats.responded}/${stats.totalInvited}',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                LinearProgressIndicator(
-                  value: stats.totalInvited > 0
-                      ? stats.responded / stats.totalInvited
-                      : 0,
-                  backgroundColor: Theme.of(context).colorScheme.outlineVariant.withAlpha(102),
-                  valueColor:
-                      AlwaysStoppedAnimation<Color>(AppColors.secondary),
-                  minHeight: 8,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ],
-            ),
+        _SoftCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text('Response Rate',
+                        style: AppTextStyles.headlineSmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${stats.responded}/${stats.totalInvited}',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              LinearProgressIndicator(
+                value: stats.totalInvited > 0
+                    ? stats.responded / stats.totalInvited
+                    : 0,
+                backgroundColor: AppColors.progressTrack,
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondary),
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
 
         // Meal preferences
         if (stats.mealCounts.isNotEmpty) ...[
+          const SizedBox(height: 20),
           Text('Meal Preferences', style: AppTextStyles.headlineSmall),
           const SizedBox(height: 10),
-          ...stats.mealCounts.entries.map((e) => _MealRow(
-                meal: e.key,
-                count: e.value,
-                total: stats.totalAttending,
-              )),
-          const SizedBox(height: 16),
+          _SoftCard(
+            child: Column(
+              children: stats.mealCounts.entries
+                  .map((e) => _MealRow(
+                        meal: e.key,
+                        count: e.value,
+                        total: stats.totalAttending,
+                      ))
+                  .toList(),
+            ),
+          ),
         ],
 
         // Recent responses
         if (responses.isNotEmpty) ...[
+          const SizedBox(height: 20),
           Text('Recent Responses', style: AppTextStyles.headlineSmall),
           const SizedBox(height: 10),
-          ...responses
-              .reversed
-              .take(5)
-              .map((r) => _ResponseCard(response: r)),
+          ...responses.reversed.take(5).map((r) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _ResponseCard(response: r),
+              )),
         ],
       ],
     );
@@ -407,30 +445,46 @@ class _GuestListTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (guests.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('👥', style: TextStyle(fontSize: 52)),
-            const SizedBox(height: 16),
-            Text('No guests yet', style: AppTextStyles.headlineMedium),
-            const SizedBox(height: 8),
-            Text('Add guests to track their RSVPs.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
-                )),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: onAddGuest,
-              icon: const Icon(Icons.person_add_outlined),
-              label: const Text('Add Guest'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.secondary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30)),
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppColors.forestGreen.withAlpha(12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Text('👥', style: TextStyle(fontSize: 34)),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              Text('No guests yet', style: AppTextStyles.headlineMedium),
+              const SizedBox(height: 8),
+              Text('Add guests to track their RSVPs.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textSecondary)),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: onAddGuest,
+                icon: const Icon(Icons.person_add_outlined, color: Colors.white),
+                label: const Text('Add Guest'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.amber,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30)),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -440,7 +494,7 @@ class _GuestListTab extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: guests.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (_, i) {
         final g = guests[i];
         final rsvp = responseMap[g.id];
@@ -500,13 +554,20 @@ class _GuestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
+    return _SoftCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
           children: [
-            Text(_statusIcon, style: const TextStyle(fontSize: 22)),
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _statusColor.withAlpha(20),
+                shape: BoxShape.circle,
+              ),
+              child: Text(_statusIcon, style: const TextStyle(fontSize: 18)),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -515,10 +576,9 @@ class _GuestCard extends StatelessWidget {
                   Text(guest.name, style: AppTextStyles.titleMedium),
                   if (guest.relation != null)
                     Text(guest.relation!,
-                        style: AppTextStyles.caption.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
-                        )),
-                  const SizedBox(height: 4),
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.textSecondary)),
+                  const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 2),
@@ -537,13 +597,20 @@ class _GuestCard extends StatelessWidget {
                 ],
               ),
             ),
+            IconButton(
+              onPressed: onDelete,
+              tooltip: 'Remove guest',
+              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+              constraints: const BoxConstraints(),
+              padding: const EdgeInsets.all(8),
+              visualDensity: VisualDensity.compact,
+            ),
             PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'rsvp') onRsvp();
                 if (v == 'share') onShareInvite();
                 if (v == 'reset') onResetRsvp?.call();
                 if (v == 'edit') onEdit();
-                if (v == 'delete') onDelete();
               },
               itemBuilder: (_) => [
                 const PopupMenuItem(
@@ -575,22 +642,12 @@ class _GuestCard extends StatelessWidget {
                         title: Text('Edit guest'),
                         contentPadding: EdgeInsets.zero,
                         dense: true)),
-                const PopupMenuItem(
-                    value: 'delete',
-                    child: ListTile(
-                        leading: Icon(Icons.delete_outline,
-                            color: AppColors.error),
-                        title: Text('Remove',
-                            style: TextStyle(color: AppColors.error)),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true)),
               ],
               child: Icon(Icons.more_vert,
-                  color: Theme.of(context).colorScheme.onSurface.withAlpha(153), size: 20),
+                  color: AppColors.textSecondary, size: 20),
             ),
           ],
         ),
-      ),
     );
   }
 }
@@ -607,19 +664,20 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
       decoration: BoxDecoration(
         color: color.withAlpha(20),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withAlpha(51)),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         children: [
           Text(value,
-              style: AppTextStyles.headlineMedium.copyWith(color: color)),
-          const SizedBox(height: 2),
+              style: AppTextStyles.headlineMedium
+                  .copyWith(color: color, fontSize: 24)),
+          const SizedBox(height: 4),
           Text(label,
-              style: AppTextStyles.caption, textAlign: TextAlign.center),
+              style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center),
         ],
       ),
     );
@@ -638,10 +696,15 @@ class _InfoRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
-              )),
+          Expanded(
+            child: Text(label,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: 8),
           Text(value,
               style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
         ],
@@ -668,7 +731,13 @@ class _MealRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(meal, style: AppTextStyles.bodySmall),
+              Expanded(
+                child: Text(meal,
+                    style: AppTextStyles.bodySmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 8),
               Text('$count guest${count == 1 ? '' : 's'}',
                   style: AppTextStyles.caption
                       .copyWith(color: AppColors.textSecondary)),
@@ -707,41 +776,47 @@ class _ResponseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: Text(_icon, style: const TextStyle(fontSize: 22)),
-        title: Text(response.guestName, style: AppTextStyles.titleMedium),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (response.guestCount > 0)
-              Text('${response.guestCount} guest${response.guestCount == 1 ? '' : 's'}',
-                  style: AppTextStyles.caption),
-            if (response.mealPreference != null)
-              Text('Meal: ${response.mealPreference}',
-                  style: AppTextStyles.caption),
-            if (response.message != null)
-              Text('"${response.message}"',
-                  style: AppTextStyles.caption
-                      .copyWith(fontStyle: FontStyle.italic)),
-          ],
-        ),
-        trailing: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: _color.withAlpha(31),
-            borderRadius: BorderRadius.circular(20),
+    return _SoftCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_icon, style: const TextStyle(fontSize: 20)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(response.guestName, style: AppTextStyles.titleMedium),
+                if (response.guestCount > 0)
+                  Text('${response.guestCount} guest${response.guestCount == 1 ? '' : 's'}',
+                      style: AppTextStyles.caption),
+                if (response.mealPreference != null)
+                  Text('Meal: ${response.mealPreference}',
+                      style: AppTextStyles.caption),
+                if (response.message != null)
+                  Text('"${response.message}"',
+                      style: AppTextStyles.caption
+                          .copyWith(fontStyle: FontStyle.italic)),
+              ],
+            ),
           ),
-          child: Text(
-            response.attending.name[0].toUpperCase() +
-                response.attending.name.substring(1),
-            style: AppTextStyles.caption
-                .copyWith(color: _color, fontWeight: FontWeight.w600),
+          const SizedBox(width: 8),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: _color.withAlpha(31),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              response.attending.name[0].toUpperCase() +
+                  response.attending.name.substring(1),
+              style: AppTextStyles.caption
+                  .copyWith(color: _color, fontWeight: FontWeight.w600),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1010,30 +1085,31 @@ class _RsvpFormSheetState extends State<_RsvpFormSheet> {
                   return Expanded(
                     child: Padding(
                       padding: const EdgeInsets.only(right: 6),
-                      child: GestureDetector(
-                        onTap: () => setState(() => _status = s),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? color.withAlpha(31)
-                                : AppColors.surface,
-                            border: Border.all(
-                              color: selected ? color : AppColors.divider,
-                              width: selected ? 2 : 1,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
+                      child: Material(
+                        color: selected ? color.withAlpha(31) : AppColors.surface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(
+                            color: selected ? color : AppColors.divider,
+                            width: selected ? 2 : 1,
                           ),
-                          child: Text(label,
-                              textAlign: TextAlign.center,
-                              style: AppTextStyles.caption.copyWith(
-                                color: selected
-                                    ? color
-                                    : AppColors.textSecondary,
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.normal,
-                              )),
+                        ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () => setState(() => _status = s),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Text(label,
+                                textAlign: TextAlign.center,
+                                style: AppTextStyles.caption.copyWith(
+                                  color: selected
+                                      ? color
+                                      : AppColors.textSecondary,
+                                  fontWeight: selected
+                                      ? FontWeight.w700
+                                      : FontWeight.normal,
+                                )),
+                          ),
                         ),
                       ),
                     ),
@@ -1049,6 +1125,7 @@ class _RsvpFormSheetState extends State<_RsvpFormSheet> {
                 Row(
                   children: [
                     IconButton(
+                      tooltip: 'Decrease guest count',
                       onPressed: () =>
                           setState(() => _count = (_count - 1).clamp(1, 20)),
                       icon: const Icon(Icons.remove_circle_outline),
@@ -1073,6 +1150,7 @@ class _RsvpFormSheetState extends State<_RsvpFormSheet> {
                       ),
                     ),
                     IconButton(
+                      tooltip: 'Increase guest count',
                       onPressed: () =>
                           setState(() => _count = (_count + 1).clamp(1, 20)),
                       icon: const Icon(Icons.add_circle_outline),

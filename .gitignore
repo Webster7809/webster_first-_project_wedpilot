@@ -77,3 +77,7 @@ coverage/
 
 # Environment variables
 .env
+
+# Generated reports
+docs/reports/
+docs/FINAL_YEAR_PROJECT_REPORT.md

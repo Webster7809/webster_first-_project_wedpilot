@@ -3,14 +3,16 @@ const { Op, fn, col } = require('sequelize');
 const Vendor = require('../db/models/vendor');
 const VendorService = require('../db/models/vendorService');
 const VendorMedia = require('../db/models/vendorMedia');
-const Review = require('../db/models/review');
+const VendorFeedback = require('../db/models/vendorFeedback');
 const Inquiry = require('../db/models/inquiry');
 const Expense = require('../db/models/expense');
 const User = require('../db/models/user');
 const CoupleProfile = require('../db/models/coupleProfile');
+const Notification = require('../db/models/notification');
 const verifyJwt = require('../middleware/verifyJwt');
 const { requireCouple, requireVendor } = require('../middleware/roles');
 const { makeUploader, relativeUploadUrl } = require('../middleware/upload');
+const { recalculateVendorStats, statsForVendorIds } = require('../services/vendorStats');
 
 const router = express.Router();
 const mediaUploader = makeUploader('vendors', { allowedMimePrefixes: ['image/', 'video/'], maxSizeMb: 25 });
@@ -42,7 +44,7 @@ function serializeMedia(media) {
   };
 }
 
-function serializeInquiry(inquiry, { coupleName = null, vendorName = null } = {}) {
+function serializeInquiry(inquiry, { coupleName = null, vendorName = null, hasFeedback = false } = {}) {
   return {
     inquiry_id: inquiry.inquiry_id,
     couple_id: inquiry.couple_user_id,
@@ -55,61 +57,17 @@ function serializeInquiry(inquiry, { coupleName = null, vendorName = null } = {}
     wedding_date: inquiry.wedding_date,
     message: inquiry.message,
     responded_at: inquiry.responded_at,
+    decline_reason: inquiry.decline_reason,
+    service_done_at: inquiry.service_done_at,
+    rating_reminder_count: inquiry.rating_reminder_count,
+    rating_reminder_last_sent_at: inquiry.rating_reminder_last_sent_at,
+    has_feedback: hasFeedback,
     created_at: inquiry.created_at,
   };
 }
 
-function serializeReview(review, { coupleName = null, coupleAvatarUrl = null } = {}) {
-  return {
-    review_id: review.review_id,
-    couple_id: review.couple_user_id,
-    vendor_id: review.vendor_id,
-    couple_name: coupleName,
-    couple_avatar_url: coupleAvatarUrl,
-    rating: review.rating,
-    title: review.title,
-    body: review.body,
-    status: review.status,
-    photo_urls: review.photo_urls,
-    published_at: review.published_at,
-    created_at: review.created_at,
-  };
-}
-
-// Computed at serialization time from real review data — not a stored/cached
-// column, and not the fabricated formula the old frontend mock used.
-function computeCompositeScore(avgRating, reviewCount) {
-  const ratingNorm = (avgRating ?? 0) / 5;
-  const volumeNorm = Math.min(reviewCount / 50, 1);
-  return Math.round((ratingNorm * 0.7 + volumeNorm * 0.3) * 100 * 100) / 100;
-}
-
-async function ratingAggForVendorIds(vendorIds) {
-  if (vendorIds.length === 0) return {};
-  const rows = await Review.findAll({
-    where: { vendor_id: { [Op.in]: vendorIds }, status: 'approved' },
-    attributes: ['vendor_id', [fn('AVG', col('rating')), 'avg_rating'], [fn('COUNT', col('review_id')), 'review_count']],
-    group: ['vendor_id'],
-    raw: true,
-  });
-  const map = {};
-  for (const row of rows) {
-    map[row.vendor_id] = {
-      rating: row.avg_rating == null ? null : Math.round(Number(row.avg_rating) * 10) / 10,
-      reviewCount: Number(row.review_count),
-    };
-  }
-  return map;
-}
-
-async function serializeVendor(vendor, { includeDetail = false, ratingInfo = null } = {}) {
-  let rating = ratingInfo?.rating ?? null;
-  let reviewCount = ratingInfo?.reviewCount ?? 0;
-  if (ratingInfo === null) {
-    const agg = await ratingAggForVendorIds([vendor.vendor_id]);
-    rating = agg[vendor.vendor_id]?.rating ?? null;
-    reviewCount = agg[vendor.vendor_id]?.reviewCount ?? 0;
-  }
+async function serializeVendor(vendor, { includeDetail = false, statsInfo = null, services = null } = {}) {
+  const stats = statsInfo ?? (await statsForVendorIds([vendor.vendor_id]))[vendor.vendor_id];
 
   const base = {
     vendor_id: vendor.vendor_id,
@@ -132,18 +90,31 @@ async function serializeVendor(vendor, { includeDetail = false, ratingInfo = nul
     address: vendor.address,
     instagram_handle: vendor.instagram_handle,
     blocked_dates: vendor.blocked_dates,
-    rating,
-    review_count: reviewCount,
-    composite_score: computeCompositeScore(rating, reviewCount),
+    // Public CRS + badges only — sourced from vendor_stats, never from raw
+    // vendor_feedback (no comments, no reviewer identity ever leave that table).
+    rating: stats.avg_star_rating,
+    feedback_count: stats.feedback_count,
+    composite_score: stats.crs_score,
+    responds_in_minutes: stats.avg_response_time_minutes,
+    weddings_completed: stats.completed_weddings_count,
+    on_time_rate: stats.on_time_rate,
+    recommend_rate: stats.recommend_rate,
     is_custom_entry: vendor.is_custom_entry,
   };
 
-  if (includeDetail) {
-    const [services, media] = await Promise.all([
-      VendorService.findAll({ where: { vendor_id: vendor.vendor_id } }),
-      VendorMedia.findAll({ where: { vendor_id: vendor.vendor_id }, order: [['sort_order', 'ASC']] }),
-    ]);
+  // Every caller needs pricing (discovery filtering/sorting and the AI
+  // matcher both read services[].price_min/price_max off the list response,
+  // not just the single-vendor detail view) — either the pre-fetched bulk
+  // `services` array from a list query, or a per-vendor lookup.
+  if (services !== null) {
     base.services = services.map(serializeService);
+  } else {
+    const ownServices = await VendorService.findAll({ where: { vendor_id: vendor.vendor_id } });
+    base.services = ownServices.map(serializeService);
+  }
+
+  if (includeDetail) {
+    const media = await VendorMedia.findAll({ where: { vendor_id: vendor.vendor_id }, order: [['sort_order', 'ASC']] });
     base.media = media.map(serializeMedia);
   }
 
@@ -176,9 +147,22 @@ router.get('/', verifyJwt, async (req, res) => {
     }
 
     const { rows, count } = await Vendor.findAndCountAll({ where, limit, offset, order: [['created_at', 'DESC']] });
-    const ratingAgg = await ratingAggForVendorIds(rows.map((v) => v.vendor_id));
+    const rowVendorIds = rows.map((v) => v.vendor_id);
+    const [statsMap, allServices] = await Promise.all([
+      statsForVendorIds(rowVendorIds),
+      rowVendorIds.length
+        ? VendorService.findAll({ where: { vendor_id: { [Op.in]: rowVendorIds } } })
+        : [],
+    ]);
+    const servicesByVendor = {};
+    for (const s of allServices) {
+      (servicesByVendor[s.vendor_id] ??= []).push(s);
+    }
     const vendors = await Promise.all(
-      rows.map((v) => serializeVendor(v, { ratingInfo: ratingAgg[v.vendor_id] ?? { rating: null, reviewCount: 0 } })),
+      rows.map((v) => serializeVendor(v, {
+        statsInfo: statsMap[v.vendor_id],
+        services: servicesByVendor[v.vendor_id] ?? [],
+      })),
     );
     res.json({ vendors, total: count });
   } catch (err) {
@@ -367,6 +351,26 @@ router.patch('/me/media/:id/featured', verifyJwt, requireVendor, async (req, res
   }
 });
 
+// A couple reporting a vendor's listing photo as inappropriate — this is what
+// feeds the admin Content Moderation "Images" queue (GET /moderation/images
+// only ever returns rows with status 'flagged').
+router.post('/media/:id/report', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const media = await VendorMedia.findByPk(req.params.id);
+    if (!media) return res.status(404).json({ error: 'Listing photo not found.' });
+    const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+    if (!reason) return res.status(400).json({ error: 'A reason is required to report this listing.' });
+
+    media.status = 'flagged';
+    media.flag_reason = reason;
+    await media.save();
+    res.json({ media: serializeMedia(media) });
+  } catch (err) {
+    console.error('Report media error:', err.message);
+    res.status(500).json({ error: 'Could not report this listing.' });
+  }
+});
+
 // ── Revenue ──────────────────────────────────────────────────────────────────────
 // A real (correctly empty-until-linked) aggregate over Expense.vendor_id.
 // Couples currently pick a vendor for an expense via free text, not a
@@ -433,14 +437,19 @@ router.get('/me/inquiries', verifyJwt, requireVendor, async (req, res) => {
     if (!vendor) return;
     const inquiries = await Inquiry.findAll({ where: { vendor_id: vendor.vendor_id }, order: [['created_at', 'DESC']] });
     const coupleIds = [...new Set(inquiries.map((i) => i.couple_user_id))];
-    const couples = coupleIds.length
-      ? await User.findAll({ where: { user_id: { [Op.in]: coupleIds } } })
-      : [];
+    const [couples, feedbackRows] = await Promise.all([
+      coupleIds.length ? User.findAll({ where: { user_id: { [Op.in]: coupleIds } } }) : [],
+      coupleIds.length
+        ? VendorFeedback.findAll({ where: { vendor_id: vendor.vendor_id, couple_user_id: { [Op.in]: coupleIds } } })
+        : [],
+    ]);
     const nameById = Object.fromEntries(couples.map((u) => [u.user_id, u.name]));
+    const feedbackCoupleIds = new Set(feedbackRows.map((f) => f.couple_user_id));
     res.json({
       inquiries: inquiries.map((i) => serializeInquiry(i, {
         coupleName: nameById[i.couple_user_id] ?? null,
         vendorName: vendor.business_name,
+        hasFeedback: feedbackCoupleIds.has(i.couple_user_id),
       })),
     });
   } catch (err) {
@@ -448,6 +457,46 @@ router.get('/me/inquiries', verifyJwt, requireVendor, async (req, res) => {
     res.status(500).json({ error: 'Could not load inquiries.' });
   }
 });
+
+// A couple's own sent inquiries/bookings — the counterpart to the vendor's
+// GET /me/inquiries above, which didn't exist until this feature (couples
+// previously had no way to see their booking status or a decline reason).
+router.get('/inquiries/mine', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const inquiries = await Inquiry.findAll({
+      where: { couple_user_id: req.user.user_id },
+      order: [['created_at', 'DESC']],
+    });
+    const vendorIds = [...new Set(inquiries.map((i) => i.vendor_id))];
+    const [vendors, feedbackRows] = await Promise.all([
+      vendorIds.length ? Vendor.findAll({ where: { vendor_id: { [Op.in]: vendorIds } } }) : [],
+      vendorIds.length
+        ? VendorFeedback.findAll({ where: { couple_user_id: req.user.user_id, vendor_id: { [Op.in]: vendorIds } } })
+        : [],
+    ]);
+    const vendorNameById = Object.fromEntries(vendors.map((v) => [v.vendor_id, v.business_name]));
+    const feedbackVendorIds = new Set(feedbackRows.map((f) => f.vendor_id));
+    res.json({
+      inquiries: inquiries.map((i) => serializeInquiry(i, {
+        vendorName: vendorNameById[i.vendor_id] ?? null,
+        hasFeedback: feedbackVendorIds.has(i.vendor_id),
+      })),
+    });
+  } catch (err) {
+    console.error('List my bookings error:', err.message);
+    res.status(500).json({ error: 'Could not load your bookings.' });
+  }
+});
+
+// Resolves the wedding date to use for a booking: the inquiry's own date if
+// it has one, otherwise the couple's on-file wedding date. Both columns are
+// DATEONLY so this returns a plain 'YYYY-MM-DD' string (or null if neither
+// is set).
+async function resolveWeddingDate(inquiry) {
+  if (inquiry.wedding_date) return inquiry.wedding_date;
+  const profile = await CoupleProfile.findOne({ where: { user_id: inquiry.couple_user_id } });
+  return profile?.wedding_date ?? null;
+}
 
 router.patch('/me/inquiries/:id', verifyJwt, requireVendor, async (req, res) => {
   try {
@@ -460,15 +509,127 @@ router.patch('/me/inquiries/:id', verifyJwt, requireVendor, async (req, res) => 
     const validStatuses = ['newInquiry', 'viewed', 'responded', 'quoted', 'booked', 'declined'];
     if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status.' });
 
+    if (status === 'declined') {
+      const reason = typeof req.body.decline_reason === 'string' ? req.body.decline_reason.trim() : '';
+      if (!reason) return res.status(400).json({ error: 'A decline reason is required.' });
+      if (reason.length > 300) return res.status(400).json({ error: 'Decline reason must be 300 characters or fewer.' });
+      inquiry.decline_reason = reason;
+    }
+
+    // Accepting a booking wires the real date into Vendor.blocked_dates (the
+    // signal the AI matcher already penalizes against) and guards against
+    // double-booking the same date via two still-pending inquiries.
+    if (status === 'booked') {
+      const effectiveDate = await resolveWeddingDate(inquiry);
+      if (effectiveDate) {
+        const conflict = await Inquiry.findOne({
+          where: {
+            vendor_id: vendor.vendor_id,
+            status: 'booked',
+            wedding_date: effectiveDate,
+            inquiry_id: { [Op.ne]: inquiry.inquiry_id },
+          },
+        });
+        if (conflict) {
+          return res.status(409).json({ error: 'You already have a confirmed booking on this date.' });
+        }
+        if (!inquiry.wedding_date) inquiry.wedding_date = effectiveDate;
+        const blocked = new Set(vendor.blocked_dates || []);
+        if (!blocked.has(effectiveDate)) {
+          vendor.blocked_dates = [...blocked, effectiveDate];
+          await vendor.save();
+        }
+      }
+    }
+
     inquiry.status = status;
     if (['responded', 'quoted', 'booked', 'declined'].includes(status) && !inquiry.responded_at) {
       inquiry.responded_at = new Date();
     }
     await inquiry.save();
+    // Response time, booking acceptance rate, and completed-weddings count
+    // all derive from inquiry status/timing.
+    await recalculateVendorStats(vendor.vendor_id);
+
+    if (status === 'booked') {
+      await Notification.create({
+        user_id: inquiry.couple_user_id,
+        type: 'booking_accepted',
+        title: `${vendor.business_name} confirmed your booking!`,
+        body: inquiry.wedding_date
+          ? `Your booking for ${inquiry.wedding_date} is confirmed.`
+          : 'Your booking request has been confirmed.',
+        entity_id: vendor.vendor_id,
+        entity_type: 'vendor',
+      });
+    } else if (status === 'declined') {
+      await Notification.create({
+        user_id: inquiry.couple_user_id,
+        type: 'booking_declined',
+        title: `${vendor.business_name} declined your request`,
+        body: inquiry.decline_reason,
+        entity_id: vendor.vendor_id,
+        entity_type: 'vendor',
+      });
+    }
+
     res.json({ inquiry: serializeInquiry(inquiry) });
   } catch (err) {
     console.error('Update inquiry error:', err.message);
     res.status(500).json({ error: 'Could not update inquiry.' });
+  }
+});
+
+// Vendor marks a booked engagement's service as fulfilled — notifies the
+// couple to leave (private) feedback. Capped at 2 reminders: the first sends
+// the initial "please rate" prompt, the second is a final nudge in case the
+// first was ignored; further calls are rejected once the couple has rated or
+// the cap is reached.
+router.post('/me/inquiries/:id/service-done', verifyJwt, requireVendor, async (req, res) => {
+  try {
+    const vendor = await ownVendorOr404(req, res);
+    if (!vendor) return;
+    const inquiry = await Inquiry.findOne({ where: { inquiry_id: req.params.id, vendor_id: vendor.vendor_id } });
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
+
+    if (inquiry.status !== 'booked') {
+      return res.status(409).json({ error: 'Only booked engagements can be marked as service done.' });
+    }
+
+    const existingFeedback = await VendorFeedback.findOne({
+      where: { couple_user_id: inquiry.couple_user_id, vendor_id: vendor.vendor_id },
+    });
+    if (existingFeedback) {
+      return res.status(409).json({ error: 'This couple has already rated you — no reminder needed.' });
+    }
+
+    if (inquiry.rating_reminder_count >= 2) {
+      return res.status(409).json({ error: 'You’ve already sent the maximum of 2 rating reminders for this booking.' });
+    }
+
+    const isFirstReminder = inquiry.rating_reminder_count === 0;
+    if (!inquiry.service_done_at) inquiry.service_done_at = new Date();
+    inquiry.rating_reminder_count += 1;
+    inquiry.rating_reminder_last_sent_at = new Date();
+    await inquiry.save();
+    // completed_weddings_count is now driven by service_done_at.
+    await recalculateVendorStats(vendor.vendor_id);
+
+    await Notification.create({
+      user_id: inquiry.couple_user_id,
+      type: 'rate_vendor',
+      title: `How was ${vendor.business_name}?`,
+      body: isFirstReminder
+        ? `${vendor.business_name} marked your booking as complete. Share a quick private rating — it's never shown publicly.`
+        : `Final reminder: rate your experience with ${vendor.business_name}. Your feedback stays private.`,
+      entity_id: vendor.vendor_id,
+      entity_type: 'vendor',
+    });
+
+    res.json({ inquiry: serializeInquiry(inquiry) });
+  } catch (err) {
+    console.error('Mark service done error:', err.message);
+    res.status(500).json({ error: 'Could not mark service as done.' });
   }
 });
 
@@ -477,9 +638,25 @@ router.post('/:id/inquiries', verifyJwt, requireCouple, async (req, res) => {
     const vendor = await Vendor.findByPk(req.params.id);
     if (!vendor) return res.status(404).json({ error: 'Vendor not found.' });
 
-    const { message, budget_range_min, budget_range_max, wedding_date } = req.body;
+    const { message, budget_range_min, budget_range_max } = req.body;
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'message is required.' });
+    }
+
+    // Normalize to a plain 'YYYY-MM-DD' (the client may send a full ISO
+    // datetime), falling back to the couple's on-file wedding date so this
+    // column — and downstream blocked-date/AI-availability checks — aren't
+    // silently left null when the couple already has a date on record.
+    let weddingDate = req.body.wedding_date ?? null;
+    if (typeof weddingDate === 'string' && weddingDate.includes('T')) {
+      weddingDate = weddingDate.split('T')[0];
+    }
+    if (!weddingDate) {
+      const profile = await CoupleProfile.findOne({ where: { user_id: req.user.user_id } });
+      weddingDate = profile?.wedding_date ?? null;
+    }
+    if (weddingDate && (vendor.blocked_dates || []).includes(weddingDate)) {
+      return res.status(409).json({ error: 'This vendor isn’t available on your wedding date.' });
     }
 
     const inquiry = await Inquiry.create({
@@ -488,7 +665,7 @@ router.post('/:id/inquiries', verifyJwt, requireCouple, async (req, res) => {
       message,
       budget_range_min: budget_range_min ?? null,
       budget_range_max: budget_range_max ?? null,
-      wedding_date: wedding_date ?? null,
+      wedding_date: weddingDate,
     });
     res.status(201).json({ inquiry: serializeInquiry(inquiry) });
   } catch (err) {
@@ -497,73 +674,133 @@ router.post('/:id/inquiries', verifyJwt, requireCouple, async (req, res) => {
   }
 });
 
-// ── Reviews ──────────────────────────────────────────────────────────────────────
+// ── Feedback (private) ────────────────────────────────────────────────────────────
+// Raw star + comment feedback is never public — only the vendor who owns it
+// and admins may read it (enforced here, not just hidden in the UI). Every
+// other couple only ever sees the aggregate CRS/badges from serializeVendor.
 
-router.get('/me/reviews', verifyJwt, requireVendor, async (req, res) => {
-  try {
-    const vendor = await ownVendorOr404(req, res);
-    if (!vendor) return;
-    const reviews = await Review.findAll({ where: { vendor_id: vendor.vendor_id }, order: [['created_at', 'DESC']] });
-    res.json({ reviews: await attachCoupleInfo(reviews) });
-  } catch (err) {
-    console.error('List own reviews error:', err.message);
-    res.status(500).json({ error: 'Could not load reviews.' });
-  }
-});
-
-router.get('/:id/reviews', verifyJwt, async (req, res) => {
-  try {
-    const reviews = await Review.findAll({
-      where: { vendor_id: req.params.id, status: 'approved' },
-      order: [['created_at', 'DESC']],
-    });
-    res.json({ reviews: await attachCoupleInfo(reviews) });
-  } catch (err) {
-    console.error('List vendor reviews error:', err.message);
-    res.status(500).json({ error: 'Could not load reviews.' });
-  }
-});
-
-async function attachCoupleInfo(reviews) {
-  const coupleIds = [...new Set(reviews.map((r) => r.couple_user_id))];
-  const [couples, coupleProfiles] = coupleIds.length
-    ? await Promise.all([
-        User.findAll({ where: { user_id: { [Op.in]: coupleIds } } }),
-        CoupleProfile.findAll({ where: { user_id: { [Op.in]: coupleIds } } }),
-      ])
-    : [[], []];
-  const byId = Object.fromEntries(couples.map((u) => [u.user_id, u]));
-  const profileById = Object.fromEntries(coupleProfiles.map((p) => [p.user_id, p]));
-  return reviews.map((r) => serializeReview(r, {
-    coupleName: byId[r.couple_user_id]?.name ?? null,
-    coupleAvatarUrl: profileById[r.couple_user_id]?.photo_url ?? byId[r.couple_user_id]?.avatar_url ?? null,
-  }));
+function serializeFeedback(feedback, { coupleName = null } = {}) {
+  return {
+    feedback_id: feedback.feedback_id,
+    couple_id: feedback.couple_user_id,
+    vendor_id: feedback.vendor_id,
+    inquiry_id: feedback.inquiry_id,
+    couple_name: coupleName,
+    star_rating: feedback.star_rating,
+    comment: feedback.comment,
+    on_time: feedback.on_time,
+    is_flagged: feedback.is_flagged,
+    flag_reason: feedback.flag_reason,
+    created_at: feedback.created_at,
+  };
 }
 
-router.post('/:id/reviews', verifyJwt, requireCouple, async (req, res) => {
+async function attachCoupleNames(feedbackRows) {
+  const coupleIds = [...new Set(feedbackRows.map((f) => f.couple_user_id))];
+  const couples = coupleIds.length
+    ? await User.findAll({ where: { user_id: { [Op.in]: coupleIds } } })
+    : [];
+  const nameById = Object.fromEntries(couples.map((u) => [u.user_id, u.name]));
+  return feedbackRows.map((f) => serializeFeedback(f, { coupleName: nameById[f.couple_user_id] ?? null }));
+}
+
+// Public: CRS + badge stats only, no comments, no reviewer identity.
+router.get('/:vendorId/crs', verifyJwt, async (req, res) => {
+  try {
+    const vendor = await Vendor.findByPk(req.params.vendorId);
+    if (!vendor) return res.status(404).json({ error: 'Vendor not found.' });
+    const stats = (await statsForVendorIds([vendor.vendor_id]))[vendor.vendor_id];
+    res.json({
+      vendor_id: vendor.vendor_id,
+      crs_score: stats.crs_score,
+      rating: stats.avg_star_rating,
+      feedback_count: stats.feedback_count,
+      is_verified_business: vendor.verification_status === 'verified',
+      responds_in_minutes: stats.avg_response_time_minutes,
+      weddings_completed: stats.completed_weddings_count,
+      on_time_rate: stats.on_time_rate,
+      recommend_rate: stats.recommend_rate,
+    });
+  } catch (err) {
+    console.error('Get vendor CRS error:', err.message);
+    res.status(500).json({ error: 'Could not load vendor score.' });
+  }
+});
+
+// Restricted: the vendor's own feedback, or an admin. 403 for everyone else,
+// including other couples — there is no "public feedback list" endpoint.
+router.get('/:vendorId/feedback', verifyJwt, async (req, res) => {
+  try {
+    const vendor = await Vendor.findByPk(req.params.vendorId);
+    if (!vendor) return res.status(404).json({ error: 'Vendor not found.' });
+
+    const isOwner = req.user.role === 'vendor' && vendor.user_id === req.user.user_id;
+    const isAdmin = req.user.role === 'admin';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'You do not have access to this vendor’s feedback.' });
+    }
+
+    const feedbackRows = await VendorFeedback.findAll({
+      where: { vendor_id: vendor.vendor_id },
+      order: [['created_at', 'DESC']],
+    });
+    res.json({ feedback: await attachCoupleNames(feedbackRows) });
+  } catch (err) {
+    console.error('List vendor feedback error:', err.message);
+    res.status(500).json({ error: 'Could not load feedback.' });
+  }
+});
+
+// Submit private feedback — only a couple with a booked inquiry for this
+// vendor is eligible, and only once per couple-vendor pair (also enforced by
+// a unique DB index as a second line of defense).
+router.post('/:id/feedback', verifyJwt, requireCouple, async (req, res) => {
   try {
     const vendor = await Vendor.findByPk(req.params.id);
     if (!vendor) return res.status(404).json({ error: 'Vendor not found.' });
 
-    const { rating, title, body, photo_urls } = req.body;
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      return res.status(400).json({ error: 'rating must be an integer 1-5.' });
+    const bookedInquiry = await Inquiry.findOne({
+      where: {
+        couple_user_id: req.user.user_id,
+        vendor_id: vendor.vendor_id,
+        status: 'booked',
+        service_done_at: { [Op.ne]: null },
+      },
+      order: [['created_at', 'DESC']],
+    });
+    if (!bookedInquiry) {
+      return res.status(403).json({ error: 'This vendor hasn’t marked your booking as complete yet.' });
     }
-    if (!title || !body) return res.status(400).json({ error: 'title and body are required.' });
 
-    const review = await Review.create({
+    const existing = await VendorFeedback.findOne({
+      where: { couple_user_id: req.user.user_id, vendor_id: vendor.vendor_id },
+    });
+    if (existing) {
+      return res.status(409).json({ error: 'You’ve already submitted feedback for this vendor.' });
+    }
+
+    const { star_rating, comment, on_time } = req.body;
+    if (!Number.isInteger(star_rating) || star_rating < 1 || star_rating > 5) {
+      return res.status(400).json({ error: 'star_rating must be an integer 1-5.' });
+    }
+    const validOnTime = ['yes', 'no', 'not_applicable'];
+    if (on_time != null && !validOnTime.includes(on_time)) {
+      return res.status(400).json({ error: 'on_time must be "yes", "no", or "not_applicable".' });
+    }
+
+    const feedback = await VendorFeedback.create({
       couple_user_id: req.user.user_id,
       vendor_id: vendor.vendor_id,
-      rating,
-      title,
-      body,
-      photo_urls: Array.isArray(photo_urls) ? photo_urls : [],
-      published_at: new Date(),
+      inquiry_id: bookedInquiry.inquiry_id,
+      star_rating,
+      comment: comment || null,
+      on_time: on_time ?? null,
     });
-    res.status(201).json({ review: serializeReview(review) });
+    await recalculateVendorStats(vendor.vendor_id);
+    res.status(201).json({ feedback: serializeFeedback(feedback) });
   } catch (err) {
-    console.error('Submit review error:', err.message);
-    res.status(500).json({ error: 'Could not submit review.' });
+    console.error('Submit feedback error:', err.message);
+    res.status(500).json({ error: 'Could not submit feedback.' });
   }
 });
 

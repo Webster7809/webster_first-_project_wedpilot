@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/router/app_routes.dart';
 import '../../../core/services/messaging_api_service.dart';
 import '../../../core/services/vendor_api_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -10,6 +11,7 @@ import '../../../models/vendor_profile.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../widgets/loading_shimmer.dart';
+import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
 import '../../../core/utils/format_utils.dart';
@@ -84,6 +86,33 @@ class _VendorProfileBody extends ConsumerStatefulWidget {
 }
 
 class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
+  Future<void> _reportPhoto(VendorMedia media) async {
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _ReportReasonSheet(),
+    );
+    if (reason == null || !mounted) return;
+
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) {
+      showWedSnackBar(context, 'Not signed in.', type: SnackType.error);
+      return;
+    }
+    try {
+      await VendorApiService.instance.reportMedia(token, media.id, reason: reason);
+      if (!mounted) return;
+      showWedSnackBar(context, "Thanks — we'll review this photo.", type: SnackType.success);
+    } on VendorApiException catch (e) {
+      if (!mounted) return;
+      showWedSnackBar(context, e.message, type: SnackType.error);
+    } catch (_) {
+      if (!mounted) return;
+      showWedSnackBar(context, 'Could not report this photo. Please try again.', type: SnackType.error);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final vendor = widget.vendor;
@@ -241,9 +270,11 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Pills row
+                    // Badges row — public CRS-derived stats only; no reviews,
+                    // no reviewer identity, no written comments ever appear here.
                     Wrap(
                       spacing: 8,
+                      runSpacing: 8,
                       children: [
                         if (vendor.isVerified)
                           _Pill(
@@ -252,14 +283,47 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                             color: AppColors.success,
                             bgColor: AppColors.successBg,
                           ),
-                        if (vendor.reviewCount > 0)
+                        if (vendor.feedbackCount > 0)
                           _Pill(
-                            label: '${vendor.reviewCount} reviews',
+                            label: 'Based on ${vendor.feedbackCount} completed bookings',
                             icon: Icons.star_outline_rounded,
                             color: AppColors.amber,
                             bgColor: AppColors.creamDark,
                           ),
+                        if (vendor.respondsInMinutes != null)
+                          _Pill(
+                            label: 'Responds in ~${_formatMinutes(vendor.respondsInMinutes!)}',
+                            icon: Icons.bolt_outlined,
+                            color: AppColors.info,
+                            bgColor: AppColors.info.withAlpha(20),
+                          ),
+                        if (vendor.weddingsCompleted > 0)
+                          _Pill(
+                            label: '${vendor.weddingsCompleted} weddings completed',
+                            icon: Icons.celebration_outlined,
+                            color: AppColors.forestGreen,
+                            bgColor: AppColors.forestGreen.withAlpha(15),
+                          ),
+                        if (vendor.recommendRate != null)
+                          _Pill(
+                            label: '${(vendor.recommendRate! * 100).round()}% recommend',
+                            icon: Icons.thumb_up_alt_outlined,
+                            color: AppColors.forestGreen,
+                            bgColor: AppColors.forestGreen.withAlpha(15),
+                          ),
                       ],
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => context.push(AppRoutes.coupleFeedbackNew, extra: vendor.id),
+                      icon: const Icon(Icons.rate_review_outlined, size: 16),
+                      label: const Text('Rate this vendor'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.forestGreen,
+                        side: const BorderSide(color: AppColors.divider),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      ),
                     ),
                     const SizedBox(height: 8),
 
@@ -326,7 +390,9 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                               fontWeight: FontWeight.w700)),
                       const SizedBox(height: 10),
                       if (vendor.phone != null)
-                        GestureDetector(
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
                           onTap: () =>
                               launchUrl(Uri.parse('tel:${vendor.phone}')),
                           child: Padding(
@@ -358,9 +424,12 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                               ],
                             ),
                           ),
+                          ),
                         ),
                       if (vendor.website != null)
-                        GestureDetector(
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
                           onTap: () {
                             final url = vendor.website!.startsWith('http')
                                 ? vendor.website!
@@ -398,6 +467,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                               ],
                             ),
                           ),
+                          ),
                         ),
                       const SizedBox(height: 14),
                     ],
@@ -427,14 +497,37 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                         physics: const NeverScrollableScrollPhysics(),
                         children: vendor.media.take(6).map((m) => ClipRRect(
                               borderRadius: BorderRadius.circular(10),
-                              child: Image.network(
-                                resolveMediaUrl(m.url),
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  color: AppColors.amber.withAlpha(20),
-                                  child: const Icon(Icons.broken_image_outlined,
-                                      color: AppColors.amber, size: 24),
-                                ),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.network(
+                                    resolveMediaUrl(m.url),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      color: AppColors.amber.withAlpha(20),
+                                      child: const Icon(Icons.broken_image_outlined,
+                                          color: AppColors.amber, size: 24),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: Material(
+                                      color: Colors.black.withAlpha(140),
+                                      shape: const CircleBorder(),
+                                      child: InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: () => _reportPhoto(m),
+                                        child: const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: Icon(Icons.flag_outlined,
+                                              size: 14, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             )).toList(),
                       ),
@@ -665,19 +758,29 @@ class _OverlayButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Colors.black.withAlpha(60),
-          shape: BoxShape.circle,
+    return Material(
+      color: Colors.black.withAlpha(60),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(icon, color: iconColor, size: 20),
         ),
-        child: Icon(icon, color: iconColor, size: 20),
       ),
     );
   }
+}
+
+// ── Formatting ────────────────────────────────────────────────────────────────
+
+String _formatMinutes(double minutes) {
+  if (minutes < 60) return '${minutes.round()} min';
+  final hours = minutes / 60;
+  if (hours < 24) return '${hours.round()} hr';
+  return '${(hours / 24).round()} d';
 }
 
 // ── Pill badge ────────────────────────────────────────────────────────────────
@@ -743,12 +846,94 @@ class _DetailRow extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: color),
           const SizedBox(width: 10),
-          Text(
-            label,
-            style: AppTextStyles.bodyMedium
-                .copyWith(color: AppColors.textPrimary),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.bodyMedium
+                  .copyWith(color: AppColors.textPrimary),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ReportReasonSheet extends StatefulWidget {
+  const _ReportReasonSheet();
+
+  @override
+  State<_ReportReasonSheet> createState() => _ReportReasonSheetState();
+}
+
+class _ReportReasonSheetState extends State<_ReportReasonSheet> {
+  static const _reasons = [
+    'Inappropriate content',
+    'Misleading or fake photo',
+    'Copyright violation',
+    'Spam or scam',
+    'Other',
+  ];
+  String _selected = _reasons.first;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Material(
+        color: AppColors.cream,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('Report Photo', style: AppTextStyles.headlineSmall),
+              const SizedBox(height: 4),
+              Text(
+                "Let us know what's wrong with this photo.",
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 8),
+              RadioGroup<String>(
+                groupValue: _selected,
+                onChanged: (v) => setState(() => _selected = v ?? _selected),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: _reasons
+                      .map((r) => RadioListTile<String>(
+                            value: r,
+                            title: Text(r, style: AppTextStyles.bodyMedium),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            activeColor: AppColors.forestGreen,
+                          ))
+                      .toList(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              WedButton(
+                label: 'Submit Report',
+                onPressed: () => Navigator.pop(context, _selected),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

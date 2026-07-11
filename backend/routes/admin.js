@@ -3,12 +3,13 @@ const { Op, fn, col } = require('sequelize');
 const User = require('../db/models/user');
 const Vendor = require('../db/models/vendor');
 const CoupleProfile = require('../db/models/coupleProfile');
-const Review = require('../db/models/review');
+const VendorFeedback = require('../db/models/vendorFeedback');
 const VendorMedia = require('../db/models/vendorMedia');
 const Inquiry = require('../db/models/inquiry');
 const Notification = require('../db/models/notification');
 const verifyJwt = require('../middleware/verifyJwt');
 const { requireAdmin } = require('../middleware/roles');
+const { recalculateVendorStats } = require('../services/vendorStats');
 
 const router = express.Router();
 router.use(verifyJwt, requireAdmin);
@@ -123,6 +124,8 @@ router.patch('/vendors/:id/verification', async (req, res) => {
     vendor.verification_status = status;
     vendor.verification_note = status === 'rejected' ? (note || null) : null;
     await vendor.save();
+    // is_verified_business feeds directly into the CRS weighting.
+    await recalculateVendorStats(vendor.vendor_id);
 
     await Notification.create({
       user_id: vendor.user_id,
@@ -175,7 +178,7 @@ router.patch('/users/:id/suspend', async (req, res) => {
 });
 
 // Hard-deletes the account (login access only). Related domain data —
-// budgets, vendor listings, reviews, inquiries — is deliberately left in
+// budgets, vendor listings, feedback, inquiries — is deliberately left in
 // place rather than cascade-deleted: that's a much bigger, separate data-
 // retention decision than "revoke this account's access."
 router.delete('/users/:id', async (req, res) => {
@@ -198,50 +201,10 @@ router.delete('/users/:id', async (req, res) => {
 });
 
 // ── Content moderation ─────────────────────────────────────────────────────────────
-// Reviews and vendor photos both carry a real `status`/flag column, but
-// nothing upstream lets a couple or vendor report content yet — so these
-// queues are real queries that will legitimately stay empty until that
-// reporting entry point is built. Not fabricated data.
-
-router.get('/moderation/reviews', async (req, res) => {
-  try {
-    const reviews = await Review.findAll({ where: { status: 'flagged' }, order: [['created_at', 'DESC']] });
-    const vendorIds = [...new Set(reviews.map((r) => r.vendor_id))];
-    const vendors = await Vendor.findAll({ where: { vendor_id: { [Op.in]: vendorIds } } });
-    const vendorById = new Map(vendors.map((v) => [v.vendor_id, v]));
-
-    res.json({
-      reviews: reviews.map((r) => ({
-        review_id: r.review_id,
-        vendor_name: vendorById.get(r.vendor_id)?.business_name ?? 'Unknown vendor',
-        rating: r.rating,
-        text: r.body,
-        flag_reason: r.flag_reason ?? 'Reported',
-      })),
-    });
-  } catch (err) {
-    console.error('Flagged reviews error:', err.message);
-    res.status(500).json({ error: 'Could not load flagged reviews.' });
-  }
-});
-
-router.patch('/moderation/reviews/:id', async (req, res) => {
-  try {
-    const { action } = req.body;
-    if (!['approve', 'reject'].includes(action)) {
-      return res.status(400).json({ error: 'action must be "approve" or "reject".' });
-    }
-    const review = await Review.findByPk(req.params.id);
-    if (!review) return res.status(404).json({ error: 'Review not found.' });
-
-    review.status = action === 'approve' ? 'approved' : 'rejected';
-    await review.save();
-    res.json({ review_id: review.review_id, status: review.status });
-  } catch (err) {
-    console.error('Moderate review error:', err.message);
-    res.status(500).json({ error: 'Could not update review.' });
-  }
-});
+// Vendor photos carry a real `status`/flag column, but nothing upstream lets
+// a couple report one yet — so that queue is a real query that will
+// legitimately stay empty until that reporting entry point is built. Not
+// fabricated data.
 
 router.get('/moderation/images', async (req, res) => {
   try {
@@ -288,6 +251,63 @@ router.patch('/moderation/images/:id', async (req, res) => {
 // returning a real empty list rather than fabricating flagged messages.
 router.get('/moderation/messages', async (req, res) => {
   res.json({ messages: [] });
+});
+
+// Vendor feedback is private (never shown to other couples), but admins can
+// read all of it for quality-control/policy enforcement — this is the real
+// data source behind the "Feedback" moderation tab, populated as soon as
+// couples start submitting rather than waiting on a report-content flow that
+// can't exist here (other couples never see feedback, so they can't report it).
+router.get('/feedback', async (req, res) => {
+  try {
+    const feedbackRows = await VendorFeedback.findAll({ order: [['created_at', 'DESC']], limit: 200 });
+    const vendorIds = [...new Set(feedbackRows.map((f) => f.vendor_id))];
+    const coupleIds = [...new Set(feedbackRows.map((f) => f.couple_user_id))];
+    const [vendors, couples] = await Promise.all([
+      Vendor.findAll({ where: { vendor_id: { [Op.in]: vendorIds } } }),
+      User.findAll({ where: { user_id: { [Op.in]: coupleIds } } }),
+    ]);
+    const vendorById = new Map(vendors.map((v) => [v.vendor_id, v]));
+    const coupleById = new Map(couples.map((u) => [u.user_id, u]));
+
+    res.json({
+      feedback: feedbackRows.map((f) => ({
+        feedback_id: f.feedback_id,
+        vendor_id: f.vendor_id,
+        vendor_name: vendorById.get(f.vendor_id)?.business_name ?? 'Unknown vendor',
+        couple_name: coupleById.get(f.couple_user_id)?.name ?? 'Unknown couple',
+        star_rating: f.star_rating,
+        comment: f.comment,
+        is_flagged: f.is_flagged,
+        flag_reason: f.flag_reason,
+        created_at: f.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error('List feedback error:', err.message);
+    res.status(500).json({ error: 'Could not load feedback.' });
+  }
+});
+
+router.post('/feedback/:feedbackId/flag', async (req, res) => {
+  try {
+    const { flagged, reason } = req.body;
+    if (typeof flagged !== 'boolean') {
+      return res.status(400).json({ error: 'flagged must be a boolean.' });
+    }
+    const feedback = await VendorFeedback.findByPk(req.params.feedbackId);
+    if (!feedback) return res.status(404).json({ error: 'Feedback not found.' });
+
+    feedback.is_flagged = flagged;
+    feedback.flag_reason = flagged ? (reason || 'Policy violation') : null;
+    await feedback.save();
+    // Flagged feedback is excluded from the vendor's CRS calculation.
+    await recalculateVendorStats(feedback.vendor_id);
+    res.json({ feedback_id: feedback.feedback_id, is_flagged: feedback.is_flagged });
+  } catch (err) {
+    console.error('Flag feedback error:', err.message);
+    res.status(500).json({ error: 'Could not update feedback.' });
+  }
 });
 
 // ── Platform analytics ────────────────────────────────────────────────────────────

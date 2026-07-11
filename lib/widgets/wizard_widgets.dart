@@ -34,17 +34,18 @@ class WizardHeader extends StatelessWidget {
               Row(
                 children: [
                   if (onBack != null)
-                    GestureDetector(
-                      onTap: onBack,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(30),
-                          shape: BoxShape.circle,
+                    Material(
+                      color: Colors.white.withAlpha(30),
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: onBack,
+                        child: const SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: Icon(Icons.chevron_left_rounded,
+                              color: Colors.white, size: 22),
                         ),
-                        child: const Icon(Icons.chevron_left_rounded,
-                            color: Colors.white, size: 22),
                       ),
                     )
                   else

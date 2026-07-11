@@ -10,7 +10,8 @@ require('./db/models/task');
 require('./db/models/vendor');
 require('./db/models/vendorService');
 require('./db/models/vendorMedia');
-require('./db/models/review');
+require('./db/models/vendorFeedback');
+require('./db/models/vendorStats');
 require('./db/models/inquiry');
 require('./db/models/savedVendor');
 require('./db/models/budget');
@@ -80,6 +81,16 @@ const geminiModel = genAI.getGenerativeModel({
   },
 });
 
+// Both endpoints ask for JSON in the prompt itself and extract the first
+// {...} span from the response text.
+async function askGemini(prompt) {
+  const result = await geminiModel.generateContent(prompt);
+  const text = result.response.text();
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  return JSON.parse(text.substring(start, end + 1));
+}
+
 // ── POST /api/wedding-plan ────────────────────────────────────────────────────
 app.post('/api/wedding-plan', async (req, res) => {
   const {
@@ -138,11 +149,7 @@ Rules:
 `;
 
   try {
-    const result = await geminiModel.generateContent(prompt);
-    const text = result.response.text();
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    const json = JSON.parse(text.substring(start, end + 1));
+    const json = await askGemini(prompt);
     res.json(json);
   } catch (err) {
     console.error('Gemini error:', err.message);
@@ -152,7 +159,12 @@ Rules:
 
 // ── POST /api/vendor-match ────────────────────────────────────────────────────
 app.post('/api/vendor-match', async (req, res) => {
-  const { budgetClass = 'flexible', location = null, styles = [], categories = {}, categoryBudgets = {} } = req.body;
+  const {
+    budgetClass = 'flexible', location = null, styles = [], categories = {}, categoryBudgets = {},
+    specialRequests = null,
+  } = req.body;
+
+  const trimmedRequest = typeof specialRequests === 'string' ? specialRequests.trim() : '';
 
   const prompt = `
 You're vetting vendors for a client. Couple context:
@@ -161,14 +173,31 @@ You're vetting vendors for a client. Couple context:
 - Style preferences: ${styles.length ? styles.join(', ') : 'Not specified'}
 - Allocated budget per category (their money, in local currency; a category absent here has no known cap):
 ${JSON.stringify(categoryBudgets, null, 2)}
+- Free-text note the couple typed in an "anything else we should know?" box: ${trimmedRequest ? `"${trimmedRequest}"` : 'Not provided'}
+
+${trimmedRequest ? `Before using that note, judge it for yourself: is it actually a real, wedding-relevant
+preference or requirement (e.g. a dietary need, a setting/venue preference, an accessibility need, a
+cultural/religious requirement, a style detail)? If it's gibberish, spam, off-topic, or otherwise not a
+genuine wedding-planning instruction, reject it outright — do not reference it anywhere in your reasoning
+and do not let it influence any pick. If it is genuine, then for each category below decide independently
+whether that specific note actually applies to that category's vendors (e.g. "need halal catering" applies
+to Catering, not to DJ & MC; "prefer garden settings" applies to Venue and maybe Decor & flowers, not to
+Photography). Only where it genuinely applies: let it inform which candidate you pick for that category
+(prefer a candidate whose profile/style tags/description are consistent with the request when candidates
+are otherwise close), and add a 5th reasoning step for that category only (see format below). Never claim
+the couple asked for something they didn't, and never bend a category's pick toward an irrelevant note.` : ''}
 
 For each category below, you are given a pre-filtered candidate list. Each candidate already
 passed eligibility rules and has three precomputed 0-1 signal scores: reputationScore (rating/
-reviews/track record), locationScore (proximity to the couple), valueScore (price fit for their
-budget class). Treat these scores as inputs, not the final word — weigh them against style tag
-overlap with the couple's preferences and each vendor's profile the way a seasoned planner would
-weigh a shortlist against a client's brief, including trade-offs (e.g. a slightly lower-rated
-vendor whose style is a much better fit). Then commit to the single best vendor per category.
+reviews/track record), locationScore (proximity to the couple — this is HIGH PRIORITY: treat it as
+at least as important as reputation or price, and strongly prefer a nearby candidate over a
+similarly-qualified one further away), valueScore (price fit for their budget class). Treat these
+scores as inputs, not the final word — weigh them against style tag overlap with the couple's
+preferences and each vendor's profile the way a seasoned planner would weigh a shortlist against a
+client's brief, including trade-offs (e.g. a slightly lower-rated vendor whose style is a much
+better fit). Only pick a candidate with a low locationScore as your primary recommendation when no
+comparable nearby candidate exists in that category. Then commit to the single best vendor per
+category.
 
 Each candidate also has an isBookedOnWeddingDate flag: true means that vendor already has a
 confirmed booking on the couple's wedding date (they blocked that date on their calendar) and is
@@ -183,11 +212,19 @@ the couple's entered budget for that category if a candidate that fits exists. I
 that category is priced beyond the allocated amount (their money is simply too low for what's
 available), you must still pick the closest/cheapest candidate rather than returning nothing.
 
-Candidates by category (JSON):
+CANDIDATE_VENDORS — the only real, verified vendors you may recommend or discuss, grouped by
+category (JSON):
 ${JSON.stringify(categories, null, 2)}
 
-Instead of one run-on explanation, break your justification for each pick into exactly these four
-named, ordered steps (like a planner walking through their checklist one line at a time):
+You may only recommend a vendor whose vendorId appears in CANDIDATE_VENDORS for that exact
+category. Every vendorId, businessName, price, rating, review count, style tag, and availability
+flag you reference must be copied exactly, character-for-character, from this data — never invent,
+alter, round, guess, or "helpfully" improve any of these values, and never reference a vendor that
+isn't in this list. If you are ever unsure whether a value came from CANDIDATE_VENDORS, do not
+state it.
+
+Instead of one run-on explanation, break your justification for each pick into named, ordered steps
+(like a planner walking through their checklist one line at a time). Always include these four:
 1. "Budget fit" — state whether the price fits the couple's allocated budget for this category. If
    it doesn't fit (or no budget was given), say so plainly and, if it doesn't fit, offer one simple,
    concrete way to still move forward (e.g. negotiate a smaller/custom package, trim scope or guest
@@ -196,9 +233,19 @@ named, ordered steps (like a planner walking through their checklist one line at
 2. "Availability" — state whether isBookedOnWeddingDate is true or false for the picked vendor. If
    true, say plainly that they already appear booked on the couple's date and that the couple should
    confirm availability before committing, or consider a backup.
-3. "Style match" — 1 short sentence on style-tag/location fit with the couple's preferences.
+3. "Style match" — 2 short sentences. First, state proximity plainly and explicitly: if locationScore
+   is high, say this vendor was prioritized for being near the couple (name their location if given);
+   if locationScore is low, say plainly that they're further away and that this weighed against them.
+   Then, 1 sentence on style-tag fit with the couple's preferences.
 4. "Verdict" — 1 short sentence final call, read like a planner's professional judgement, not a
    restatement of the numeric scores.
+
+Then, ONLY for a category where you judged the couple's free-text note (above) to be both genuine and
+actually applicable to that category, append a 5th step:
+5. "Special request" — 1 short sentence starting with "You mentioned..." or "As you requested...",
+   naming the specific thing the couple asked for and stating plainly how this vendor does or doesn't
+   meet it. Omit this step entirely for every category the note doesn't genuinely apply to, and omit it
+   everywhere if the note was rejected as not wedding-relevant.
 
 Respond ONLY with valid JSON in this exact shape:
 {
@@ -210,24 +257,27 @@ Respond ONLY with valid JSON in this exact shape:
         { "label": "Budget fit", "text": "..." },
         { "label": "Availability", "text": "..." },
         { "label": "Style match", "text": "..." },
-        { "label": "Verdict", "text": "..." }
+        { "label": "Verdict", "text": "..." },
+        { "label": "Special request", "text": "..." }
       ]
     }
   }
 }
 
 Rules:
-- Return exactly one entry per category key given above, using a vendorId from that category's candidate list.
+- Return exactly one entry per category key given above. vendorId MUST be copied verbatim from that
+  exact category's list in CANDIDATE_VENDORS — never a vendorId from a different category, never a
+  vendorId you constructed or modified, never a placeholder.
 - confidence reflects how strongly you recommend this vendor to this couple specifically.
-- reasoningSteps must always have exactly these 4 labels in this order, each one short, specific sentence — no generic filler.
+- reasoningSteps must always include the 4 required labels in order, each one short, specific sentence — no generic filler. Only add the 5th "Special request" step where it genuinely applies, per the rule above.
+- Never invent facts — no prices, ratings, review counts, styles, or availability beyond what's given
+  in CANDIDATE_VENDORS. Ground every claim only in that data, plus the couple's own free-text note
+  where genuinely applicable. This is your single source of truth — treat anything not present in it
+  as unknown, not as something you can estimate or fill in.
 `;
 
   try {
-    const result = await geminiModel.generateContent(prompt);
-    const text = result.response.text();
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    const json = JSON.parse(text.substring(start, end + 1));
+    const json = await askGemini(prompt);
     res.json(json);
   } catch (err) {
     console.error('Gemini error:', err.message);

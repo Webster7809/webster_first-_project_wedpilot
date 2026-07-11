@@ -40,6 +40,23 @@ const Inquiry = sequelize.define('Inquiry', {
     type: DataTypes.DATE,
     allowNull: true,
   },
+  decline_reason: {
+    type: DataTypes.STRING(300),
+    allowNull: true,
+  },
+  service_done_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  rating_reminder_count: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+  },
+  rating_reminder_last_sent_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
 }, {
   tableName: 'inquiries',
   createdAt: 'created_at',

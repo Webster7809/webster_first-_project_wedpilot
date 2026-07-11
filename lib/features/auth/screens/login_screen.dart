@@ -96,8 +96,13 @@ class _HeroSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: isDesktop ? 220 : 280,
+    // ConstrainedBox gives a minHeight (the original fixed design height) as
+    // a floor, not a ceiling — the content Column below is the Stack's only
+    // non-positioned child, so at large accessibility text-scale settings the
+    // Stack (and the decorative background/circles filling it) grow to match
+    // instead of the text overflowing a hard-capped SizedBox.
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: isDesktop ? 220 : 280),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -118,30 +123,30 @@ class _HeroSection extends StatelessWidget {
             left: -20,
             child: _Circle(size: 120, color: Colors.white.withAlpha(8)),
           ),
-          Positioned.fill(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: AppColors.amber,
-                          borderRadius: BorderRadius.circular(13),
-                        ),
-                        child: const Icon(
-                          Icons.favorite,
-                          color: Colors.white,
-                          size: 24,
-                        ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: AppColors.amber,
+                        borderRadius: BorderRadius.circular(13),
                       ),
-                      const SizedBox(width: 12),
-                      Text(
+                      child: const Icon(
+                        Icons.favorite,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Text(
                         'WedPilot',
                         style: GoogleFonts.playfairDisplay(
                           fontSize: 22,
@@ -149,30 +154,30 @@ class _HeroSection extends StatelessWidget {
                           color: Colors.white,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-                  Text(
-                    'WELCOME BACK',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.amber,
-                      letterSpacing: 1.5,
                     ),
+                  ],
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  'WELCOME BACK',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.amber,
+                    letterSpacing: 1.5,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Continue planning\nyour perfect day',
-                    style: GoogleFonts.playfairDisplay(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      height: 1.2,
-                    ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Continue planning\nyour perfect day',
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    height: 1.2,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
@@ -267,14 +272,21 @@ class _FormCard extends StatelessWidget {
 
             Align(
               alignment: Alignment.centerRight,
-              child: GestureDetector(
-                onTap: () => context.push('/forgot-password'),
-                child: Text(
-                  'Forgot password?',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.amber,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => context.push('/forgot-password'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                    child: Text(
+                      'Forgot password?',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.amber,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -292,24 +304,31 @@ class _FormCard extends StatelessWidget {
             const SizedBox(height: 32),
 
             Center(
-              child: GestureDetector(
-                onTap: () => context.go('/register'),
-                child: RichText(
-                  text: TextSpan(
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                    children: const [
-                      TextSpan(text: 'New to WedPilot? '),
-                      TextSpan(
-                        text: 'Create an account',
-                        style: TextStyle(
-                          color: AppColors.amber,
-                          fontWeight: FontWeight.w600,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => context.go('/register'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                    child: RichText(
+                      text: TextSpan(
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: AppColors.textSecondary,
                         ),
+                        children: const [
+                          TextSpan(text: 'New to WedPilot? '),
+                          TextSpan(
+                            text: 'Create an account',
+                            style: TextStyle(
+                              color: AppColors.amber,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),

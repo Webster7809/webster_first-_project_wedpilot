@@ -72,6 +72,9 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
   ];
   final Set<String> _selectedStyles = {};
 
+  // Step 3 — Anything else
+  final _specialRequestsCtrl = TextEditingController();
+
   // AI plan results for step 4
   WeddingPlanResult? _aiPlanResult;
   bool _aiPlanLoading = false;
@@ -99,6 +102,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     _guestsCtrl.dispose();
     _locationCtrl.dispose();
     _customCategoryCtrl.dispose();
+    _specialRequestsCtrl.dispose();
     super.dispose();
   }
 
@@ -133,8 +137,22 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     setState(() => _customCategories.remove(category));
   }
 
+  double? _parsedBudget() => double.tryParse(
+        _budgetCtrl.text.replaceAll(',', '').replaceAll(' ', ''),
+      );
+
   void _next() {
     if (_step == 0) {
+      final budget = _parsedBudget();
+      if (budget == null || budget <= 0) {
+        showWedSnackBar(
+          context,
+          "You haven't entered a wedding budget yet — WedPilot AI can't match "
+          'vendors until it knows how much you intend to spend. Please add an amount.',
+          type: SnackType.error,
+        );
+        return;
+      }
       ref.read(selectedServiceCategoriesProvider.notifier).state =
           _activeCategories();
       ref.read(wizardLocationProvider.notifier).state = _locationCtrl.text
@@ -169,21 +187,31 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
   }
 
   void _createPlan() {
+    final totalBudget = _parsedBudget() ?? 0;
+    if (totalBudget <= 0) {
+      showWedSnackBar(
+        context,
+        "You haven't entered a wedding budget yet — WedPilot AI can't match "
+        'vendors until it knows how much you intend to spend. Please add an amount.',
+        type: SnackType.error,
+      );
+      setState(() => _step = 0);
+      return;
+    }
     unawaited(_saveProfile());
     final categories = _activeCategories();
     ref.read(selectedServiceCategoriesProvider.notifier).state = categories;
     ref.read(wizardLocationProvider.notifier).state = _locationCtrl.text.trim();
     ref.read(wizardStylesProvider.notifier).state = _selectedStyles.toList();
+    ref.read(wizardSpecialRequestsProvider.notifier).state =
+        _specialRequestsCtrl.text.trim().isEmpty
+            ? null
+            : _specialRequestsCtrl.text.trim();
     ref.read(budgetClassProvider.notifier).state = switch (_weddingClass) {
       'Low class' => BudgetClass.budgetFriendly,
       'High class' => BudgetClass.highClass,
       _ => BudgetClass.flexible,
     };
-    final totalBudget =
-        double.tryParse(
-          _budgetCtrl.text.replaceAll(',', '').replaceAll(' ', ''),
-        ) ??
-        0;
     ref
         .read(budgetProvider.notifier)
         .loadBudget(
@@ -379,30 +407,34 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           runSpacing: 8,
           children: _vendorCategories.keys.map((cat) {
             final selected = _vendorCategories[cat]!;
-            return GestureDetector(
-              onTap: () => setState(() => _vendorCategories[cat] = !selected),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? AppColors.amber.withAlpha(30)
-                      : AppColors.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: selected ? AppColors.amber : AppColors.divider,
-                    width: selected ? 1.5 : 1,
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => setState(() => _vendorCategories[cat] = !selected),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
                   ),
-                ),
-                child: Text(
-                  cat,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                    color: selected ? AppColors.amber : AppColors.textSecondary,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppColors.amber.withAlpha(30)
+                        : AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: selected ? AppColors.amber : AppColors.divider,
+                      width: selected ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Text(
+                    cat,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      color: selected ? AppColors.amber : AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -428,21 +460,33 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      cat,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.forestGreen,
+                    Flexible(
+                      child: Text(
+                        cat,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.forestGreen,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () => _removeCustomCategory(cat),
-                      child: const Icon(
-                        Icons.close_rounded,
-                        size: 14,
-                        color: AppColors.forestGreen,
+                    Material(
+                      color: Colors.transparent,
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => _removeCustomCategory(cat),
+                        child: const Padding(
+                          padding: EdgeInsets.all(3),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 14,
+                            color: AppColors.forestGreen,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -493,16 +537,17 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _addCustomCategory,
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.forestGreen,
-                  borderRadius: BorderRadius.circular(10),
+            Material(
+              color: AppColors.forestGreen,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: _addCustomCategory,
+                child: const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(Icons.add_rounded, color: Colors.white),
                 ),
-                child: const Icon(Icons.add_rounded, color: Colors.white),
               ),
             ),
           ],
@@ -531,7 +576,11 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           label: 'Select your wedding date',
         ),
         const SizedBox(height: 16),
-        GestureDetector(
+        Material(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+          borderRadius: BorderRadius.circular(14),
           onTap: () async {
             final picked = await showDatePicker(
               context: context,
@@ -554,7 +603,6 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.surface,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: _weddingDate != null
@@ -590,6 +638,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
               ],
             ),
           ),
+          ),
         ),
         const SizedBox(height: 32),
         WizardContinueButton(onPressed: _next, label: 'Continue'),
@@ -615,33 +664,37 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           runSpacing: 10,
           children: _styleOptions.map((style) {
             final selected = _selectedStyles.contains(style);
-            return GestureDetector(
-              onTap: () => setState(() {
-                if (selected) {
-                  _selectedStyles.remove(style);
-                } else {
-                  _selectedStyles.add(style);
-                }
-              }),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: selected ? AppColors.forestGreen : AppColors.surface,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: selected ? AppColors.forestGreen : AppColors.divider,
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: () => setState(() {
+                  if (selected) {
+                    _selectedStyles.remove(style);
+                  } else {
+                    _selectedStyles.add(style);
+                  }
+                }),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
                   ),
-                ),
-                child: Text(
-                  style,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: selected ? Colors.white : AppColors.textPrimary,
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.forestGreen : AppColors.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: selected ? AppColors.forestGreen : AppColors.divider,
+                    ),
+                  ),
+                  child: Text(
+                    style,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: selected ? Colors.white : AppColors.textPrimary,
+                    ),
                   ),
                 ),
               ),
@@ -668,6 +721,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         ),
         const SizedBox(height: 20),
         TextFormField(
+          controller: _specialRequestsCtrl,
           maxLines: 5,
           decoration: InputDecoration(
             hintText:
@@ -766,7 +820,8 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          'WedPilot AI checks availability and ranks every vendor near you to pick the best match for each category.',
+          'WedPilot AI prioritizes vendors near you for each category. If a vendor further away fits '
+          'your budget better than anything close by, it\'s shown too so you can compare.',
           style: AppTextStyles.bodySmall.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -774,16 +829,23 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         const SizedBox(height: 14),
         aiAsync.when(
           loading: () => const _AiRankingCard(),
-          error: (e, st) => Text(
-            "Couldn't reach WedPilot AI right now. Add vendors yourself below.",
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
+          error: (e, st) => e is NoBudgetSetException
+              ? _NoBudgetCard(onEnterBudget: () => setState(() => _step = 0))
+              : Text(
+                  "Couldn't reach WedPilot AI right now. Add vendors yourself below.",
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
           data: (matches) {
             final bestByCategory = <String, VendorMatch>{};
+            final budgetAlternateByCategory = <String, VendorMatch>{};
             for (final m in matches) {
-              if (m.rankInCategory == 1) bestByCategory[m.vendor.category] = m;
+              if (m.kind == VendorMatchKind.budgetAlternate) {
+                budgetAlternateByCategory[m.vendor.category] = m;
+              } else if (m.rankInCategory == 1) {
+                bestByCategory[m.vendor.category] = m;
+              }
             }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -807,6 +869,10 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                         color: AppColors.textSecondary,
                       ),
                     ),
+                  if (budgetAlternateByCategory[category] != null) ...[
+                    const SizedBox(height: 10),
+                    _PlanVendorCard(match: budgetAlternateByCategory[category]),
+                  ],
                   for (final v in customVendors.where(
                     (v) => v.category == category,
                   )) ...[
@@ -1009,6 +1075,66 @@ class _AiRankingCardState extends State<_AiRankingCard>
   }
 }
 
+// ── No-budget notice — blocks AI vendor matching until one is entered ──────
+
+class _NoBudgetCard extends StatelessWidget {
+  final VoidCallback onEnterBudget;
+
+  const _NoBudgetCard({required this.onEnterBudget});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.amber.withAlpha(20),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.amber.withAlpha(80)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.savings_outlined,
+                color: AppColors.amber,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "You haven't entered a wedding budget yet",
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "WedPilot AI won't recommend or rank any vendor until it knows how "
+            "much you intend to spend — price is part of every match it makes. "
+            'Please go back and add your total budget.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          WedButton(
+            label: 'Enter your budget',
+            onPressed: onEnterBudget,
+            width: 200,
+            height: 40,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Plan vendor card — AI pick or couple-added, with contact details ───────
 
 class _PlanVendorCard extends StatelessWidget {
@@ -1023,6 +1149,8 @@ class _PlanVendorCard extends StatelessWidget {
     this.onRemove,
     this.overrideReasoning,
   }) : assert(match != null || vendor != null);
+
+  bool get _isBudgetAlternate => match?.kind == VendorMatchKind.budgetAlternate;
 
   VendorProfile get _vendor => match?.vendor ?? vendor!;
 
@@ -1060,11 +1188,20 @@ class _PlanVendorCard extends StatelessWidget {
                 ),
               ),
               _Badge(
-                label: isCustom ? 'Added by you' : 'AI top pick',
-                color: isCustom ? AppColors.amber : AppColors.success,
+                label: isCustom
+                    ? 'Added by you'
+                    : _isBudgetAlternate
+                        ? 'Fits budget, not near you'
+                        : 'AI top pick',
+                color: isCustom
+                    ? AppColors.amber
+                    : _isBudgetAlternate
+                        ? AppColors.info
+                        : AppColors.success,
               ),
               if (isCustom && onRemove != null)
                 IconButton(
+                  tooltip: 'Remove',
                   onPressed: onRemove,
                   icon: const Icon(
                     Icons.delete_outline_rounded,
@@ -1182,6 +1319,7 @@ IconData _reasoningStepIcon(String label) => switch (label) {
   ReasoningStep.availability => Icons.event_available_outlined,
   ReasoningStep.styleMatch => Icons.palette_outlined,
   ReasoningStep.verdict => Icons.auto_awesome_rounded,
+  ReasoningStep.specialRequest => Icons.record_voice_over_outlined,
   _ => Icons.auto_awesome_rounded,
 };
 
@@ -1231,7 +1369,17 @@ class _ContactChip extends StatelessWidget {
       ],
     );
     if (onTap == null) return child;
-    return GestureDetector(onTap: onTap, child: child);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: child,
+        ),
+      ),
+    );
   }
 }
 
@@ -1548,29 +1696,33 @@ class _TypePills extends StatelessWidget {
         return Expanded(
           child: Padding(
             padding: EdgeInsets.only(right: opt != options.last ? 8 : 0),
-            child: GestureDetector(
-              onTap: () => onChanged(opt),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppColors.forestGreen : AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.forestGreen
-                        : AppColors.divider,
-                    width: isSelected ? 1.5 : 1,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => onChanged(opt),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.forestGreen : AppColors.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.forestGreen
+                          : AppColors.divider,
+                      width: isSelected ? 1.5 : 1,
+                    ),
                   ),
-                ),
-                child: Text(
-                  opt,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                  child: Text(
+                    opt,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
               ),
             ),
@@ -1603,7 +1755,10 @@ class _WeddingClassCards extends StatelessWidget {
         return Expanded(
           child: Padding(
             padding: EdgeInsets.only(right: label != classes.last.$1 ? 8 : 0),
-            child: GestureDetector(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+              borderRadius: BorderRadius.circular(12),
               onTap: () => onChanged(label),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
@@ -1664,6 +1819,7 @@ class _WeddingClassCards extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
               ),
             ),
           ),

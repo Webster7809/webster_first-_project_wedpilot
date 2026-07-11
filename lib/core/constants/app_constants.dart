@@ -68,7 +68,6 @@ class AppConstants {
   static const int refreshTokenExpiryDays = 30;
   static const int maxPortfolioImages = 50;
   static const int maxPortfolioVideos = 5;
-  static const int maxReviewPhotos = 5;
   static const int maxFileUploadMB = 10;
   static const int rsvpReminderCooldownSeconds = 60;
 }

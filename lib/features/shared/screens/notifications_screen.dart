@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/router/app_routes.dart';
 import '../../../core/services/notification_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -8,6 +10,10 @@ import '../../../models/notification_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/notification_provider.dart';
 import '../../../widgets/wed_snack_bar.dart';
+
+// Notification types that deep-link somewhere beyond just marking read —
+// everything else keeps the original mark-read-only tap behavior.
+const _kDeepLinkTypes = {'rate_vendor', 'booking_accepted', 'booking_declined'};
 
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
@@ -20,6 +26,12 @@ class NotificationsScreen extends ConsumerWidget {
         return (Icons.account_balance_wallet_outlined, AppColors.warning, AppColors.warningBg);
       case 'vendor_verification':
         return (Icons.verified_user_outlined, AppColors.success, AppColors.successBg);
+      case 'booking_accepted':
+        return (Icons.event_available_outlined, AppColors.success, AppColors.successBg);
+      case 'booking_declined':
+        return (Icons.event_busy_outlined, AppColors.warning, AppColors.warningBg);
+      case 'rate_vendor':
+        return (Icons.star_outline_rounded, AppColors.amber, AppColors.adminAmberBg);
       default:
         return (Icons.notifications_outlined, AppColors.amber, AppColors.adminAmberBg);
     }
@@ -33,6 +45,20 @@ class NotificationsScreen extends ConsumerWidget {
       ref.invalidate(notificationsProvider);
     } on NotificationApiException catch (e) {
       if (context.mounted) showWedSnackBar(context, e.message, type: SnackType.error);
+    }
+  }
+
+  Future<void> _handleTap(WidgetRef ref, BuildContext context, NotificationModel n) async {
+    if (!n.isRead) await _markRead(ref, context, n.id);
+    if (!context.mounted) return;
+    switch (n.type) {
+      case 'rate_vendor':
+        context.push(AppRoutes.coupleFeedbackNew, extra: n.entityId);
+        break;
+      case 'booking_accepted':
+      case 'booking_declined':
+        if (n.entityId != null) context.push('/couple/vendors/${n.entityId}');
+        break;
     }
   }
 
@@ -119,10 +145,14 @@ class NotificationsScreen extends ConsumerWidget {
                   ),
                   itemBuilder: (_, i) {
                     final n = notifications[i];
+                    final deepLinks = _kDeepLinkTypes.contains(n.type);
+                    final onTap = deepLinks
+                        ? () => _handleTap(ref, context, n)
+                        : (n.isRead ? null : () => _markRead(ref, context, n.id));
                     return _NotificationTile(
                       notification: n,
                       presentation: _presentation(n.type),
-                      onTap: n.isRead ? null : () => _markRead(ref, context, n.id),
+                      onTap: onTap,
                     );
                   },
                 ),

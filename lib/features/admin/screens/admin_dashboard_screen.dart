@@ -110,9 +110,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           invitationsSentThisWeek: 0,
         );
     final pendingVendors = ref.watch(adminPendingVendorsProvider).valueOrNull ?? [];
-    final flaggedReviews = ref.watch(adminFlaggedReviewsProvider).valueOrNull ?? [];
+    final flaggedFeedback =
+        (ref.watch(adminFeedbackProvider).valueOrNull ?? []).where((f) => f.isFlagged).toList();
     final flaggedImages = ref.watch(adminFlaggedImagesProvider).valueOrNull ?? [];
-    final totalFlaggedItems = flaggedReviews.length + flaggedImages.length;
+    final totalFlaggedItems = flaggedFeedback.length + flaggedImages.length;
     final isWide = MediaQuery.sizeOf(context).width >= AppDimensions.tabletMin;
     final filteredVendors = _filtered(pendingVendors);
 
@@ -170,11 +171,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             const SizedBox(width: 4),
           ] else
             IconButton(
+              tooltip: 'Search',
               icon: const Icon(Icons.search_rounded,
                   color: AppColors.textPrimary, size: 22),
               onPressed: () => _showMobileSearch(context),
             ),
           IconButton(
+            tooltip: 'Notifications',
             icon: const Icon(Icons.notifications_outlined,
                 color: AppColors.textPrimary, size: 22),
             onPressed: () => context.push(AppRoutes.notifications),
@@ -392,6 +395,7 @@ class _VendorSearchDelegate extends SearchDelegate<String> {
   List<Widget> buildActions(BuildContext context) => [
         if (query.isNotEmpty)
           IconButton(
+            tooltip: 'Clear search',
             icon: const Icon(Icons.clear),
             onPressed: () => query = '',
           ),
@@ -399,6 +403,7 @@ class _VendorSearchDelegate extends SearchDelegate<String> {
 
   @override
   Widget buildLeading(BuildContext context) => IconButton(
+        tooltip: 'Back',
         icon: const Icon(Icons.arrow_back),
         onPressed: () => close(context, ''),
       );
@@ -472,15 +477,19 @@ class _KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: AppShadows.sm,
+      ),
+      child: Material(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: AppShadows.sm,
-        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -528,6 +537,8 @@ class _KpiCard extends StatelessWidget {
             ),
           ],
         ),
+        ),
+        ),
       ),
     );
   }
@@ -563,15 +574,22 @@ class _FlaggedContentBanner extends StatelessWidget {
               ),
             ),
           ),
-          GestureDetector(
-            onTap: onReview,
-            child: Text(
-              'Review now',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.error,
-                fontWeight: FontWeight.w700,
-                decoration: TextDecoration.underline,
-                decorationColor: AppColors.error,
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: onReview,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Text(
+                  'Review now',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w700,
+                    decoration: TextDecoration.underline,
+                    decorationColor: AppColors.error,
+                  ),
+                ),
               ),
             ),
           ),
@@ -616,13 +634,20 @@ class _RecentSignupsPanel extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                GestureDetector(
-                  onTap: onViewAll,
-                  child: Text(
-                    'View all',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.amber,
-                      fontWeight: FontWeight.w600,
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: onViewAll,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      child: Text(
+                        'View all',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.amber,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -868,6 +893,8 @@ class _VerificationQueuePanel extends StatelessWidget {
                                   color: AppColors.textPrimary,
                                   fontWeight: FontWeight.w700,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 2),
                               Text(
@@ -875,36 +902,40 @@ class _VerificationQueuePanel extends StatelessWidget {
                                 style: AppTextStyles.caption.copyWith(
                                   color: AppColors.textSecondary,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () => onApprove(v.id),
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: const BoxDecoration(
-                              color: AppColors.adminGreenBg,
-                              shape: BoxShape.circle,
+                        Material(
+                          color: AppColors.adminGreenBg,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () => onApprove(v.id),
+                            child: const SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: Icon(Icons.check_rounded,
+                                  size: 16, color: AppColors.adminGreen),
                             ),
-                            child: const Icon(Icons.check_rounded,
-                                size: 16, color: AppColors.adminGreen),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () => onReject(v.id),
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: const BoxDecoration(
-                              color: AppColors.adminRedBg,
-                              shape: BoxShape.circle,
+                        Material(
+                          color: AppColors.adminRedBg,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () => onReject(v.id),
+                            child: const SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: Icon(Icons.close_rounded,
+                                  size: 16, color: AppColors.error),
                             ),
-                            child: const Icon(Icons.close_rounded,
-                                size: 16, color: AppColors.error),
                           ),
                         ),
                       ],

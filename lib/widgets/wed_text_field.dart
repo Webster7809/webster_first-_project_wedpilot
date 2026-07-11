@@ -96,6 +96,7 @@ class _WedTextFieldState extends State<WedTextField> {
         suffixIcon: widget.isPassword
             ? IconButton(
                 iconSize: 18,
+                tooltip: _obscure ? 'Show password' : 'Hide password',
                 icon: Icon(
                   _obscure
                       ? Icons.visibility_off_outlined

@@ -34,6 +34,10 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final availableWidth = MediaQuery.of(context).size.width - 48;
+    final primaryBtnWidth = availableWidth < 260 ? availableWidth : 260.0;
+    final secondaryBtnWidth = availableWidth < 220 ? availableWidth : 220.0;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Verify Email')),
@@ -58,7 +62,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
             const SizedBox(height: 40),
             WedButton(
               label: "I've Verified — Continue",
-              width: 260,
+              width: primaryBtnWidth,
               onPressed: () {
                 final role = ref.read(authProvider).user?.role;
                 if (role == UserRole.couple) {
@@ -71,7 +75,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
             const SizedBox(height: 12),
             WedButton(
               label: _canResend ? 'Resend Email' : 'Resend in ${_countdown}s',
-              width: 220,
+              width: secondaryBtnWidth,
               onPressed: _canResend ? () {
                 setState(() { _countdown = 60; _canResend = false; });
                 _startCountdown();

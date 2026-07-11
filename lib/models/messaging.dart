@@ -14,6 +14,10 @@ class Inquiry {
   final DateTime? weddingDate;
   final String message;
   final DateTime? respondedAt;
+  final String? declineReason;
+  final DateTime? serviceDoneAt;
+  final int ratingReminderCount;
+  final bool hasFeedback;
   final DateTime createdAt;
 
   const Inquiry({
@@ -28,6 +32,10 @@ class Inquiry {
     this.weddingDate,
     required this.message,
     this.respondedAt,
+    this.declineReason,
+    this.serviceDoneAt,
+    this.ratingReminderCount = 0,
+    this.hasFeedback = false,
     required this.createdAt,
   });
 
@@ -47,6 +55,12 @@ class Inquiry {
         respondedAt: json['responded_at'] != null
             ? DateTime.parse(json['responded_at'] as String)
             : null,
+        declineReason: json['decline_reason'] as String?,
+        serviceDoneAt: json['service_done_at'] != null
+            ? DateTime.parse(json['service_done_at'] as String)
+            : null,
+        ratingReminderCount: json['rating_reminder_count'] as int? ?? 0,
+        hasFeedback: json['has_feedback'] as bool? ?? false,
         createdAt: DateTime.parse(json['created_at'] as String),
       );
 
@@ -62,6 +76,10 @@ class Inquiry {
         'wedding_date': weddingDate?.toIso8601String(),
         'message': message,
         'responded_at': respondedAt?.toIso8601String(),
+        'decline_reason': declineReason,
+        'service_done_at': serviceDoneAt?.toIso8601String(),
+        'rating_reminder_count': ratingReminderCount,
+        'has_feedback': hasFeedback,
         'created_at': createdAt.toIso8601String(),
       };
 }

@@ -58,8 +58,8 @@ class _CoupleNavBar extends StatelessWidget {
           child: Row(
             children: [
               ShellNavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home', index: 0, currentIndex: currentIndex, onTap: onTap),
-              ShellNavItem(icon: Icons.search_outlined, activeIcon: Icons.search_rounded, label: 'Vendors', index: 1, currentIndex: currentIndex, onTap: onTap),
-              ShellNavItem(icon: Icons.credit_card_outlined, activeIcon: Icons.credit_card_rounded, label: 'Budget', index: 2, currentIndex: currentIndex, onTap: onTap),
+              ShellNavItem(icon: Icons.storefront_outlined, activeIcon: Icons.storefront_rounded, label: 'Vendors', index: 1, currentIndex: currentIndex, onTap: onTap),
+              ShellNavItem(icon: Icons.account_balance_wallet_outlined, activeIcon: Icons.account_balance_wallet_rounded, label: 'Budget', index: 2, currentIndex: currentIndex, onTap: onTap),
               ShellNavItem(icon: Icons.mail_outline_rounded, activeIcon: Icons.mail_rounded, label: 'Invite', index: 3, currentIndex: currentIndex, onTap: onTap),
               ShellNavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: 'Profile', index: 4, currentIndex: currentIndex, onTap: onTap),
             ],

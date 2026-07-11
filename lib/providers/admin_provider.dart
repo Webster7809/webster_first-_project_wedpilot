@@ -32,10 +32,10 @@ final adminUsersProvider = FutureProvider<List<AdminUser>>((ref) async {
   return AdminApiService.instance.fetchUsers(token);
 });
 
-final adminFlaggedReviewsProvider = FutureProvider<List<FlaggedReview>>((ref) async {
+final adminFeedbackProvider = FutureProvider<List<AdminVendorFeedback>>((ref) async {
   final token = _token(ref);
   if (token == null) return [];
-  return AdminApiService.instance.fetchFlaggedReviews(token);
+  return AdminApiService.instance.fetchAllFeedback(token);
 });
 
 final adminFlaggedImagesProvider = FutureProvider<List<FlaggedImage>>((ref) async {

@@ -4,6 +4,7 @@ import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/messaging.dart';
+import '../../../models/vendor_feedback.dart';
 import '../../../providers/vendor_own_provider.dart';
 import '../../../widgets/wed_card.dart';
 
@@ -30,7 +31,7 @@ class VendorAnalyticsScreen extends ConsumerWidget {
         error: (message) => Center(
           child: Text(message, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
         ),
-        data: (data) => _AnalyticsBody(inquiries: data.inquiries, reviews: data.reviews),
+        data: (data) => _AnalyticsBody(inquiries: data.inquiries, feedback: data.feedback),
       ),
     );
   }
@@ -38,9 +39,9 @@ class VendorAnalyticsScreen extends ConsumerWidget {
 
 class _AnalyticsBody extends ConsumerWidget {
   final List<Inquiry> inquiries;
-  final List<dynamic> reviews;
+  final List<VendorFeedback> feedback;
 
-  const _AnalyticsBody({required this.inquiries, required this.reviews});
+  const _AnalyticsBody({required this.inquiries, required this.feedback});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -57,9 +58,9 @@ class _AnalyticsBody extends ConsumerWidget {
     final responseRate = inquiryCount == 0
         ? '—'
         : '${((respondedCount / inquiryCount) * 100).toStringAsFixed(0)}%';
-    final avgRating = reviews.isEmpty
+    final avgRating = feedback.isEmpty
         ? '—'
-        : (reviews.fold(0.0, (s, dynamic r) => s + (r.rating as num)) / reviews.length)
+        : (feedback.fold(0.0, (s, f) => s + f.starRating) / feedback.length)
             .toStringAsFixed(1);
 
     return ListView(
@@ -138,9 +139,15 @@ class _AnalyticsBody extends ConsumerWidget {
                 data: (revenue) => Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _RevenueItem(label: 'This Month', value: _fmt(revenue.thisMonth)),
-                    _RevenueItem(label: 'Last Month', value: _fmt(revenue.lastMonth)),
-                    _RevenueItem(label: 'YTD', value: _fmt(revenue.yearToDate)),
+                    Expanded(
+                      child: _RevenueItem(label: 'This Month', value: _fmt(revenue.thisMonth)),
+                    ),
+                    Expanded(
+                      child: _RevenueItem(label: 'Last Month', value: _fmt(revenue.lastMonth)),
+                    ),
+                    Expanded(
+                      child: _RevenueItem(label: 'YTD', value: _fmt(revenue.yearToDate)),
+                    ),
                   ],
                 ),
               ),
@@ -261,8 +268,13 @@ class _RevenueItem extends StatelessWidget {
       children: [
         Text(value,
             style: AppTextStyles.headlineSmall
-                .copyWith(color: AppColors.forestGreen)),
-        Text(label, style: AppTextStyles.caption),
+                .copyWith(color: AppColors.forestGreen),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis),
+        Text(label,
+            style: AppTextStyles.caption,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis),
       ],
     );
   }

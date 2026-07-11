@@ -411,23 +411,23 @@ class _RangeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color:
-              selected ? AppColors.adminIndigo : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.caption.copyWith(
-            color:
-                selected ? Colors.white : AppColors.textSecondary,
-            fontWeight:
-                selected ? FontWeight.w700 : FontWeight.normal,
+    return Material(
+      color: selected ? AppColors.adminIndigo : Colors.transparent,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Padding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color:
+                  selected ? Colors.white : AppColors.textSecondary,
+              fontWeight:
+                  selected ? FontWeight.w700 : FontWeight.normal,
+            ),
           ),
         ),
       ),

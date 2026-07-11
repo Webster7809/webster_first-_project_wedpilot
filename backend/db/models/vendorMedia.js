@@ -36,7 +36,7 @@ const VendorMedia = sequelize.define('VendorMedia', {
   },
   // No report/flag-content UI exists yet for couples or vendors to flag a
   // photo — so this queue is real but will legitimately stay empty until
-  // that reporting entry point is built (same pattern as Review.status).
+  // that reporting entry point is built.
   status: {
     type: DataTypes.ENUM('active', 'flagged', 'removed'),
     allowNull: false,

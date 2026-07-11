@@ -286,12 +286,16 @@ class _VerificationCardState extends State<_VerificationCard> {
                         v.name,
                         style: AppTextStyles.titleMedium
                             .copyWith(fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
                       Text(
                         '${v.category} · Submitted ${fmtRelativeTime(v.submittedAt)}',
                         style: AppTextStyles.caption
                             .copyWith(color: AppColors.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -327,30 +331,39 @@ class _VerificationCardState extends State<_VerificationCard> {
                     v.location ?? 'No location provided',
                     style: AppTextStyles.bodySmall
                         .copyWith(color: AppColors.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                GestureDetector(
-                  onTap: () =>
-                      setState(() => _expanded = !_expanded),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _expanded ? 'Hide details' : 'View details',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.adminIndigo,
-                          fontWeight: FontWeight.w600,
-                        ),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () =>
+                        setState(() => _expanded = !_expanded),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _expanded ? 'Hide details' : 'View details',
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.adminIndigo,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(
+                            _expanded
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.keyboard_arrow_down_rounded,
+                            size: 16,
+                            color: AppColors.adminIndigo,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 2),
-                      Icon(
-                        _expanded
-                            ? Icons.keyboard_arrow_up_rounded
-                            : Icons.keyboard_arrow_down_rounded,
-                        size: 16,
-                        color: AppColors.adminIndigo,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],
@@ -427,6 +440,8 @@ class _DetailRow extends StatelessWidget {
             text,
             style: AppTextStyles.bodySmall
                 .copyWith(color: AppColors.textPrimary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],

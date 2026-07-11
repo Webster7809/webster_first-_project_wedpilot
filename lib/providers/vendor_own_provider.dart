@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/vendor_profile.dart';
 import '../models/messaging.dart';
-import '../models/review.dart';
+import '../models/vendor_feedback.dart';
 import '../core/services/vendor_api_service.dart';
 import '../core/state/resource.dart';
 import 'auth_provider.dart';
@@ -15,7 +15,7 @@ class VendorOwnState {
   final List<VendorService> services;
   final List<VendorMedia> media;
   final List<Inquiry> inquiries;
-  final List<Review> reviews;
+  final List<VendorFeedback> feedback;
   final Set<DateTime> blockedDates;
   final bool notificationsEnabled;
   final bool isSaving;
@@ -25,7 +25,7 @@ class VendorOwnState {
     this.services = const [],
     this.media = const [],
     this.inquiries = const [],
-    this.reviews = const [],
+    this.feedback = const [],
     this.blockedDates = const {},
     this.notificationsEnabled = true,
     this.isSaving = false,
@@ -36,7 +36,7 @@ class VendorOwnState {
     List<VendorService>? services,
     List<VendorMedia>? media,
     List<Inquiry>? inquiries,
-    List<Review>? reviews,
+    List<VendorFeedback>? feedback,
     Set<DateTime>? blockedDates,
     bool? notificationsEnabled,
     bool? isSaving,
@@ -45,7 +45,7 @@ class VendorOwnState {
         services: services ?? this.services,
         media: media ?? this.media,
         inquiries: inquiries ?? this.inquiries,
-        reviews: reviews ?? this.reviews,
+        feedback: feedback ?? this.feedback,
         blockedDates: blockedDates ?? this.blockedDates,
         notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
         isSaving: isSaving ?? this.isSaving,
@@ -90,14 +90,14 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       }
       final results = await Future.wait([
         _service.fetchMyInquiries(token),
-        _service.fetchMyReviews(token),
+        _service.fetchVendorFeedback(token, profile.id),
       ]);
       final data = VendorOwnState(
         profile: profile,
         services: profile.services,
         media: profile.media,
         inquiries: results[0] as List<Inquiry>,
-        reviews: results[1] as List<Review>,
+        feedback: results[1] as List<VendorFeedback>,
         blockedDates: _parseBlockedDates(profile.blockedDates),
       );
       _ref.read(authProvider.notifier).setVendorProfile(profile);
@@ -399,13 +399,42 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
 
   // ── Inquiries ──────────────────────────────────────────────────────────────
 
-  Future<String?> markInquiryStatus(String id, InquiryStatus status) async {
+  Future<String?> markInquiryStatus(
+    String id,
+    InquiryStatus status, {
+    String? declineReason,
+  }) async {
     final token = _token;
     if (token == null) return 'Not signed in.';
     final current = state.data;
     if (current == null) return 'No vendor profile yet.';
     try {
-      final updated = await _service.updateInquiryStatus(token, id, status.name);
+      final updated = await _service.updateInquiryStatus(
+        token,
+        id,
+        status.name,
+        declineReason: declineReason,
+      );
+      state = state.copyWith(
+        data: current.copyWith(
+          inquiries: current.inquiries.map((i) => i.id == id ? updated : i).toList(),
+        ),
+      );
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+  }
+
+  Future<String?> markServiceDone(String id) async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    final current = state.data;
+    if (current == null) return 'No vendor profile yet.';
+    try {
+      final updated = await _service.markServiceDone(token, id);
       state = state.copyWith(
         data: current.copyWith(
           inquiries: current.inquiries.map((i) => i.id == id ? updated : i).toList(),
@@ -443,8 +472,8 @@ final vendorInquiriesProvider = Provider<List<Inquiry>>(
   (ref) => ref.watch(vendorOwnProvider).data?.inquiries ?? [],
 );
 
-final vendorReviewsProvider = Provider<List<Review>>(
-  (ref) => ref.watch(vendorOwnProvider).data?.reviews ?? [],
+final vendorFeedbackProvider = Provider<List<VendorFeedback>>(
+  (ref) => ref.watch(vendorOwnProvider).data?.feedback ?? [],
 );
 
 final vendorBlockedDatesProvider = Provider<Set<DateTime>>(

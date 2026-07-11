@@ -395,18 +395,25 @@ class _InvitationEditorScreenState
                 const SizedBox(height: 20),
                 Divider(color: theme.dividerColor, height: 1),
                 const SizedBox(height: 16),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pop(sheetCtx);
-                    setState(() {
-                      _backgroundImageBytes = null;
-                      _backgroundImageUrl = null;
-                    });
-                  },
-                  child: Text(
-                    'Remove Photo',
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: AppColors.error,
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      setState(() {
+                        _backgroundImageBytes = null;
+                        _backgroundImageUrl = null;
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Text(
+                        'Remove Photo',
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: AppColors.error,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -426,27 +433,35 @@ class _InvitationEditorScreenState
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 64, height: 64,
-            decoration: BoxDecoration(
-              color: color.withAlpha(23),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 28),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: color.withAlpha(23),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 28),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -457,19 +472,22 @@ class _InvitationEditorScreenState
     return AppBar(
       leading: Padding(
         padding: const EdgeInsets.all(10),
-        child: GestureDetector(
-          onTap: () {
-            _saveEdits();
-            Navigator.maybePop(context);
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.divider, width: 1.5),
-              color: Colors.white,
+        child: Material(
+          shape: const CircleBorder(
+            side: BorderSide(color: AppColors.divider, width: 1.5),
+          ),
+          color: Colors.white,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              _saveEdits();
+              Navigator.maybePop(context);
+            },
+            child: const Padding(
+              padding: EdgeInsets.all(8),
+              child: Icon(Icons.chevron_left_rounded,
+                  color: AppColors.textPrimary, size: 20),
             ),
-            child: const Icon(Icons.chevron_left_rounded,
-                color: AppColors.textPrimary, size: 20),
           ),
         ),
       ),
@@ -706,7 +724,11 @@ class _InvitationEditorScreenState
         for (var i = 0; i < tabs.length; i++) ...[
           if (i > 0) const SizedBox(width: 8),
           Expanded(
-            child: GestureDetector(
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+              borderRadius: BorderRadius.circular(12),
               onTap: () => setState(() => _selectedTab = i),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
@@ -747,6 +769,7 @@ class _InvitationEditorScreenState
                     ),
                   ],
                 ),
+              ),
               ),
             ),
           ),
@@ -888,17 +911,24 @@ class _InvitationEditorScreenState
                               color: theme.colorScheme.onSurface
                                   .withAlpha(102))),
                       if (_imageOffset != Offset.zero || _imageScale != 1.0)
-                        GestureDetector(
-                          onTap: () => setState(() {
-                            _imageOffset = Offset.zero;
-                            _imageScale = 1.0;
-                          }),
-                          child: Text(
-                            'Reset Position',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: _accentColor,
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () => setState(() {
+                              _imageOffset = Offset.zero;
+                              _imageScale = 1.0;
+                            }),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              child: Text(
+                                'Reset Position',
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: _accentColor,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -921,33 +951,37 @@ class _InvitationEditorScreenState
               ),
             ),
             const SizedBox(height: 16),
-            GestureDetector(
-              onTap: () => setState(() {
-                      _backgroundImageBytes = null;
-                      _backgroundImageUrl = null;
-                    }),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withAlpha(13),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.error.withAlpha(77)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.delete_outline_rounded,
-                        color: AppColors.error, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Remove Photo',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.error,
+            Material(
+              color: AppColors.error.withAlpha(13),
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => setState(() {
+                  _backgroundImageBytes = null;
+                  _backgroundImageUrl = null;
+                }),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.error.withAlpha(77)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.delete_outline_rounded,
+                          color: AppColors.error, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Remove Photo',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.error,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -986,7 +1020,11 @@ class _InvitationEditorScreenState
               for (final clr in _cardThemeColors)
                 Expanded(
                   child: Center(
-                    child: GestureDetector(
+                    child: Material(
+                      color: Colors.transparent,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                      customBorder: const CircleBorder(),
                       onTap: () => setState(() => _cardBgColor = clr),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
@@ -1015,6 +1053,7 @@ class _InvitationEditorScreenState
                             ? const Icon(Icons.check_rounded,
                                 color: Colors.white, size: 18)
                             : null,
+                      ),
                       ),
                     ),
                   ),
@@ -1218,6 +1257,7 @@ class _InvitationEditorScreenState
                 Row(
                   children: [
                     IconButton(
+                      tooltip: 'Decrease font size',
                       icon: Icon(
                         Icons.remove_circle_outline_rounded,
                         color: _fontSize > 18
@@ -1257,6 +1297,7 @@ class _InvitationEditorScreenState
                       ),
                     ),
                     IconButton(
+                      tooltip: 'Increase font size',
                       icon: Icon(
                         Icons.add_circle_outline_rounded,
                         color: _fontSize < 48
@@ -1336,19 +1377,22 @@ class _InvitationEditorScreenState
           ],
 
           // Custom colour picker
-          GestureDetector(
-            onTap: () => _openCustomColorPicker(
-                context, _accentColor, (c) => setState(() => _accentColor = c)),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  vertical: 14, horizontal: 16),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: theme.dividerColor, width: 1.5),
-              ),
-              child: Row(
+          Material(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _openCustomColorPicker(
+                  context, _accentColor, (c) => setState(() => _accentColor = c)),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    vertical: 14, horizontal: 16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: theme.dividerColor, width: 1.5),
+                ),
+                child: Row(
                 children: [
                   Container(
                     width: 36, height: 36,
@@ -1397,6 +1441,7 @@ class _InvitationEditorScreenState
                       color: theme.colorScheme.onSurface
                           .withAlpha(102)),
                 ],
+              ),
               ),
             ),
           ),
@@ -2110,7 +2155,11 @@ class _FontCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final catColor = _categoryColor(font.category);
-    return GestureDetector(
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+      borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
@@ -2186,6 +2235,7 @@ class _FontCard extends StatelessWidget {
           ],
         ),
       ),
+      ),
     );
   }
 }
@@ -2225,7 +2275,10 @@ class _ColorCategoryRow extends StatelessWidget {
             final selected =
                 selectedColor.toARGB32() == swatch.color.toARGB32();
             return Expanded(
-              child: GestureDetector(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                borderRadius: BorderRadius.circular(30),
                 onTap: () => onColorSelect(swatch.color),
                 child: Column(
                   children: [
@@ -2273,6 +2326,7 @@ class _ColorCategoryRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
+                ),
                 ),
               ),
             );

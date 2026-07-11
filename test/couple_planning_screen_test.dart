@@ -24,7 +24,7 @@ final _fakeVendors = [
     tier: VendorTier.pro,
     verificationStatus: VerificationStatus.verified,
     rating: 4.6,
-    reviewCount: 42,
+    feedbackCount: 42,
     compositeScore: 88,
   ),
   const VendorProfile(
@@ -36,7 +36,7 @@ final _fakeVendors = [
     tier: VendorTier.free,
     verificationStatus: VerificationStatus.verified,
     rating: 4.2,
-    reviewCount: 27,
+    feedbackCount: 27,
     compositeScore: 75,
   ),
 ];

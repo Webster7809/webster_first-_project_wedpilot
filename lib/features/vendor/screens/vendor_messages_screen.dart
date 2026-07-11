@@ -64,10 +64,20 @@ class VendorMessagesScreen extends ConsumerWidget {
                 leading: WedAvatar(imageUrl: conv.coupleAvatarUrl, name: name, radius: 24),
                 title: Text(name,
                     style: AppTextStyles.titleMedium
-                        .copyWith(color: AppColors.forestGreen)),
-                subtitle: Text(conv.lastMessageText ?? '',
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textSecondary),
+                        .copyWith(color: AppColors.forestGreen),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                subtitle: Text(
+                    conv.lastMessageText?.isNotEmpty == true
+                        ? conv.lastMessageText!
+                        : 'No messages yet — tap to start chatting',
+                    style: AppTextStyles.bodySmall.copyWith(
+                        color: conv.lastMessageText?.isNotEmpty == true
+                            ? AppColors.textSecondary
+                            : AppColors.textHint,
+                        fontStyle: conv.lastMessageText?.isNotEmpty == true
+                            ? FontStyle.normal
+                            : FontStyle.italic),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
                 trailing: conv.unreadCount > 0

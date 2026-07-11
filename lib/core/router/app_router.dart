@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
 import '../../features/auth/screens/forgot_password_screen.dart';
+import '../../features/auth/screens/reset_password_screen.dart';
 import '../../features/auth/screens/email_verify_screen.dart';
 import '../../features/auth/screens/couple_planning_screen.dart';
 import '../../features/auth/screens/vendor_onboarding_screen.dart';
@@ -17,7 +18,8 @@ import '../../features/couple/screens/wishlist_screen.dart';
 import '../../features/couple/screens/couple_messages_screen.dart';
 import '../../features/couple/screens/chat_screen.dart';
 import '../../features/couple/screens/planning_checklist_screen.dart';
-import '../../features/couple/screens/review_submission_screen.dart';
+import '../../features/couple/screens/feedback_submission_screen.dart';
+import '../../features/couple/screens/my_bookings_screen.dart';
 import '../../features/vendor/screens/vendor_dashboard_screen.dart';
 import '../../features/vendor/screens/vendor_listings_screen.dart';
 import '../../features/vendor/screens/vendor_profile_management_screen.dart';
@@ -26,7 +28,7 @@ import '../../features/vendor/screens/lead_inbox_screen.dart';
 import '../../features/vendor/screens/vendor_analytics_screen.dart';
 import '../../features/vendor/screens/subscription_screen.dart';
 import '../../features/vendor/screens/vendor_messages_screen.dart';
-import '../../features/vendor/screens/vendor_reviews_screen.dart';
+import '../../features/vendor/screens/vendor_feedback_screen.dart';
 import '../../features/admin/screens/admin_dashboard_screen.dart';
 import '../../features/admin/screens/admin_categories_screen.dart';
 import '../../features/admin/screens/admin_invitation_templates_screen.dart';
@@ -77,8 +79,17 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       final isAuthScreen = AppRoutes.authScreens.contains(loc);
       final isPublicInvite = loc.startsWith('/i/') || loc.startsWith('/g/');
+      // Reset-password links are token-identified, not session-identified —
+      // they must work whether or not the clicking device happens to still
+      // be logged in as someone else, so this bypasses both the "must be
+      // authenticated" and "authenticated users get bounced home" rules
+      // below (unlike login/register, which intentionally bounce).
+      final isPasswordReset = loc == AppRoutes.resetPassword;
 
-      if (!auth.isAuthenticated && !isAuthScreen && !isPublicInvite) {
+      if (!auth.isAuthenticated &&
+          !isAuthScreen &&
+          !isPublicInvite &&
+          !isPasswordReset) {
         return AppRoutes.login;
       }
 
@@ -92,7 +103,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (auth.isAuthenticated && isAuthScreen) {
         return _homeForRole(auth);
       }
-      if (auth.isAuthenticated && !isAuthScreen && !isPublicInvite) {
+      if (auth.isAuthenticated && !isAuthScreen && !isPublicInvite && !isPasswordReset) {
         if (loc.startsWith(AppRoutes.couplePrefix) && !auth.isCouple) {
           return _homeForRole(auth);
         }
@@ -117,6 +128,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.forgotPassword,
         builder: (_, _) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.resetPassword,
+        builder: (_, state) =>
+            ResetPasswordScreen(token: state.uri.queryParameters['token']),
       ),
       GoRoute(
         path: AppRoutes.verifyEmail,
@@ -204,8 +220,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const WishlistScreen(),
       ),
       GoRoute(
-        path: AppRoutes.coupleReviewNew,
-        builder: (_, _) => const ReviewSubmissionScreen(),
+        path: AppRoutes.coupleFeedbackNew,
+        builder: (_, state) =>
+            FeedbackSubmissionScreen(initialVendorId: state.extra as String?),
+      ),
+      GoRoute(
+        path: AppRoutes.coupleBookings,
+        builder: (_, _) => const MyBookingsScreen(),
       ),
 
       // ── Vendor full-screen pushes ─────────────────────────────────────────
@@ -216,6 +237,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.vendorMessages,
         builder: (_, _) => const VendorMessagesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.vendorFeedback,
+        builder: (_, _) => const VendorFeedbackScreen(),
       ),
       GoRoute(
         path: AppRoutes.vendorChat,
@@ -303,7 +328,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
 
       // ══════════════════════════════════════════════════════════════════════
-      // VENDOR SHELL — 5 tabs: Dashboard, Listings, Inquiries, Reviews, Account
+      // VENDOR SHELL — 4 tabs: Dashboard, Listings, Inquiries, Account
       // ══════════════════════════════════════════════════════════════════════
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => VendorShell(navigationShell: shell),
@@ -329,14 +354,6 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.vendorLeads,
                 builder: (_, _) => const LeadInboxScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: AppRoutes.vendorReviews,
-                builder: (_, _) => const VendorReviewsScreen(),
               ),
             ],
           ),

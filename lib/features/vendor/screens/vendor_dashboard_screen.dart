@@ -82,6 +82,7 @@ class _VendorDashboardBody extends StatelessWidget {
             automaticallyImplyLeading: false,
             actions: [
               IconButton(
+                tooltip: 'Notifications',
                 icon: const Icon(Icons.notifications_outlined,
                     color: Colors.white, size: 24),
                 onPressed: () => context.push(AppRoutes.notifications),
@@ -207,8 +208,8 @@ class _VendorDashboardBody extends StatelessWidget {
                     ),
                     _QuickAction(
                       icon: Icons.star_outline_rounded,
-                      label: 'Reviews',
-                      onTap: () => context.go(AppRoutes.vendorReviews),
+                      label: 'Feedback',
+                      onTap: () => context.go(AppRoutes.vendorFeedback),
                     ),
                     _QuickAction(
                       icon: Icons.calendar_month_outlined,

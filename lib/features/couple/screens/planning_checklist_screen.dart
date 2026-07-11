@@ -460,7 +460,9 @@ class _PhaseSectionState extends State<_PhaseSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        GestureDetector(
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
           onTap: () => setState(() => _expanded = !_expanded),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),
@@ -482,6 +484,7 @@ class _PhaseSectionState extends State<_PhaseSection> {
                 ),
               ],
             ),
+          ),
           ),
         ),
         if (_expanded)
@@ -600,7 +603,11 @@ class _TaskTile extends StatelessWidget {
             horizontal: 12,
             vertical: 2,
           ),
-          leading: GestureDetector(
+          leading: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
             onTap: onToggle,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -621,6 +628,7 @@ class _TaskTile extends StatelessWidget {
               child: item.isCompleted
                   ? const Icon(Icons.check, size: 14, color: Colors.white)
                   : null,
+            ),
             ),
           ),
           title: Text(
@@ -965,7 +973,11 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                 const SizedBox(height: 16),
 
                 // Due date picker
-                GestureDetector(
+                Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
                   onTap: _pickDate,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -1003,21 +1015,30 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                           ),
                         ),
                         if (_dueDate != null)
-                          GestureDetector(
-                            onTap: () => setState(() {
-                              _dueDate = null;
-                              _clearDue = true;
-                            }),
-                            child: Icon(
-                              Icons.close,
-                              size: 16,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withAlpha(153),
+                          Material(
+                            color: Colors.transparent,
+                            shape: const CircleBorder(),
+                            clipBehavior: Clip.antiAlias,
+                            child: InkWell(
+                              onTap: () => setState(() {
+                                _dueDate = null;
+                                _clearDue = true;
+                              }),
+                              child: Padding(
+                                padding: const EdgeInsets.all(3),
+                                child: Icon(
+                                  Icons.close,
+                                  size: 16,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface.withAlpha(153),
+                                ),
+                              ),
                             ),
                           ),
                       ],
                     ),
+                  ),
                   ),
                 ),
                 const SizedBox(height: 24),

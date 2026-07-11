@@ -197,17 +197,19 @@ class GuestRsvpNotifier extends StateNotifier<GuestRsvpState> {
     return null;
   }
 
-  Future<void> deleteGuest(String id) async {
+  /// Returns the server error message, or null on success.
+  Future<String?> deleteGuest(String id) async {
     final token = _token;
-    if (token == null) return;
+    if (token == null) return 'Please sign in to remove guests.';
     try {
       await InvitationApiService.instance.deleteGuest(token, id);
       state = state.copyWith(
         guests: state.guests.where((g) => g.id != id).toList(),
         responses: state.responses.where((r) => r.guestId != id).toList(),
       );
-    } on InvitationApiException {
-      // Leave state as-is on failure.
+      return null;
+    } on InvitationApiException catch (e) {
+      return e.message;
     }
   }
 

@@ -82,11 +82,18 @@ class CoupleMessagesScreen extends ConsumerWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        conv.lastMessageText ?? '',
+                        conv.lastMessageText?.isNotEmpty == true
+                            ? conv.lastMessageText!
+                            : 'No messages yet — tap to start chatting',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: conv.unreadCount > 0
-                              ? AppColors.textPrimary
-                              : AppColors.textSecondary,
+                          color: conv.lastMessageText?.isNotEmpty == true
+                              ? (conv.unreadCount > 0
+                                  ? AppColors.textPrimary
+                                  : AppColors.textSecondary)
+                              : AppColors.textHint,
+                          fontStyle: conv.lastMessageText?.isNotEmpty == true
+                              ? FontStyle.normal
+                              : FontStyle.italic,
                           fontWeight: conv.unreadCount > 0
                               ? FontWeight.w600
                               : FontWeight.normal,

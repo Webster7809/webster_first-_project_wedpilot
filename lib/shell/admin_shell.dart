@@ -387,35 +387,44 @@ class _SidebarItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isActive = currentIndex == index;
-    return GestureDetector(
-      onTap: () => onTap(index),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.white.withAlpha(20) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: isActive
-              ? Border(left: BorderSide(color: AppColors.amber, width: 3))
-              : null,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isActive ? AppColors.amber : Colors.white70,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onTap(index),
+        borderRadius: BorderRadius.circular(10),
+        splashColor: AppColors.amber.withAlpha(50),
+        highlightColor: AppColors.amber.withAlpha(25),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white.withAlpha(20) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: isActive
+                ? Border(left: BorderSide(color: AppColors.amber, width: 3))
+                : null,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 18,
                 color: isActive ? AppColors.amber : Colors.white70,
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                    color: isActive ? AppColors.amber : Colors.white70,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -437,20 +446,29 @@ class _SidebarRouteItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext _) {
-    return GestureDetector(
-      onTap: () => context.push(route),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: Colors.white70),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: GoogleFonts.inter(fontSize: 14, color: Colors.white70),
-            ),
-          ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.push(route),
+        borderRadius: BorderRadius.circular(10),
+        splashColor: AppColors.amber.withAlpha(50),
+        highlightColor: AppColors.amber.withAlpha(25),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: Colors.white70),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(fontSize: 14, color: Colors.white70),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -68,11 +68,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           children: [
             WedAvatar(imageUrl: otherPartyAvatarUrl, name: otherPartyName, radius: 16),
             const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(otherPartyName, style: const TextStyle(fontSize: 15)),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    otherPartyName,
+                    style: const TextStyle(fontSize: 15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -100,50 +107,63 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           const Divider(height: 1),
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.attach_file_outlined, color: AppColors.textSecondary),
-                    onPressed: () {},
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _msgCtrl,
-                      decoration: InputDecoration(
-                        hintText: 'Type a message...',
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        filled: true,
-                        fillColor: AppColors.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: AppColors.divider),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: AppColors.divider),
-                        ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isTablet = constraints.maxWidth >= 600;
+                final maxWidth = isTablet ? 500.0 : double.infinity;
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            tooltip: 'Attach file',
+                            icon: const Icon(Icons.attach_file_outlined, color: AppColors.textSecondary),
+                            onPressed: () {},
+                          ),
+                          Expanded(
+                            child: TextField(
+                              controller: _msgCtrl,
+                              decoration: InputDecoration(
+                                hintText: 'Type a message...',
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                filled: true,
+                                fillColor: AppColors.surface,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: const BorderSide(color: AppColors.divider),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: const BorderSide(color: AppColors.divider),
+                                ),
+                              ),
+                              maxLines: null,
+                              textInputAction: TextInputAction.newline,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Material(
+                            color: AppColors.secondary,
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: _send,
+                              child: const SizedBox(
+                                width: 44,
+                                height: 44,
+                                child: Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      maxLines: null,
-                      textInputAction: TextInputAction.newline,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: _send,
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.secondary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ],

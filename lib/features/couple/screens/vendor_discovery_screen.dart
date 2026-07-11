@@ -12,7 +12,8 @@ import '../../../widgets/loading_shimmer.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../core/constants/app_constants.dart';
 
-const _kAllCategories = [
+const _kCategoryTabs = [
+  kAllVendorCategories,
   'Venue',
   'Catering',
   'Photography',
@@ -37,7 +38,7 @@ class VendorDiscoveryScreen extends ConsumerStatefulWidget {
 
 class _VendorDiscoveryScreenState
     extends ConsumerState<VendorDiscoveryScreen> {
-  String _selectedCategory = 'Venue';
+  String _selectedCategory = kAllVendorCategories;
   int _filterIndex = 0;
 
   @override
@@ -143,12 +144,15 @@ class _VendorDiscoveryScreenState
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: _kAllCategories.map((cat) {
+                    children: _kCategoryTabs.map((cat) {
                       final budget = catBudgets[cat];
                       final isSelected = _selectedCategory == cat;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
-                        child: GestureDetector(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
                           onTap: () =>
                               setState(() => _selectedCategory = cat),
                           child: AnimatedContainer(
@@ -197,6 +201,7 @@ class _VendorDiscoveryScreenState
                               ],
                             ),
                           ),
+                          ),
                         ),
                       );
                     }).toList(),
@@ -217,33 +222,36 @@ class _VendorDiscoveryScreenState
                     final active = _filterIndex == i;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: GestureDetector(
-                        onTap: () => setState(() => _filterIndex = i),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
+                      child: Material(
+                        animationDuration: const Duration(milliseconds: 150),
+                        color: active
+                            ? AppColors.forestGreen
+                            : AppColors.surface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: BorderSide(
                             color: active
                                 ? AppColors.forestGreen
-                                : AppColors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: active
-                                  ? AppColors.forestGreen
-                                  : AppColors.divider,
-                            ),
+                                : AppColors.divider,
                           ),
-                          child: Text(
-                            _filterLabel(i),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: active
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                              color: active
-                                  ? Colors.white
-                                  : AppColors.textSecondary,
+                        ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () => setState(() => _filterIndex = i),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            child: Text(
+                              _filterLabel(i),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: active
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                                color: active
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                              ),
                             ),
                           ),
                         ),
@@ -261,7 +269,7 @@ class _VendorDiscoveryScreenState
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
               child: vendorAsync.when(
                 data: (vendors) => Text(
-                  '${_applyFilter(vendors).length} ${_selectedCategory.toLowerCase()} vendors'
+                  '${_applyFilter(vendors).length} ${_categoryNoun}vendors'
                   ' match your Flexible tier in $city',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.textSecondary,
@@ -317,7 +325,9 @@ class _VendorDiscoveryScreenState
                                   size: 48, color: AppColors.textHint),
                               const SizedBox(height: 12),
                               Text(
-                                'No $_selectedCategory vendors in $city yet',
+                                _selectedCategory == kAllVendorCategories
+                                    ? 'No vendors in $city yet'
+                                    : 'No $_selectedCategory vendors in $city yet',
                                 style: AppTextStyles.bodyMedium.copyWith(
                                     color: AppColors.textSecondary),
                                 textAlign: TextAlign.center,
@@ -346,10 +356,19 @@ class _VendorDiscoveryScreenState
     );
   }
 
+  /// Singular-ish noun for count text, e.g. "1 venue vendors" or, when
+  /// browsing every category at once, plain "4 vendors" instead of the
+  /// nonsensical "4 all vendors".
+  String get _categoryNoun =>
+      _selectedCategory == kAllVendorCategories ? '' : '${_selectedCategory.toLowerCase()} ';
+
   String _filterLabel(int i) {
-    final cat = _selectedCategory.toLowerCase();
+    if (i == 0) {
+      return _selectedCategory == kAllVendorCategories
+          ? 'All vendors'
+          : 'All ${_selectedCategory.toLowerCase()}s';
+    }
     return switch (i) {
-      0 => 'All ${cat}s',
       1 => 'Under 30k',
       2 => 'Verified',
       _ => _kFilters[i],
@@ -377,6 +396,9 @@ class _VendorMatchCard extends ConsumerWidget {
     final priceMin = vendor.priceMin > 0
         ? '${fmtCurrency(vendor.priceMin.round())} – ${fmtAmount(vendor.priceMax.round())}'
         : null;
+    final weddingDate = ref.watch(coupleProfileProvider)?.weddingDate;
+    final isBookedOnWeddingDate = weddingDate != null &&
+        vendor.blockedDates.contains(weddingDate.toIso8601String().split('T').first);
 
     return Container(
       decoration: BoxDecoration(
@@ -505,6 +527,14 @@ class _VendorMatchCard extends ConsumerWidget {
                         textColor: AppColors.success,
                         bgColor: AppColors.successBg,
                       ),
+                    if (isBookedOnWeddingDate)
+                      _TagChip(
+                        label: 'Booked on your date',
+                        icon: Icons.event_busy_outlined,
+                        color: AppColors.warning,
+                        textColor: AppColors.warning,
+                        bgColor: AppColors.warningBg,
+                      ),
                   ],
                 ),
 
@@ -526,6 +556,7 @@ class _VendorMatchCard extends ConsumerWidget {
                   return Row(
                     children: [
                       IconButton(
+                        tooltip: isWishlisted ? 'Remove from wishlist' : 'Add to wishlist',
                         icon: Icon(
                           isWishlisted ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                           color: isWishlisted ? AppColors.error : AppColors.textSecondary,

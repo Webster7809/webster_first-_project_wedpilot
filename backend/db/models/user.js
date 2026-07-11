@@ -39,6 +39,17 @@ const User = sequelize.define('User', {
     allowNull: false,
     defaultValue: false,
   },
+  // SHA-256 hash of the current password-reset token (never the raw token,
+  // same principle as password_hash — a DB leak shouldn't hand out usable
+  // reset credentials). Null when no reset is in flight.
+  reset_token_hash: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  reset_token_expires: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
 }, {
   tableName: 'users',
   createdAt: 'created_at',

@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:dio/dio.dart';
 
 import '../../models/vendor_profile.dart';
-import '../../models/review.dart';
+import '../../models/vendor_feedback.dart';
 import '../../models/messaging.dart' show Inquiry;
 
 // Flutter never touches the database directly.
@@ -306,15 +306,53 @@ class VendorApiService {
     }
   }
 
-  Future<Inquiry> updateInquiryStatus(String accessToken, String inquiryId, String status) async {
+  Future<Inquiry> updateInquiryStatus(
+    String accessToken,
+    String inquiryId,
+    String status, {
+    String? declineReason,
+  }) async {
     try {
       final response = await _dio.patch<Map<String, dynamic>>(
         '/api/vendors/me/inquiries/$inquiryId',
-        data: {'status': status},
+        data: {
+          'status': status,
+          'decline_reason': ?declineReason,
+        },
         options: _auth(accessToken),
       );
       final data = response.data ?? {};
       return Inquiry.fromJson(data['inquiry'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw VendorApiException(_extractError(e));
+    }
+  }
+
+  Future<Inquiry> markServiceDone(String accessToken, String inquiryId) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/vendors/me/inquiries/$inquiryId/service-done',
+        options: _auth(accessToken),
+      );
+      final data = response.data ?? {};
+      return Inquiry.fromJson(data['inquiry'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw VendorApiException(_extractError(e));
+    }
+  }
+
+  /// The couple-facing counterpart to [fetchMyInquiries] — their own sent
+  /// booking requests, with status/decline-reason/rating eligibility.
+  Future<List<Inquiry>> fetchMyBookings(String accessToken) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/vendors/inquiries/mine',
+        options: _auth(accessToken),
+      );
+      final data = response.data ?? {};
+      return (data['inquiries'] as List<dynamic>? ?? [])
+          .map((i) => Inquiry.fromJson(i as Map<String, dynamic>))
+          .toList();
     } on DioException catch (e) {
       throw VendorApiException(_extractError(e));
     }
@@ -346,54 +384,61 @@ class VendorApiService {
     }
   }
 
-  // ── Reviews ──────────────────────────────────────────────────────────────────
+  // ── Feedback (private) ──────────────────────────────────────────────────────
 
-  Future<List<Review>> fetchVendorReviews(String accessToken, String vendorId) async {
+  /// Restricted server-side to the vendor's own feedback or an admin — used
+  /// both by the vendor's private dashboard (with its own vendor id) and any
+  /// future admin drill-in.
+  Future<List<VendorFeedback>> fetchVendorFeedback(String accessToken, String vendorId) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/api/vendors/$vendorId/reviews',
+        '/api/vendors/$vendorId/feedback',
         options: _auth(accessToken),
       );
       final data = response.data ?? {};
-      return (data['reviews'] as List<dynamic>? ?? [])
-          .map((r) => Review.fromJson(r as Map<String, dynamic>))
+      return (data['feedback'] as List<dynamic>? ?? [])
+          .map((f) => VendorFeedback.fromJson(f as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
       throw VendorApiException(_extractError(e));
     }
   }
 
-  Future<List<Review>> fetchMyReviews(String accessToken) async {
+  Future<void> reportMedia(
+    String accessToken,
+    String mediaId, {
+    required String reason,
+  }) async {
     try {
-      final response = await _dio.get<Map<String, dynamic>>(
-        '/api/vendors/me/reviews',
+      await _dio.post(
+        '/api/vendors/media/$mediaId/report',
+        data: {'reason': reason},
         options: _auth(accessToken),
       );
-      final data = response.data ?? {};
-      return (data['reviews'] as List<dynamic>? ?? [])
-          .map((r) => Review.fromJson(r as Map<String, dynamic>))
-          .toList();
     } on DioException catch (e) {
       throw VendorApiException(_extractError(e));
     }
   }
 
-  Future<Review> submitReview(
+  Future<VendorFeedback> submitFeedback(
     String accessToken,
     String vendorId, {
-    required int rating,
-    required String title,
-    required String body,
-    List<String> photoUrls = const [],
+    required int starRating,
+    String? comment,
+    OnTimeAnswer? onTime,
   }) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/api/vendors/$vendorId/reviews',
-        data: {'rating': rating, 'title': title, 'body': body, 'photo_urls': photoUrls},
+        '/api/vendors/$vendorId/feedback',
+        data: {
+          'star_rating': starRating,
+          'comment': comment,
+          'on_time': onTime == null ? null : onTimeToWire(onTime),
+        },
         options: _auth(accessToken),
       );
       final data = response.data ?? {};
-      return Review.fromJson(data['review'] as Map<String, dynamic>);
+      return VendorFeedback.fromJson(data['feedback'] as Map<String, dynamic>);
     } on DioException catch (e) {
       throw VendorApiException(_extractError(e));
     }

@@ -13,13 +13,20 @@ final vendorSearchQueryProvider = StateProvider<String>((ref) => '');
 
 // ── Location-aware vendor list ──────────────────────────────────────────────
 
+/// Passing the literal 'All' skips the category filter entirely, returning
+/// every verified vendor across categories instead of just one.
+const kAllVendorCategories = 'All';
+
 final vendorListProvider = FutureProvider.family<List<VendorProfile>, String>(
   (ref, category) async {
     final token = ref.watch(authProvider.notifier).accessToken;
     if (token == null) return [];
 
     final coupleProfile = ref.watch(coupleProfileProvider);
-    final vendors = await VendorApiService.instance.fetchVendors(token, category: category);
+    final vendors = await VendorApiService.instance.fetchVendors(
+      token,
+      category: category == kAllVendorCategories ? null : category,
+    );
 
     final location = coupleProfile?.location;
     if (location == null || location.isEmpty) return vendors;

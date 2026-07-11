@@ -91,13 +91,20 @@ class _WishlistItem extends ConsumerWidget {
                 children: [
                   const Icon(Icons.star, size: 12, color: AppColors.goldPremium),
                   const SizedBox(width: 2),
-                  Text('${vendor.rating?.toStringAsFixed(1) ?? '—'} · ${vendor.location ?? ''}',
-                      style: AppTextStyles.caption),
+                  Expanded(
+                    child: Text(
+                      '${vendor.rating?.toStringAsFixed(1) ?? '—'} · ${vendor.location ?? ''}',
+                      style: AppTextStyles.caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
           trailing: IconButton(
+            tooltip: 'Remove from wishlist',
             icon: const Icon(Icons.favorite, color: AppColors.secondary),
             onPressed: onRemove,
           ),

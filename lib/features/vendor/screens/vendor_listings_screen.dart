@@ -81,63 +81,77 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
 
     return Scaffold(
       backgroundColor: AppColors.cream,
-      appBar: AppBar(
-        backgroundColor: AppColors.forestGreen,
-        automaticallyImplyLeading: false,
-        title: Text(
-          'My Listings',
-          style: AppTextStyles.headlineMedium.copyWith(color: Colors.white),
-        ),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.amber,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white.withAlpha(153),
-          labelStyle: AppTextStyles.labelLarge,
-          tabs: [
-            Tab(text: 'Services (${services.length})'),
-            Tab(text: 'Portfolio (${media.length})'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _ServicesTab(onAddService: _showAddServiceSheet),
-          _PortfolioTab(
-            onDeleteMedia: (id) async {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Remove photo'),
-                  content: const Text('Remove this photo from your portfolio?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: Text(
-                        'Remove',
-                        style: TextStyle(color: AppColors.error),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-              if (confirmed == true) {
-                final error = await ref
-                    .read(vendorOwnProvider.notifier)
-                    .deleteMedia(id);
-                if (!context.mounted) return;
-                if (error != null) {
-                  showWedSnackBar(context, error, type: SnackType.error);
-                }
-              }
-            },
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          SliverOverlapAbsorber(
+            handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+            sliver: SliverAppBar(
+              backgroundColor: AppColors.forestGreen,
+              automaticallyImplyLeading: false,
+              floating: true,
+              snap: true,
+              title: Text(
+                'My Listings',
+                style: AppTextStyles.headlineMedium.copyWith(color: Colors.white),
+              ),
+            ),
+          ),
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _TabBarHeaderDelegate(
+              TabBar(
+                controller: _tabController,
+                indicatorColor: AppColors.amber,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white.withAlpha(153),
+                labelStyle: AppTextStyles.labelLarge,
+                tabs: [
+                  Tab(text: 'Services (${services.length})'),
+                  Tab(text: 'Portfolio (${media.length})'),
+                ],
+              ),
+            ),
           ),
         ],
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            _ServicesTab(onAddService: _showAddServiceSheet),
+            _PortfolioTab(
+              onDeleteMedia: (id) async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Remove photo'),
+                    content: const Text('Remove this photo from your portfolio?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: Text(
+                          'Remove',
+                          style: TextStyle(color: AppColors.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  final error = await ref
+                      .read(vendorOwnProvider.notifier)
+                      .deleteMedia(id);
+                  if (!context.mounted) return;
+                  if (error != null) {
+                    showWedSnackBar(context, error, type: SnackType.error);
+                  }
+                }
+              },
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.amber,
@@ -166,84 +180,94 @@ class _ServicesTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final services = ref.watch(vendorServicesProvider);
 
-    if (services.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.storefront_outlined,
-                size: 64,
-                color: AppColors.forestGreen.withAlpha(80),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No services yet',
-                style: AppTextStyles.headlineSmall.copyWith(
-                  color: AppColors.forestGreen,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Tap + to add your first service package.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+    return CustomScrollView(
+      slivers: [
+        SliverOverlapInjector(
+          handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
         ),
-      );
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      itemCount: services.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final service = services[index];
-        return _ServiceCard(
-          service: service,
-          onEdit: () => onAddService(existing: service),
-          onToggleActive: () => ref
-              .read(vendorOwnProvider.notifier)
-              .toggleServiceActive(service.id),
-          onDelete: () async {
-            final confirmed = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Delete service'),
-                content: Text('Remove "${service.title}" from your listings?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Cancel'),
+        if (services.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.storefront_outlined,
+                    size: 64,
+                    color: AppColors.forestGreen.withAlpha(80),
                   ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: Text(
-                      'Delete',
-                      style: TextStyle(color: AppColors.error),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No services yet',
+                    style: AppTextStyles.headlineSmall.copyWith(
+                      color: AppColors.forestGreen,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tap + to add your first service package.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
-            );
-            if (confirmed == true) {
-              final error = await ref
-                  .read(vendorOwnProvider.notifier)
-                  .deleteService(service.id);
-              if (!context.mounted) return;
-              if (error != null) {
-                showWedSnackBar(context, error, type: SnackType.error);
-              }
-            }
-          },
-        );
-      },
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            sliver: SliverList.separated(
+              itemCount: services.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final service = services[index];
+                return _ServiceCard(
+                  service: service,
+                  onEdit: () => onAddService(existing: service),
+                  onToggleActive: () => ref
+                      .read(vendorOwnProvider.notifier)
+                      .toggleServiceActive(service.id),
+                  onDelete: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Delete service'),
+                        content: Text(
+                            'Remove "${service.title}" from your listings?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: Text(
+                              'Delete',
+                              style: TextStyle(color: AppColors.error),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      final error = await ref
+                          .read(vendorOwnProvider.notifier)
+                          .deleteService(service.id);
+                      if (!context.mounted) return;
+                      if (error != null) {
+                        showWedSnackBar(context, error, type: SnackType.error);
+                      }
+                    }
+                  },
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 }
@@ -259,57 +283,69 @@ class _PortfolioTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final media = ref.watch(vendorMediaProvider);
 
-    if (media.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.photo_library_outlined,
-                size: 64,
-                color: AppColors.forestGreen.withAlpha(80),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No portfolio photos',
-                style: AppTextStyles.headlineSmall.copyWith(
-                  color: AppColors.forestGreen,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Upload photos of your work to attract couples.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+    return CustomScrollView(
+      slivers: [
+        SliverOverlapInjector(
+          handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
         ),
-      );
-    }
-
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 6,
-        mainAxisSpacing: 6,
-        childAspectRatio: 1,
-      ),
-      itemCount: media.length,
-      itemBuilder: (context, index) {
-        final item = media[index];
-        return _PortfolioTile(
-          item: item,
-          onDelete: () => onDeleteMedia(item.id),
-          onToggleFeatured: () =>
-              ref.read(vendorOwnProvider.notifier).toggleFeaturedMedia(item.id),
-        );
-      },
+        if (media.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.photo_library_outlined,
+                    size: 64,
+                    color: AppColors.forestGreen.withAlpha(80),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No portfolio photos',
+                    style: AppTextStyles.headlineSmall.copyWith(
+                      color: AppColors.forestGreen,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Upload photos of your work to attract couples.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 6,
+                mainAxisSpacing: 6,
+                childAspectRatio: 1,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final item = media[index];
+                  return _PortfolioTile(
+                    item: item,
+                    onDelete: () => onDeleteMedia(item.id),
+                    onToggleFeatured: () => ref
+                        .read(vendorOwnProvider.notifier)
+                        .toggleFeaturedMedia(item.id),
+                  );
+                },
+                childCount: media.length,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -473,23 +509,22 @@ class _PortfolioTile extends StatelessWidget {
           Positioned(
             top: 4,
             right: 4,
-            child: GestureDetector(
-              onTap: onToggleFeatured,
-              child: Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: item.isFeatured
-                      ? AppColors.amber
-                      : Colors.black.withAlpha(80),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  item.isFeatured
-                      ? Icons.star_rounded
-                      : Icons.star_outline_rounded,
-                  size: 16,
-                  color: Colors.white,
+            child: Material(
+              color: item.isFeatured ? AppColors.amber : Colors.black.withAlpha(80),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onToggleFeatured,
+                child: SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: Icon(
+                    item.isFeatured
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -497,16 +532,17 @@ class _PortfolioTile extends StatelessWidget {
           Positioned(
             top: 4,
             left: 4,
-            child: GestureDetector(
-              onTap: onDelete,
-              child: Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: Colors.black.withAlpha(80),
-                  shape: BoxShape.circle,
+            child: Material(
+              color: Colors.black.withAlpha(80),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onDelete,
+                child: const SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: Icon(Icons.close, size: 16, color: Colors.white),
                 ),
-                child: const Icon(Icons.close, size: 16, color: Colors.white),
               ),
             ),
           ),
@@ -750,5 +786,29 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
         ),
       ),
     );
+  }
+}
+
+// ── Pinned tab bar header ────────────────────────────────────────────────────
+
+class _TabBarHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+
+  _TabBarHeaderDelegate(this.tabBar);
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return ColoredBox(color: AppColors.forestGreen, child: tabBar);
+  }
+
+  @override
+  bool shouldRebuild(covariant _TabBarHeaderDelegate oldDelegate) {
+    return tabBar != oldDelegate.tabBar;
   }
 }

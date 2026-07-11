@@ -72,6 +72,7 @@ class _VendorProfileManagementScreenState
             automaticallyImplyLeading: false,
             actions: [
               IconButton(
+                tooltip: 'Notifications',
                 icon: const Icon(
                   Icons.notifications_outlined,
                   color: Colors.white,
@@ -80,6 +81,7 @@ class _VendorProfileManagementScreenState
                 onPressed: () => context.push('/notifications'),
               ),
               IconButton(
+                tooltip: 'Log out',
                 icon: const Icon(
                   Icons.logout_rounded,
                   color: Colors.white,
@@ -141,7 +143,11 @@ class _VendorProfileManagementScreenState
                   ),
                   child: Row(
                     children: [
-                      GestureDetector(
+                      Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(16),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
                         onTap: () => _showLogoOptions(
                           context,
                           ref,
@@ -192,6 +198,7 @@ class _VendorProfileManagementScreenState
                             ),
                           ],
                         ),
+                        ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -204,6 +211,8 @@ class _VendorProfileManagementScreenState
                                 color: AppColors.forestGreen,
                                 fontWeight: FontWeight.bold,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -444,6 +453,7 @@ class _VendorProfileManagementScreenState
                   children: [
                     Text('Business logo', style: AppTextStyles.headlineSmall),
                     IconButton(
+                      tooltip: 'Close',
                       onPressed: () => Navigator.of(ctx).pop(),
                       icon: const Icon(Icons.close),
                       splashRadius: 18,

@@ -98,6 +98,31 @@ class AuthService {
     }
   }
 
+  Future<void> forgotPassword(String email) async {
+    try {
+      await _dio.post<Map<String, dynamic>>(
+        '/api/auth/forgot-password',
+        data: {'email': email},
+      );
+    } on DioException catch (e) {
+      throw AuthApiException(_extractError(e));
+    }
+  }
+
+  Future<void> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    try {
+      await _dio.post<Map<String, dynamic>>(
+        '/api/auth/reset-password',
+        data: {'token': token, 'newPassword': newPassword},
+      );
+    } on DioException catch (e) {
+      throw AuthApiException(_extractError(e));
+    }
+  }
+
   Future<AuthResult> _postAuth(String path, Map<String, dynamic> body) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(path, data: body);

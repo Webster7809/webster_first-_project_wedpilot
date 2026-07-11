@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
+import 'app_text_styles.dart';
 
 class AppTheme {
   AppTheme._();
@@ -336,81 +337,81 @@ class AppTheme {
 
   static TextTheme _buildTextTheme(Color primary, Color secondary) {
     return GoogleFonts.interTextTheme().copyWith(
-      displayLarge: GoogleFonts.playfairDisplay(
+      displayLarge: AppTextStyles.withGlyphFallback(GoogleFonts.playfairDisplay(
         fontSize: 32,
         fontWeight: FontWeight.bold,
         color: primary,
         height: 1.2,
-      ),
-      displayMedium: GoogleFonts.playfairDisplay(
+      )),
+      displayMedium: AppTextStyles.withGlyphFallback(GoogleFonts.playfairDisplay(
         fontSize: 26,
         fontWeight: FontWeight.bold,
         color: primary,
         height: 1.3,
-      ),
-      displaySmall: GoogleFonts.playfairDisplay(
+      )),
+      displaySmall: AppTextStyles.withGlyphFallback(GoogleFonts.playfairDisplay(
         fontSize: 22,
         fontWeight: FontWeight.w600,
         color: primary,
         height: 1.3,
-      ),
-      headlineLarge: GoogleFonts.playfairDisplay(
+      )),
+      headlineLarge: AppTextStyles.withGlyphFallback(GoogleFonts.playfairDisplay(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: primary,
-      ),
-      headlineMedium: GoogleFonts.inter(
+      )),
+      headlineMedium: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: primary,
-      ),
-      headlineSmall: GoogleFonts.inter(
+      )),
+      headlineSmall: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: primary,
-      ),
-      titleLarge: GoogleFonts.inter(
+      )),
+      titleLarge: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         color: primary,
-      ),
-      titleMedium: GoogleFonts.inter(
+      )),
+      titleMedium: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: primary,
-      ),
-      bodyLarge: GoogleFonts.inter(
+      )),
+      bodyLarge: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
         fontSize: 16,
         fontWeight: FontWeight.normal,
         color: primary,
-      ),
-      bodyMedium: GoogleFonts.inter(
+      )),
+      bodyMedium: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
         fontSize: 14,
         fontWeight: FontWeight.normal,
         color: primary,
-      ),
-      bodySmall: GoogleFonts.inter(
+      )),
+      bodySmall: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
         fontSize: 12,
         fontWeight: FontWeight.normal,
         color: secondary,
-      ),
-      labelLarge: GoogleFonts.inter(
+      )),
+      labelLarge: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: primary,
         letterSpacing: 0.5,
-      ),
-      labelMedium: GoogleFonts.inter(
+      )),
+      labelMedium: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: secondary,
         letterSpacing: 0.3,
-      ),
-      labelSmall: GoogleFonts.inter(
+      )),
+      labelSmall: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
         fontSize: 11,
         fontWeight: FontWeight.normal,
         color: secondary,
-      ),
+      )),
     );
   }
 }

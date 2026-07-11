@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/constants/invitation_fonts.dart';
 import '../../../core/services/invitation_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/invitation.dart';
+import '../../../widgets/wed_snack_bar.dart';
 
 class PublicInvitationScreen extends StatefulWidget {
   final String? shareToken;
@@ -31,6 +33,11 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
   AttendingStatus _attending = AttendingStatus.yes;
 
   bool get _isGuestLink => widget.inviteToken != null;
+
+  // Local-only draft storage (device-scoped), keyed by the link's token so an
+  // unfinished RSVP survives closing the tab/app before it's submitted.
+  String get _draftKey => 'rsvp_draft_${widget.inviteToken ?? widget.shareToken}';
+  Box get _draftBox => Hive.box('invitation_drafts');
 
   @override
   void initState() {
@@ -61,9 +68,28 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           _loading = false;
         });
       }
+      if (!_alreadyResponded) _loadDraft();
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _loadDraft() {
+    final draft = _draftBox.get(_draftKey) as Map?;
+    if (draft == null) return;
+    setState(() {
+      if (!_isGuestLink) {
+        final name = draft['name'] as String?;
+        if (name != null && name.isNotEmpty) _nameCtrl.text = name;
+      }
+      final email = draft['email'] as String?;
+      if (email != null) _emailCtrl.text = email;
+      final attending = draft['attending'] as String?;
+      _attending = AttendingStatus.values.firstWhere(
+        (s) => s.name == attending,
+        orElse: () => _attending,
+      );
+    });
   }
 
   @override
@@ -92,6 +118,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           guestCount: 1,
         );
       }
+      await _draftBox.delete(_draftKey);
       if (mounted) setState(() { _submitting = false; _submitted = true; });
     } on InvitationApiException catch (e) {
       if (!mounted) return;
@@ -179,6 +206,26 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
     return value != null ? Color(value) : AppColors.amber;
   }
 
+  // Splits "Chanda & Mwila" into two gold names joined by a white "&", to
+  // match the couple's card design. Falls back to a single-color name when
+  // the text doesn't contain a clean "&" separator.
+  Widget _buildCoupleName(String coupleName, TextStyle nameStyle) {
+    final parts = coupleName.split('&');
+    if (parts.length != 2 || parts.any((p) => p.trim().isEmpty)) {
+      return Text(coupleName, style: nameStyle, textAlign: TextAlign.center);
+    }
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: parts[0].trim(), style: nameStyle),
+          TextSpan(text: ' & ', style: nameStyle.copyWith(color: Colors.white)),
+          TextSpan(text: parts[1].trim(), style: nameStyle),
+        ],
+      ),
+      textAlign: TextAlign.center,
+    );
+  }
+
   // ── Dark green full-bleed header ──────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context, Map<String, dynamic> data, Color accentColor) {
@@ -217,11 +264,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 14),
-          Text(
-            coupleName,
-            style: nameStyle,
-            textAlign: TextAlign.center,
-          ),
+          _buildCoupleName(coupleName, nameStyle),
           if (date != null && date.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text(
@@ -283,6 +326,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
   Widget _buildBody(Map<String, dynamic> data, Color accentColor) {
     final venue = data['venue'] as String?;
     final dressCode = data['dressCode'] as String?;
+    final parking = data['parking'] as String?;
     final receptionVenue = data['receptionVenue'] as String?;
     final rsvpBy = data['rsvpBy'] as String?;
 
@@ -297,6 +341,10 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           ],
           if (dressCode != null && dressCode.isNotEmpty) ...[
             _InfoCard(icon: Icons.checkroom_outlined, label: 'Dress code', value: dressCode),
+            const SizedBox(height: 12),
+          ],
+          if (parking != null && parking.isNotEmpty) ...[
+            _InfoCard(icon: Icons.directions_car_outlined, label: 'Parking', value: parking),
             const SizedBox(height: 12),
           ],
           if (receptionVenue != null && receptionVenue.isNotEmpty) ...[
@@ -355,6 +403,17 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
 
   // ── Sticky bottom bar ─────────────────────────────────────────────────────
 
+  Future<void> _saveDraft(BuildContext context) async {
+    await _draftBox.put(_draftKey, {
+      'name': _nameCtrl.text.trim(),
+      'email': _emailCtrl.text.trim(),
+      'attending': _attending.name,
+    });
+    if (context.mounted) {
+      showWedSnackBar(context, 'Draft saved', type: SnackType.success);
+    }
+  }
+
   Widget _buildBottomBar(BuildContext context, Color accentColor) {
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -369,39 +428,73 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           ),
         ],
       ),
-      child: ElevatedButton(
-        onPressed: _submitting ? null : _submit,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: accentColor,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: accentColor.withAlpha(153),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-          ),
-          elevation: 0,
-        ),
-        child: _submitting
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Submit RSVP',
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.arrow_forward_rounded, size: 18),
-                ],
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _submitting ? null : () => _saveDraft(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                side: const BorderSide(color: AppColors.divider),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
               ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Save draft',
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: ElevatedButton(
+              onPressed: _submitting ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentColor,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: accentColor.withAlpha(153),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                elevation: 0,
+              ),
+              child: _submitting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Submit RSVP',
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.arrow_forward_rounded, size: 18),
+                        ],
+                      ),
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -631,29 +724,30 @@ class _Chip extends StatelessWidget {
   Widget build(BuildContext context) {
     final isSelected = status == selected;
     return Expanded(
-      child: GestureDetector(
-        onTap: () => onTap(status),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? accentColor.withAlpha(23)
-                : AppColors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected ? accentColor : AppColors.divider,
-              width: isSelected ? 1.5 : 1,
-            ),
+      child: Material(
+        animationDuration: const Duration(milliseconds: 180),
+        color: isSelected ? accentColor.withAlpha(23) : AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(
+            color: isSelected ? accentColor : AppColors.divider,
+            width: isSelected ? 1.5 : 1,
           ),
-          child: Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              color: isSelected ? accentColor : AppColors.textSecondary,
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => onTap(status),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? accentColor : AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
           ),
         ),
       ),

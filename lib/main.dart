@@ -9,6 +9,7 @@ void main() async {
   await initializeDateFormatting();
   await Hive.initFlutter();
   await Hive.openBox('app_settings');
+  await Hive.openBox('invitation_drafts');
   runApp(
     const ProviderScope(
       child: WedpilotApp(),

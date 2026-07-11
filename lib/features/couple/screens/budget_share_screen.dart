@@ -21,6 +21,7 @@ class BudgetShareScreen extends ConsumerWidget {
         appBar: AppBar(
           backgroundColor: AppColors.forestGreen,
           leading: IconButton(
+            tooltip: 'Back',
             icon: const Icon(Icons.chevron_left_rounded,
                 color: Colors.white, size: 28),
             onPressed: () => context.pop(),
@@ -55,6 +56,7 @@ class BudgetShareScreen extends ConsumerWidget {
             backgroundColor: AppColors.forestGreen,
             elevation: 0,
             leading: IconButton(
+              tooltip: 'Back',
               icon: const Icon(Icons.chevron_left_rounded,
                   color: Colors.white, size: 28),
               onPressed: () => context.pop(),
@@ -225,10 +227,15 @@ class BudgetShareScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      '$bookedCount spending · $pendingCount pending',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
+                    Expanded(
+                      child: Text(
+                        '$bookedCount spending · $pendingCount pending',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
                       ),
                     ),
                   ],

@@ -313,7 +313,10 @@ class _VendorOnboardingScreenState
           children: _categories.map((cat) {
             final (name, icon) = cat;
             final isSelected = _selectedCategory == name;
-            return GestureDetector(
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+              borderRadius: BorderRadius.circular(14),
               onTap: () => setState(() => _selectedCategory = name),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
@@ -362,6 +365,7 @@ class _VendorOnboardingScreenState
                   ],
                 ),
               ),
+              ),
             );
           }).toList(),
         ),
@@ -395,12 +399,20 @@ class _VendorOnboardingScreenState
                   ),
                 ),
                 const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: _clearCustomCategory,
-                  child: const Icon(
-                    Icons.close_rounded,
-                    size: 14,
-                    color: AppColors.forestGreen,
+                Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: _clearCustomCategory,
+                    child: const Padding(
+                      padding: EdgeInsets.all(3),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 14,
+                        color: AppColors.forestGreen,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -449,16 +461,17 @@ class _VendorOnboardingScreenState
               ),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _addCustomCategory,
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.forestGreen,
-                  borderRadius: BorderRadius.circular(10),
+            Material(
+              color: AppColors.forestGreen,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: _addCustomCategory,
+                child: const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(Icons.add_rounded, color: Colors.white),
                 ),
-                child: const Icon(Icons.add_rounded, color: Colors.white),
               ),
             ),
           ],
@@ -613,18 +626,22 @@ class _VendorOnboardingScreenState
               Expanded(
                 child: AspectRatio(
                   aspectRatio: 1,
-                  child: GestureDetector(
-                    onTap: _addGalleryPhoto,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: const Icon(
-                        Icons.add_rounded,
-                        color: AppColors.textHint,
-                        size: 28,
+                  child: Material(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: _addGalleryPhoto,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.divider),
+                        ),
+                        child: const Icon(
+                          Icons.add_rounded,
+                          color: AppColors.textHint,
+                          size: 28,
+                        ),
                       ),
                     ),
                   ),
@@ -930,19 +947,20 @@ class _RemovePhotoButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: AppColors.forestGreen.withAlpha(200),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          Icons.close_rounded,
-          size: size * 0.65,
-          color: AppColors.textOnPrimary,
+    return Material(
+      color: AppColors.forestGreen.withAlpha(200),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Icon(
+            Icons.close_rounded,
+            size: size * 0.65,
+            color: AppColors.textOnPrimary,
+          ),
         ),
       ),
     );
@@ -957,18 +975,23 @@ class _DashedUploadArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: CustomPaint(
-        painter: _DashBorderPainter(),
-        child: Container(
-          height: 116,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: AppColors.amber.withAlpha(15),
-            borderRadius: BorderRadius.circular(12),
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: CustomPaint(
+          painter: _DashBorderPainter(),
+          child: Container(
+            height: 116,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: AppColors.amber.withAlpha(15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: child,
           ),
-          child: child,
         ),
       ),
     );

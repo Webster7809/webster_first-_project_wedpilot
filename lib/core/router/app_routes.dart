@@ -3,6 +3,7 @@ class AppRoutes {
   static const login = '/login';
   static const register = '/register';
   static const forgotPassword = '/forgot-password';
+  static const resetPassword = '/reset-password';
   static const verifyEmail = '/verify-email';
   static const couplePlanning = '/couple-planning';
   static const vendorOnboarding = '/vendor-onboarding';
@@ -31,14 +32,15 @@ class AppRoutes {
   static const coupleChat = '/couple/messages/:convoId';
   static const coupleChecklist = '/couple/checklist';
   static const coupleWishlist = '/couple/wishlist';
-  static const coupleReviewNew = '/couple/reviews/new';
+  static const coupleFeedbackNew = '/couple/feedback/new';
+  static const coupleBookings = '/couple/bookings';
   static const coupleProfile = '/couple/profile';
 
   // ── Vendor ───────────────────────────────────────────────────────────────
   static const vendorDashboard = '/vendor/dashboard';
   static const vendorListings = '/vendor/listings';
   static const vendorLeads = '/vendor/leads';
-  static const vendorReviews = '/vendor/reviews';
+  static const vendorFeedback = '/vendor/feedback';
   static const vendorAccount = '/vendor/account';
   static const vendorAnalytics = '/vendor/analytics';
   static const vendorMessages = '/vendor/messages';

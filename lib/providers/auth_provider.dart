@@ -266,8 +266,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> forgotPassword(String email) async {
     state = state.copyWith(isLoading: true, error: null);
-    await Future.delayed(const Duration(milliseconds: 800));
-    state = state.copyWith(isLoading: false);
+    try {
+      await _authService.forgotPassword(email);
+      state = state.copyWith(isLoading: false);
+    } on AuthApiException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: 'Could not reach the server. Please try again.');
+    }
+  }
+
+  Future<void> resetPassword({required String token, required String newPassword}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _authService.resetPassword(token: token, newPassword: newPassword);
+      state = state.copyWith(isLoading: false);
+    } on AuthApiException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: 'Could not reach the server. Please try again.');
+    }
   }
 
   Future<void> logout() async {

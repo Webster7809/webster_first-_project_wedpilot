@@ -7,12 +7,10 @@ import 'package:dio/dio.dart';
 import '../../models/invitation.dart';
 
 const int _backendPort = 3000;
-// Set for LAN testing so a guest's own device (not this machine) can reach
-// the backend to load a shared invitation — "localhost" from their browser
-// would otherwise resolve to their own device, not this computer. Update
-// this if the computer's LAN IP changes (check with `ipconfig`).
-// ignore: unnecessary_nullable_for_final_variable_declarations
-const String? _lanHost = '192.168.69.30';
+// Set this to your machine's LAN IP (e.g. '192.168.1.20') when testing a
+// shared invitation link on a separate physical device, since 'localhost'
+// on that device would refer to itself, not this computer.
+const String? _lanHost = null;
 
 String get _baseUrl {
   if (_lanHost != null) return 'http://$_lanHost:$_backendPort';

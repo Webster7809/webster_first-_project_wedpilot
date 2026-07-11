@@ -77,12 +77,14 @@ class _HelpScreenState extends State<HelpScreen> {
               decoration: InputDecoration(
                 hintText: 'Search help topics...',
                 prefixIcon: IconButton(
+                  tooltip: 'Search',
                   onPressed: () => _searchFocus.requestFocus(),
                   icon: const Icon(Icons.search),
                   splashRadius: 20,
                 ),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
+                        tooltip: 'Clear search',
                         onPressed: () {
                           _searchCtrl.clear();
                           setState(() {});

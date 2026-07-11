@@ -218,7 +218,7 @@ class VendorPdfService {
                           fontSize: 7, color: PdfColors.white)),
                 )
               else if (v.rating != null)
-                pw.Text('${v.rating!.toStringAsFixed(1)} stars (${v.reviewCount} reviews)',
+                pw.Text('${v.rating!.toStringAsFixed(1)} stars (${v.feedbackCount} ratings)',
                     style: const pw.TextStyle(fontSize: 9, color: _grey)),
             ],
           ),

@@ -57,13 +57,13 @@ class VendorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        elevation: 2,
-        shadowColor: AppColors.cardShadow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        clipBehavior: Clip.antiAlias,
+    return Card(
+      elevation: 2,
+      shadowColor: AppColors.cardShadow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -80,21 +80,22 @@ class VendorCard extends StatelessWidget {
                 Positioned(
                   top: 8,
                   right: 8,
-                  child: GestureDetector(
-                    onTap: onWishlistToggle,
-                    child: Builder(
-                      builder: (ctx) => Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Theme.of(ctx).colorScheme.surface.withAlpha(230),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          isWishlisted ? Icons.favorite : Icons.favorite_border,
-                          color: isWishlisted
-                              ? AppColors.secondary
-                              : Theme.of(ctx).colorScheme.onSurface.withAlpha(153),
-                          size: 18,
+                  child: Builder(
+                    builder: (ctx) => Material(
+                      color: Theme.of(ctx).colorScheme.surface.withAlpha(230),
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: onWishlistToggle,
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(
+                            isWishlisted ? Icons.favorite : Icons.favorite_border,
+                            color: isWishlisted
+                                ? AppColors.secondary
+                                : Theme.of(ctx).colorScheme.onSurface.withAlpha(153),
+                            size: 18,
+                          ),
                         ),
                       ),
                     ),
@@ -205,7 +206,7 @@ class VendorCard extends StatelessWidget {
                         vendor.rating?.toStringAsFixed(1) ?? '—',
                         style: AppTextStyles.labelMedium,
                       ),
-                      Text(' (${vendor.reviewCount})',
+                      Text(' (${vendor.feedbackCount})',
                           style: AppTextStyles.caption.copyWith(
                             color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                           )),

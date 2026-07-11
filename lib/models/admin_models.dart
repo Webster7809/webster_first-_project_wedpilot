@@ -85,27 +85,42 @@ class AdminUser {
   );
 }
 
-class FlaggedReview {
+/// A couple's private vendor feedback as seen by an admin — the raw
+/// star + comment is never visible to other couples, only to the owning
+/// vendor and admins (enforced server-side).
+class AdminVendorFeedback {
   final String id;
+  final String vendorId;
   final String vendor;
+  final String coupleName;
   final int rating;
-  final String text;
-  final String flagReason;
+  final String? comment;
+  final bool isFlagged;
+  final String? flagReason;
+  final DateTime createdAt;
 
-  const FlaggedReview({
+  const AdminVendorFeedback({
     required this.id,
+    required this.vendorId,
     required this.vendor,
+    required this.coupleName,
     required this.rating,
-    required this.text,
-    required this.flagReason,
+    this.comment,
+    required this.isFlagged,
+    this.flagReason,
+    required this.createdAt,
   });
 
-  factory FlaggedReview.fromJson(Map<String, dynamic> json) => FlaggedReview(
-    id: json['review_id'] as String,
+  factory AdminVendorFeedback.fromJson(Map<String, dynamic> json) => AdminVendorFeedback(
+    id: json['feedback_id'] as String,
+    vendorId: json['vendor_id'] as String,
     vendor: json['vendor_name'] as String,
-    rating: json['rating'] as int,
-    text: json['text'] as String,
-    flagReason: json['flag_reason'] as String,
+    coupleName: json['couple_name'] as String,
+    rating: json['star_rating'] as int,
+    comment: json['comment'] as String?,
+    isFlagged: json['is_flagged'] as bool? ?? false,
+    flagReason: json['flag_reason'] as String?,
+    createdAt: DateTime.parse(json['created_at'] as String),
   );
 }
 

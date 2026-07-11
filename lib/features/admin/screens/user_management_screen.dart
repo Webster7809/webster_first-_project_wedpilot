@@ -227,6 +227,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                       color: AppColors.textHint,
                     ),
                     prefixIcon: IconButton(
+                      tooltip: 'Search',
                       onPressed: () => _searchFocus.requestFocus(),
                       icon: const Icon(
                         Icons.search,
@@ -237,6 +238,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                     ),
                     suffixIcon: _searchCtrl.text.isNotEmpty
                         ? IconButton(
+                            tooltip: 'Clear search',
                             onPressed: () {
                               _searchCtrl.clear();
                               setState(() {});
@@ -267,28 +269,27 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                       final selected = _filter == f;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
-                        child: GestureDetector(
-                          onTap: () => setState(() => _filter = f),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 7,
-                            ),
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? AppColors.adminIndigo
-                                  : AppColors.adminPage,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              f,
-                              style: AppTextStyles.caption.copyWith(
-                                color: selected
-                                    ? Colors.white
-                                    : AppColors.textSecondary,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
+                        child: Material(
+                          color: selected ? AppColors.adminIndigo : AppColors.adminPage,
+                          borderRadius: BorderRadius.circular(20),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () => setState(() => _filter = f),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 7,
+                              ),
+                              child: Text(
+                                f,
+                                style: AppTextStyles.caption.copyWith(
+                                  color: selected
+                                      ? Colors.white
+                                      : AppColors.textSecondary,
+                                  fontWeight: selected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
                               ),
                             ),
                           ),
@@ -370,6 +371,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                                       ? AppColors.textSecondary
                                       : AppColors.textPrimary,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             if (user.isSuspended)
@@ -397,6 +400,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                           style: AppTextStyles.caption.copyWith(
                             color: AppColors.textSecondary,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,

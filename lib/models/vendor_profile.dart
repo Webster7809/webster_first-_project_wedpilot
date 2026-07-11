@@ -28,8 +28,13 @@ class VendorProfile {
   final String? instagramHandle;
   final List<String> blockedDates;
   final double? rating;
-  final int reviewCount;
+  final int feedbackCount;
   final double compositeScore;
+  // ── Public CRS badges (see backend services/vendorStats.js) ──────────────
+  final double? respondsInMinutes;
+  final int weddingsCompleted;
+  final double? onTimeRate;
+  final double? recommendRate;
   final List<VendorService> services;
   final List<VendorMedia> media;
   final bool isCustomEntry;
@@ -56,8 +61,12 @@ class VendorProfile {
     this.instagramHandle,
     this.blockedDates = const [],
     this.rating,
-    this.reviewCount = 0,
+    this.feedbackCount = 0,
     this.compositeScore = 0,
+    this.respondsInMinutes,
+    this.weddingsCompleted = 0,
+    this.onTimeRate,
+    this.recommendRate,
     this.services = const [],
     this.media = const [],
     this.isCustomEntry = false,
@@ -83,8 +92,12 @@ class VendorProfile {
     String? instagramHandle,
     List<String>? blockedDates,
     double? rating,
-    int? reviewCount,
+    int? feedbackCount,
     double? compositeScore,
+    double? respondsInMinutes,
+    int? weddingsCompleted,
+    double? onTimeRate,
+    double? recommendRate,
     List<VendorService>? services,
     List<VendorMedia>? media,
     bool? isCustomEntry,
@@ -110,8 +123,12 @@ class VendorProfile {
         instagramHandle: instagramHandle ?? this.instagramHandle,
         blockedDates: blockedDates ?? this.blockedDates,
         rating: rating ?? this.rating,
-        reviewCount: reviewCount ?? this.reviewCount,
+        feedbackCount: feedbackCount ?? this.feedbackCount,
         compositeScore: compositeScore ?? this.compositeScore,
+        respondsInMinutes: respondsInMinutes ?? this.respondsInMinutes,
+        weddingsCompleted: weddingsCompleted ?? this.weddingsCompleted,
+        onTimeRate: onTimeRate ?? this.onTimeRate,
+        recommendRate: recommendRate ?? this.recommendRate,
         services: services ?? this.services,
         media: media ?? this.media,
         isCustomEntry: isCustomEntry ?? this.isCustomEntry,
@@ -126,12 +143,12 @@ class VendorProfile {
     VendorTier.free => VendorPriceTier.low,
   };
 
-  /// Composite 0–1 score combining rating, composite score, and review volume.
+  /// Composite 0–1 score combining rating, composite score, and feedback volume.
   double get performanceScore {
     final ratingNorm = (rating ?? 0) / 5.0;
     final compositeNorm = (compositeScore / 100.0).clamp(0.0, 1.0);
-    final reviewNorm = (reviewCount / 200.0).clamp(0.0, 1.0);
-    return ratingNorm * 0.5 + compositeNorm * 0.35 + reviewNorm * 0.15;
+    final feedbackNorm = (feedbackCount / 200.0).clamp(0.0, 1.0);
+    return ratingNorm * 0.5 + compositeNorm * 0.35 + feedbackNorm * 0.15;
   }
 
   double get priceMin {
@@ -166,8 +183,12 @@ class VendorProfile {
         instagramHandle: json['instagram_handle'] as String?,
         blockedDates: List<String>.from(json['blocked_dates'] ?? []),
         rating: (json['rating'] as num?)?.toDouble(),
-        reviewCount: json['review_count'] as int? ?? 0,
+        feedbackCount: json['feedback_count'] as int? ?? 0,
         compositeScore: (json['composite_score'] as num?)?.toDouble() ?? 0,
+        respondsInMinutes: (json['responds_in_minutes'] as num?)?.toDouble(),
+        weddingsCompleted: json['weddings_completed'] as int? ?? 0,
+        onTimeRate: (json['on_time_rate'] as num?)?.toDouble(),
+        recommendRate: (json['recommend_rate'] as num?)?.toDouble(),
         services: (json['services'] as List<dynamic>? ?? [])
             .map((s) => VendorService.fromJson(s as Map<String, dynamic>))
             .toList(),
@@ -199,8 +220,12 @@ class VendorProfile {
         'instagram_handle': instagramHandle,
         'blocked_dates': blockedDates,
         'rating': rating,
-        'review_count': reviewCount,
+        'feedback_count': feedbackCount,
         'composite_score': compositeScore,
+        'responds_in_minutes': respondsInMinutes,
+        'weddings_completed': weddingsCompleted,
+        'on_time_rate': onTimeRate,
+        'recommend_rate': recommendRate,
         'services': services.map((s) => s.toJson()).toList(),
         'media': media.map((m) => m.toJson()).toList(),
         'is_custom_entry': isCustomEntry,
@@ -340,7 +365,11 @@ class ReasoningStep {
   static const availability = 'Availability';
   static const styleMatch = 'Style match';
   static const verdict = 'Verdict';
-  static const knownLabels = [budgetFit, availability, styleMatch, verdict];
+  // Only present when the couple's free-text "anything else" note turned out
+  // to be genuinely applicable to this vendor — omitted entirely otherwise,
+  // rather than shown as a hollow "not applicable" line.
+  static const specialRequest = 'Special request';
+  static const knownLabels = [budgetFit, availability, styleMatch, verdict, specialRequest];
 
   factory ReasoningStep.fromJson(Map<String, dynamic> json) => ReasoningStep(
         label: json['label'] as String? ?? '',
@@ -349,6 +378,13 @@ class ReasoningStep {
 
   Map<String, dynamic> toJson() => {'label': label, 'text': text};
 }
+
+/// [VendorMatch.kind] distinguishes the AI's main per-category pick from a
+/// secondary suggestion surfaced for comparison — a [budgetAlternate] is a
+/// vendor the primary pick's location weighting passed over for being too
+/// far, but which is shown anyway because it fits the couple's budget better
+/// than anything close by, so they can weigh the trade-off themselves.
+enum VendorMatchKind { primary, budgetAlternate }
 
 class VendorMatch {
   final String vendorId;
@@ -362,6 +398,7 @@ class VendorMatch {
   final List<ReasoningStep> reasoningSteps;
   final int rankInCategory;
   final int totalInCategory;
+  final VendorMatchKind kind;
 
   const VendorMatch({
     required this.vendorId,
@@ -375,5 +412,6 @@ class VendorMatch {
     this.reasoningSteps = const [],
     required this.rankInCategory,
     required this.totalInCategory,
+    this.kind = VendorMatchKind.primary,
   });
 }

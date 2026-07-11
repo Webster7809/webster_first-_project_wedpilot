@@ -287,31 +287,40 @@ class _ThemeTile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          SegmentedButton<ThemeMode>(
-            segments: const [
-              ButtonSegment(
-                value: ThemeMode.light,
-                label: Text('Light'),
-                icon: Icon(Icons.light_mode_outlined, size: 16),
-              ),
-              ButtonSegment(
-                value: ThemeMode.system,
-                label: Text('System'),
-                icon: Icon(Icons.brightness_auto_outlined, size: 16),
-              ),
-              ButtonSegment(
-                value: ThemeMode.dark,
-                label: Text('Dark'),
-                icon: Icon(Icons.dark_mode_outlined, size: 16),
+          // SegmentedButton doesn't shrink its own intrinsic width to fit
+          // narrow screens (a known Flutter overflow case); wrapping it in
+          // Expanded forces it to size within the available width instead.
+          Row(
+            children: [
+              Expanded(
+                child: SegmentedButton<ThemeMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: ThemeMode.light,
+                      label: Text('Light'),
+                      icon: Icon(Icons.light_mode_outlined, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.system,
+                      label: Text('System'),
+                      icon: Icon(Icons.brightness_auto_outlined, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.dark,
+                      label: Text('Dark'),
+                      icon: Icon(Icons.dark_mode_outlined, size: 16),
+                    ),
+                  ],
+                  selected: {currentMode},
+                  onSelectionChanged: (modes) => onChanged(modes.first),
+                  style: ButtonStyle(
+                    textStyle: WidgetStateProperty.all(
+                      const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ),
               ),
             ],
-            selected: {currentMode},
-            onSelectionChanged: (modes) => onChanged(modes.first),
-            style: ButtonStyle(
-              textStyle: WidgetStateProperty.all(
-                const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-              ),
-            ),
           ),
         ],
       ),
@@ -354,44 +363,49 @@ class _FontSizeTile extends StatelessWidget {
             children: FontSizeOption.values.map((opt) {
               final isSelected = opt == current;
               return Expanded(
-                child: GestureDetector(
-                  onTap: () => onChanged(opt),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    margin: EdgeInsets.only(
-                      right: opt != FontSizeOption.values.last ? 8 : 0,
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.secondary : Colors.transparent,
+                child: Container(
+                  margin: EdgeInsets.only(
+                    right: opt != FontSizeOption.values.last ? 8 : 0,
+                  ),
+                  child: Material(
+                    animationDuration: const Duration(milliseconds: 180),
+                    color: isSelected ? AppColors.secondary : Colors.transparent,
+                    shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
+                      side: BorderSide(
                         color: isSelected ? AppColors.secondary : AppColors.divider,
                         width: isSelected ? 2 : 1,
                       ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Aa',
-                          style: TextStyle(
-                            fontSize: 12 + (opt.index * 3.0),
-                            fontWeight: FontWeight.w700,
-                            color: isSelected ? Colors.white : AppColors.textPrimary,
-                          ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => onChanged(opt),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Aa',
+                              style: TextStyle(
+                                fontSize: 12 + (opt.index * 3.0),
+                                fontWeight: FontWeight.w700,
+                                color: isSelected ? Colors.white : AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              opt.label,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                color: isSelected ? Colors.white : AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          opt.label,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                            color: isSelected ? Colors.white : AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),

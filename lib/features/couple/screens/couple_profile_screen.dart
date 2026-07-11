@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/router/app_routes.dart';
 import '../../../core/services/couple_profile_service.dart';
 import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/theme/app_colors.dart';
@@ -36,6 +37,7 @@ class CoupleProfileScreen extends ConsumerWidget {
             backgroundColor: AppColors.forestGreen,
             actions: [
               IconButton(
+                tooltip: 'Notifications',
                 icon: const Icon(
                   Icons.notifications_outlined,
                   color: Colors.white,
@@ -44,6 +46,7 @@ class CoupleProfileScreen extends ConsumerWidget {
                 onPressed: () => context.push('/notifications'),
               ),
               IconButton(
+                tooltip: 'Log out',
                 icon: const Icon(
                   Icons.logout_rounded,
                   color: Colors.white,
@@ -94,9 +97,15 @@ class CoupleProfileScreen extends ConsumerWidget {
                       ),
                       _ToolItem(
                         icon: Icons.rate_review_outlined,
-                        label: 'Reviews',
+                        label: 'Rate a Vendor',
                         color: AppColors.goldPremium,
-                        onTap: () => context.push('/couple/reviews/new'),
+                        onTap: () => context.push(AppRoutes.coupleFeedbackNew),
+                      ),
+                      _ToolItem(
+                        icon: Icons.event_available_outlined,
+                        label: 'My Bookings',
+                        color: AppColors.info,
+                        onTap: () => context.push(AppRoutes.coupleBookings),
                       ),
                     ],
                   ),
@@ -262,6 +271,7 @@ class _ProfileHero extends ConsumerWidget {
                       style: AppTextStyles.headlineSmall,
                     ),
                     IconButton(
+                      tooltip: 'Close',
                       onPressed: () => Navigator.of(ctx).pop(),
                       icon: const Icon(Icons.close),
                       splashRadius: 18,
@@ -320,7 +330,13 @@ class _ProfileHero extends ConsumerWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            GestureDetector(
+            Material(
+              // Not clipped to a CircleBorder: the edit badge is Positioned
+              // in the bottom-right corner of this Stack's square bounding
+              // box, outside the inscribed circle — clipping would cut it off.
+              color: Colors.transparent,
+              child: InkWell(
+              borderRadius: BorderRadius.circular(36),
               onTap: () =>
                   _showPhotoOptions(context, ref, hasPhoto: photoUrl != null),
               child: Stack(
@@ -368,6 +384,7 @@ class _ProfileHero extends ConsumerWidget {
                     ),
                   ),
                 ],
+              ),
               ),
             ),
             const SizedBox(height: 12),
@@ -465,12 +482,12 @@ class _ToolGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GridView.count(
-      crossAxisCount: 2,
+      crossAxisCount: 4,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 2.0,
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+      childAspectRatio: 0.85,
       children: items,
     );
   }
@@ -490,36 +507,50 @@ class _ToolItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.divider),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.cardShadow,
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: color.withAlpha(26),
-                shape: BoxShape.circle,
+    // Tooltip surfaces the tool's purpose on long-press (mobile) or mouse
+    // hover (web/desktop) — recognition over recall for icon-first tiles.
+    return Tooltip(
+      message: label,
+      decoration: BoxDecoration(
+        color: AppColors.forestGreen,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+      child: Material(
+        color: color.withAlpha(26),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withAlpha(60)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                child: Icon(icon, size: 17, color: Colors.white),
               ),
-              child: Icon(icon, size: 18, color: color),
-            ),
-            const SizedBox(width: 10),
-            Text(label, style: AppTextStyles.labelLarge),
-          ],
+              const SizedBox(height: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+        ),
         ),
       ),
     );

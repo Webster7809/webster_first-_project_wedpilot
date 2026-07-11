@@ -35,32 +35,35 @@ class _ContentModerationScreenState
 
   @override
   Widget build(BuildContext context) {
-    final flaggedReviews =
-        ref.watch(adminFlaggedReviewsProvider).valueOrNull ?? [];
-    final flaggedImages =
-        ref.watch(adminFlaggedImagesProvider).valueOrNull ?? [];
-    final flaggedMessages =
-        ref.watch(adminFlaggedMessagesProvider).valueOrNull ?? [];
+    final feedbackAsync = ref.watch(adminFeedbackProvider);
+    final flaggedImagesAsync = ref.watch(adminFlaggedImagesProvider);
+    final flaggedMessagesAsync = ref.watch(adminFlaggedMessagesProvider);
+    final flaggedFeedbackCount =
+        feedbackAsync.valueOrNull?.where((f) => f.isFlagged).length ?? 0;
+    final flaggedImagesCount = flaggedImagesAsync.valueOrNull?.length ?? 0;
+    final flaggedMessagesCount = flaggedMessagesAsync.valueOrNull?.length ?? 0;
 
-    Future<void> moderateReview(
+    Future<void> setFeedbackFlag(
       String id,
-      String action,
-      String successMessage,
-    ) async {
+      bool flagged,
+      String successMessage, {
+      String? reason,
+    }) async {
       final token = ref.read(authProvider.notifier).accessToken;
       if (token == null) return;
       try {
-        await AdminApiService.instance.moderateReview(
+        await AdminApiService.instance.flagFeedback(
           token,
           id,
-          action: action,
+          flagged: flagged,
+          reason: reason,
         );
-        ref.invalidate(adminFlaggedReviewsProvider);
+        ref.invalidate(adminFeedbackProvider);
         if (context.mounted) {
           showWedSnackBar(
             context,
             successMessage,
-            type: action == 'approve' ? SnackType.success : SnackType.error,
+            type: flagged ? SnackType.error : SnackType.success,
           );
         }
       } on AdminApiException catch (e) {
@@ -94,6 +97,35 @@ class _ContentModerationScreenState
       }
     }
 
+    Future<void> flagWithReason(String id) async {
+      final reasonCtrl = TextEditingController();
+      final reason = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Flag feedback'),
+          content: TextField(
+            controller: reasonCtrl,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'Reason (e.g. abusive comment)'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, reasonCtrl.text.trim()),
+              child: const Text('Flag'),
+            ),
+          ],
+        ),
+      );
+      if (reason == null) return;
+      await setFeedbackFlag(
+        id,
+        true,
+        'Feedback flagged and excluded from this vendor\'s score',
+        reason: reason.isEmpty ? null : reason,
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.adminPage,
       appBar: AppBar(
@@ -118,35 +150,42 @@ class _ContentModerationScreenState
             fontWeight: FontWeight.w600,
           ),
           tabs: [
-            Tab(text: 'Reviews (${flaggedReviews.length})'),
-            Tab(text: 'Images (${flaggedImages.length})'),
-            Tab(text: 'Messages (${flaggedMessages.length})'),
+            Tab(text: 'Feedback ($flaggedFeedbackCount)'),
+            Tab(text: 'Images ($flaggedImagesCount)'),
+            Tab(text: 'Messages ($flaggedMessagesCount)'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabCtrl,
         children: [
-          // ── Reviews tab ──────────────────────────────────────
-          _ReviewModerationList(
-            reviews: flaggedReviews,
-            onApprove: (id) => moderateReview(id, 'approve', 'Review approved'),
-            onReject: (id) => moderateReview(id, 'reject', 'Review removed'),
+          // ── Feedback tab ─────────────────────────────────────
+          // Private couple→vendor feedback — never shown to other couples,
+          // but readable by admins for policy enforcement. Unlike the other
+          // tabs this lists everything (not just already-flagged items),
+          // since nothing else can ever report it first.
+          _FeedbackModerationList(
+            feedbackAsync: feedbackAsync,
+            onFlag: flagWithReason,
+            onUnflag: (id) => setFeedbackFlag(id, false, 'Feedback restored to this vendor\'s score'),
+            onRefresh: () async => ref.invalidate(adminFeedbackProvider),
           ),
 
           // ── Images tab ───────────────────────────────────────
           _ImageModerationList(
-            images: flaggedImages,
+            imagesAsync: flaggedImagesAsync,
             onApprove: (id) => moderateImage(id, 'approve', 'Image approved'),
             onReject: (id) => moderateImage(id, 'reject', 'Image removed'),
+            onRefresh: () async => ref.invalidate(adminFlaggedImagesProvider),
           ),
 
           // ── Messages tab ─────────────────────────────────────
           // Always empty today — no messaging system exists yet to flag from.
           _MessageModerationList(
-            messages: flaggedMessages,
+            messagesAsync: flaggedMessagesAsync,
             onApprove: (_) {},
             onReject: (_) {},
+            onRefresh: () async => ref.invalidate(adminFlaggedMessagesProvider),
           ),
         ],
       ),
@@ -184,6 +223,93 @@ class _EmptyModeration extends StatelessWidget {
   }
 }
 
+// ── Shared error state ────────────────────────────────────────────────────────
+
+class _ModerationError extends StatelessWidget {
+  final Future<void> Function() onRetry;
+  const _ModerationError({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline_rounded, size: 64, color: AppColors.error),
+          const SizedBox(height: 16),
+          Text('Could not load this queue.', style: AppTextStyles.headlineMedium),
+          const SizedBox(height: 6),
+          Text(
+            'Check your connection, then pull down or retry.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Shared async list scaffold ────────────────────────────────────────────────
+// Handles loading/error/empty/data for every moderation tab uniformly, with
+// pull-to-refresh available even on the loading/error/empty states.
+
+class _ModerationListView<T> extends StatelessWidget {
+  final AsyncValue<List<T>> asyncValue;
+  final Widget Function(BuildContext context, T item) itemBuilder;
+  final IconData emptyIcon;
+  final String emptyMessage;
+  final Future<void> Function() onRefresh;
+
+  const _ModerationListView({
+    required this.asyncValue,
+    required this.itemBuilder,
+    required this.emptyIcon,
+    required this.emptyMessage,
+    required this.onRefresh,
+  });
+
+  Widget _scrollableCenter(Widget child) => LayoutBuilder(
+        builder: (context, constraints) => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: constraints.maxHeight,
+              child: child,
+            ),
+          ],
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: asyncValue.when(
+        loading: () => _scrollableCenter(
+          const Center(child: CircularProgressIndicator()),
+        ),
+        error: (error, stackTrace) => _scrollableCenter(
+          _ModerationError(onRetry: onRefresh),
+        ),
+        data: (items) => items.isEmpty
+            ? _scrollableCenter(
+                _EmptyModeration(icon: emptyIcon, message: emptyMessage),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: items.length,
+                itemBuilder: (ctx, i) => itemBuilder(ctx, items[i]),
+              ),
+      ),
+    );
+  }
+}
+
 // ── Shared flag chip ──────────────────────────────────────────────────────────
 
 class _FlagChip extends StatelessWidget {
@@ -204,37 +330,40 @@ class _FlagChip extends StatelessWidget {
           color: AppColors.error,
           fontWeight: FontWeight.w600,
         ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
 }
 
-// ── Review Moderation List ────────────────────────────────────────────────────
+// ── Feedback Moderation List ──────────────────────────────────────────────────
+// Private couple→vendor feedback. Every row is visible to admins (per the
+// access model — only the owning vendor and admins can read it), not just
+// previously-flagged ones, since there's no way for another couple to ever
+// report it first.
 
-class _ReviewModerationList extends StatelessWidget {
-  final List<FlaggedReview> reviews;
-  final ValueChanged<String> onApprove;
-  final ValueChanged<String> onReject;
+class _FeedbackModerationList extends StatelessWidget {
+  final AsyncValue<List<AdminVendorFeedback>> feedbackAsync;
+  final ValueChanged<String> onFlag;
+  final ValueChanged<String> onUnflag;
+  final Future<void> Function() onRefresh;
 
-  const _ReviewModerationList({
-    required this.reviews,
-    required this.onApprove,
-    required this.onReject,
+  const _FeedbackModerationList({
+    required this.feedbackAsync,
+    required this.onFlag,
+    required this.onUnflag,
+    required this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (reviews.isEmpty) {
-      return const _EmptyModeration(
-        icon: Icons.check_circle_rounded,
-        message: 'All flagged reviews have been resolved.',
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: reviews.length,
-      itemBuilder: (_, i) {
-        final review = reviews[i];
+    return _ModerationListView<AdminVendorFeedback>(
+      asyncValue: feedbackAsync,
+      onRefresh: onRefresh,
+      emptyIcon: Icons.forum_outlined,
+      emptyMessage: 'No feedback has been submitted yet.',
+      itemBuilder: (context, feedback) {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
@@ -257,14 +386,18 @@ class _ReviewModerationList extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      review.vendor,
+                      '${feedback.vendor} · ${feedback.coupleName}',
                       style: AppTextStyles.titleMedium.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  _FlagChip(reason: review.flagReason),
+                  if (feedback.isFlagged) ...[
+                    const SizedBox(width: 8),
+                    Flexible(child: _FlagChip(reason: feedback.flagReason ?? 'Flagged')),
+                  ],
                 ],
               ),
               const SizedBox(height: 8),
@@ -272,7 +405,7 @@ class _ReviewModerationList extends StatelessWidget {
                 children: List.generate(
                   5,
                   (j) => Icon(
-                    j < review.rating
+                    j < feedback.rating
                         ? Icons.star_rounded
                         : Icons.star_outline_rounded,
                     size: 14,
@@ -280,31 +413,31 @@ class _ReviewModerationList extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                review.text,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
+              if (feedback.comment != null && feedback.comment!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  feedback.comment!,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 14),
               Row(
                 children: [
                   Expanded(
-                    child: WedButton(
-                      label: 'Remove',
-                      variant: WedButtonVariant.destructive,
-                      onPressed: () => onReject(review.id),
-                      height: 38,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: WedButton(
-                      label: 'Approve',
-                      onPressed: () => onApprove(review.id),
-                      height: 38,
-                    ),
+                    child: feedback.isFlagged
+                        ? WedButton(
+                            label: 'Unflag',
+                            onPressed: () => onUnflag(feedback.id),
+                            height: 38,
+                          )
+                        : WedButton(
+                            label: 'Flag',
+                            variant: WedButtonVariant.destructive,
+                            onPressed: () => onFlag(feedback.id),
+                            height: 38,
+                          ),
                   ),
                 ],
               ),
@@ -319,29 +452,26 @@ class _ReviewModerationList extends StatelessWidget {
 // ── Image Moderation List ─────────────────────────────────────────────────────
 
 class _ImageModerationList extends StatelessWidget {
-  final List<FlaggedImage> images;
+  final AsyncValue<List<FlaggedImage>> imagesAsync;
   final ValueChanged<String> onApprove;
   final ValueChanged<String> onReject;
+  final Future<void> Function() onRefresh;
 
   const _ImageModerationList({
-    required this.images,
+    required this.imagesAsync,
     required this.onApprove,
     required this.onReject,
+    required this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (images.isEmpty) {
-      return const _EmptyModeration(
-        icon: Icons.check_circle_rounded,
-        message: 'All flagged images have been resolved.',
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: images.length,
-      itemBuilder: (_, i) {
-        final img = images[i];
+    return _ModerationListView<FlaggedImage>(
+      asyncValue: imagesAsync,
+      onRefresh: onRefresh,
+      emptyIcon: Icons.check_circle_rounded,
+      emptyMessage: 'All flagged images have been resolved.',
+      itemBuilder: (context, img) {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
@@ -420,10 +550,12 @@ class _ImageModerationList extends StatelessWidget {
                             style: AppTextStyles.titleMedium.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 8),
-                        _FlagChip(reason: img.flagReason),
+                        Flexible(child: _FlagChip(reason: img.flagReason)),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -461,29 +593,26 @@ class _ImageModerationList extends StatelessWidget {
 // ── Message Moderation List ───────────────────────────────────────────────────
 
 class _MessageModerationList extends StatelessWidget {
-  final List<FlaggedMessage> messages;
+  final AsyncValue<List<FlaggedMessage>> messagesAsync;
   final ValueChanged<String> onApprove;
   final ValueChanged<String> onReject;
+  final Future<void> Function() onRefresh;
 
   const _MessageModerationList({
-    required this.messages,
+    required this.messagesAsync,
     required this.onApprove,
     required this.onReject,
+    required this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (messages.isEmpty) {
-      return const _EmptyModeration(
-        icon: Icons.check_circle_rounded,
-        message: 'All flagged messages have been resolved.',
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: messages.length,
-      itemBuilder: (_, i) {
-        final msg = messages[i];
+    return _ModerationListView<FlaggedMessage>(
+      asyncValue: messagesAsync,
+      onRefresh: onRefresh,
+      emptyIcon: Icons.check_circle_rounded,
+      emptyMessage: 'All flagged messages have been resolved.',
+      itemBuilder: (context, msg) {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
@@ -546,7 +675,7 @@ class _MessageModerationList extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _FlagChip(reason: msg.flagReason),
+                  Flexible(child: _FlagChip(reason: msg.flagReason)),
                 ],
               ),
               const SizedBox(height: 10),

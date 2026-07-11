@@ -111,24 +111,31 @@ class AdminApiService {
     }
   }
 
-  Future<List<FlaggedReview>> fetchFlaggedReviews(String accessToken) async {
+  /// All vendor feedback platform-wide — admins can read it per the
+  /// private-feedback access model (only the owning vendor and admins can).
+  Future<List<AdminVendorFeedback>> fetchAllFeedback(String accessToken) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/api/admin/moderation/reviews',
+        '/api/admin/feedback',
         options: _auth(accessToken),
       );
-      final list = (response.data?['reviews'] as List?) ?? [];
-      return list.map((r) => FlaggedReview.fromJson(r as Map<String, dynamic>)).toList();
+      final list = (response.data?['feedback'] as List?) ?? [];
+      return list.map((f) => AdminVendorFeedback.fromJson(f as Map<String, dynamic>)).toList();
     } on DioException catch (e) {
       throw AdminApiException(_extractError(e));
     }
   }
 
-  Future<void> moderateReview(String accessToken, String reviewId, {required String action}) async {
+  Future<void> flagFeedback(
+    String accessToken,
+    String feedbackId, {
+    required bool flagged,
+    String? reason,
+  }) async {
     try {
-      await _dio.patch(
-        '/api/admin/moderation/reviews/$reviewId',
-        data: {'action': action},
+      await _dio.post(
+        '/api/admin/feedback/$feedbackId/flag',
+        data: {'flagged': flagged, 'reason': reason},
         options: _auth(accessToken),
       );
     } on DioException catch (e) {
