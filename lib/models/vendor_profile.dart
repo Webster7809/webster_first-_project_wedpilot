@@ -362,6 +362,7 @@ class ReasoningStep {
   const ReasoningStep({required this.label, required this.text});
 
   static const budgetFit = 'Budget fit';
+  static const reputation = 'Reputation';
   static const availability = 'Availability';
   static const styleMatch = 'Style match';
   static const verdict = 'Verdict';
@@ -369,7 +370,7 @@ class ReasoningStep {
   // to be genuinely applicable to this vendor — omitted entirely otherwise,
   // rather than shown as a hollow "not applicable" line.
   static const specialRequest = 'Special request';
-  static const knownLabels = [budgetFit, availability, styleMatch, verdict, specialRequest];
+  static const knownLabels = [budgetFit, reputation, availability, styleMatch, verdict, specialRequest];
 
   factory ReasoningStep.fromJson(Map<String, dynamic> json) => ReasoningStep(
         label: json['label'] as String? ?? '',
@@ -386,6 +387,11 @@ class ReasoningStep {
 /// than anything close by, so they can weigh the trade-off themselves.
 enum VendorMatchKind { primary, budgetAlternate }
 
+/// Why a vendor was picked for its category: matched the couple's stated
+/// budget exactly, or was the best available fit for their wedding class
+/// once nothing in the category fit their allocated budget.
+enum SelectionBasis { exactBudgetMatch, weddingClassBestFit }
+
 class VendorMatch {
   final String vendorId;
   final VendorProfile vendor;
@@ -399,6 +405,10 @@ class VendorMatch {
   final int rankInCategory;
   final int totalInCategory;
   final VendorMatchKind kind;
+  final bool fitsBudget;
+  final double? budgetDeltaPercent;
+  final SelectionBasis selectionBasis;
+  final String? noteToCouple;
 
   const VendorMatch({
     required this.vendorId,
@@ -413,5 +423,9 @@ class VendorMatch {
     required this.rankInCategory,
     required this.totalInCategory,
     this.kind = VendorMatchKind.primary,
+    this.fitsBudget = true,
+    this.budgetDeltaPercent,
+    this.selectionBasis = SelectionBasis.exactBudgetMatch,
+    this.noteToCouple,
   });
 }

@@ -3,9 +3,9 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:dio/dio.dart';
 
-import '../../models/vendor_profile.dart' show ReasoningStep;
+import '../../models/vendor_profile.dart' show ReasoningStep, SelectionBasis;
 
-// All AI calls (Gemini-backed) go through the Node/Express backend at [_baseUrl].
+// All AI calls (OpenRouter-backed) go through the Node/Express backend at [_baseUrl].
 // Flutter never touches the LLM API key.
 // Change [_backendPort] or [_lanHost] when deploying to production.
 const int _backendPort = 3000;
@@ -30,13 +30,11 @@ class WeddingPlanResult {
   final String planSummary;
   final Map<String, double> budgetAdvice;
   final Map<String, String> budgetReasoning;
-  final Map<String, String> vendorReasonings;
 
   const WeddingPlanResult({
     required this.planSummary,
     required this.budgetAdvice,
     required this.budgetReasoning,
-    required this.vendorReasonings,
   });
 }
 
@@ -95,11 +93,19 @@ class VendorMatchSuggestion {
   final String vendorId;
   final double confidence;
   final List<ReasoningStep> reasoningSteps;
+  final bool fitsBudget;
+  final double? budgetDeltaPercent;
+  final SelectionBasis selectionBasis;
+  final String? noteToCouple;
 
   const VendorMatchSuggestion({
     required this.vendorId,
     required this.confidence,
     required this.reasoningSteps,
+    this.fitsBudget = true,
+    this.budgetDeltaPercent,
+    this.selectionBasis = SelectionBasis.exactBudgetMatch,
+    this.noteToCouple,
   });
 
   /// Flattened text for contexts that only accept one plain string (e.g. PDF export).
@@ -125,6 +131,12 @@ class VendorMatchSuggestion {
                 text: json['reasoning'] as String? ?? '',
               ),
             ],
+      fitsBudget: json['fitsBudget'] as bool? ?? true,
+      budgetDeltaPercent: (json['budgetDeltaPercent'] as num?)?.toDouble(),
+      selectionBasis: json['selectionBasis'] == 'wedding_class_best_fit'
+          ? SelectionBasis.weddingClassBestFit
+          : SelectionBasis.exactBudgetMatch,
+      noteToCouple: json['noteToCouple'] as String?,
     );
   }
 }
@@ -150,7 +162,6 @@ class WeddingAiService {
     required DateTime? weddingDate,
     required List<String> styles,
     required List<String> categories,
-    required Map<String, String> topVendorNames,
   }) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
@@ -165,7 +176,6 @@ class WeddingAiService {
           'weddingDate': weddingDate?.toIso8601String(),
           'styles': styles,
           'categories': categories,
-          'topVendorNames': topVendorNames,
         },
       );
 
@@ -173,13 +183,11 @@ class WeddingAiService {
 
       final budgetRaw = (data['budgetAdvice'] as Map<String, dynamic>?) ?? {};
       final budgetReasoningRaw = (data['budgetReasoning'] as Map<String, dynamic>?) ?? {};
-      final reasoningRaw = (data['vendorReasonings'] as Map<String, dynamic>?) ?? {};
 
       return WeddingPlanResult(
         planSummary: (data['planSummary'] as String?) ?? '',
         budgetAdvice: budgetRaw.map((k, v) => MapEntry(k, (v as num).toDouble())),
         budgetReasoning: budgetReasoningRaw.map((k, v) => MapEntry(k, v.toString())),
-        vendorReasonings: reasoningRaw.map((k, v) => MapEntry(k, v.toString())),
       );
     } on DioException catch (e) {
       throw WeddingAiException(_friendlyError(e));
@@ -230,7 +238,7 @@ class WeddingAiService {
 
   /// Turns a raw Dio/backend failure into a message that tells the couple
   /// what's actually going on instead of always blaming their API key —
-  /// the backend's Gemini quota (free tier: 20 requests/day) is a common,
+  /// the backend's OpenRouter free-tier rate limit is a common,
   /// self-resolving cause that looks nothing like a broken key.
   String _friendlyError(DioException e) {
     final data = e.response?.data;

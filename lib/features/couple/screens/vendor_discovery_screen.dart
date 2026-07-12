@@ -12,15 +12,10 @@ import '../../../widgets/loading_shimmer.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../core/constants/app_constants.dart';
 
-const _kCategoryTabs = [
-  kAllVendorCategories,
-  'Venue',
-  'Catering',
-  'Photography',
-  'Decor & flowers',
-  'DJ & MC',
-  'Transport',
-];
+// Derived from AppConstants.vendorCategories (the single source of truth,
+// also used by the onboarding wizard's category picker) so this can't drift
+// out of sync and silently drop a category again.
+const _kCategoryTabs = [kAllVendorCategories, ...AppConstants.vendorCategories];
 
 // 'Under 30k' and 'Verified' map to real fields (price, verification_status).
 // A capacity filter isn't offered — vendor capacity isn't tracked anywhere

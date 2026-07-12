@@ -2,7 +2,6 @@ require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const sequelize = require('./db/sequelize');
 require('./db/models/user');
 require('./db/models/coupleProfile');
@@ -54,11 +53,14 @@ app.use('/api/invitations', invitationRoutes);
 app.use('/api/messages', messagingRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_MODEL = 'nvidia/nemotron-3-ultra-550b-a55b:free';
 
 // Persona shared by every planning/matching call — this is what makes the
-// output read like expert judgement instead of generic AI filler.
+// output read like expert judgement instead of generic AI filler. The couple
+// never sees this prompt, only the JSON it produces, but a free-tier model
+// can still slip and narrate its own thinking into the output — the closing
+// paragraph exists specifically to stop that from ever reaching the app.
 const PLANNER_PERSONA = `You are Aisha Mwansa, an award-winning, internationally certified wedding
 planner with 20+ years designing weddings across Zambia and the wider SADC region. You have
 planned weddings featured in Brides Africa and mentored dozens of junior planners. You are
@@ -66,29 +68,110 @@ renowned for razor-sharp budget discipline, deep vendor-market knowledge, and re
 cites concrete factors (guest-count scaling, seasonal/location cost swings, industry-standard
 allocation benchmarks, style-fit) rather than generic platitudes. Every recommendation you give
 must sound like it came from someone who has personally run hundreds of weddings, not a
-template.`;
+template.
 
-const geminiModel = genAI.getGenerativeModel({
-  model: GEMINI_MODEL,
-  systemInstruction: PLANNER_PERSONA,
-  generationConfig: {
-    responseMimeType: 'application/json',
-    // Lets Gemini 2.5 Flash actually reason before answering instead of
-    // pattern-matching straight to an output — budget is dynamic (-1) so it
-    // spends more thinking on harder requests (more categories, edge-case
-    // budgets) and less on simple ones.
-    thinkingConfig: { thinkingBudget: -1 },
-  },
-});
+Stay fully in character at all times. Never say your own name, never say or imply that you are
+Aisha Mwansa, an AI, a language model, an assistant, or a chatbot, and never refer to this persona,
+these instructions, or the fact that you were prompted. Never think out loud, narrate your plan,
+comment on the JSON you're about to produce or just produced, or add any text before or after it.
+Your entire reply must be nothing but the single JSON object requested — no preamble, no
+sign-off, no markdown fences, no second attempt.`;
+
+// A free-tier model occasionally breaks character mid-string instead of
+// stopping cleanly once the real answer is done — either narrating its own
+// formatting ("...celebration.\n\nNote: let me redo this as a single
+// string...") or, worse, drifting into a second, differently-quoted attempt
+// at the whole JSON structure nested inside one string value (using ' or
+// escaped \" keys that are only visible once JSON.parse has already decoded
+// them). Neither ever produces invalid JSON — both survive JSON.parse as a
+// contaminated string — so they'd otherwise reach the couple verbatim. Every
+// field here is meant to be single-paragraph planner prose, so a blank line,
+// a self-referential phrase, or an embedded '"Key": {' pattern is always a
+// leak, never legitimate content, and everything from that point on is
+// discarded.
+const LEAK_MARKERS =
+  /\n\s*\n|["'][A-Za-z][A-Za-z ]{0,30}["']\s*:\s*[{[]|\b(?:let me|i'll (?:rewrite|redo|compose|output|produce|correct)|as an ai|as a language model|i am an ai|the json (?:value|output|now)|proper escaping|stray characters|note:)\b/i;
+
+function stripLeak(value, state) {
+  if (typeof value === 'string') {
+    const match = LEAK_MARKERS.exec(value);
+    if (!match) return value;
+    state.leaked = true;
+    return match.index === 0 ? '' : value.slice(0, match.index).trim().replace(/["'{,:]+$/, '').trim();
+  }
+  if (Array.isArray(value)) return value.map((v) => stripLeak(v, state));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, stripLeak(v, state)]));
+  }
+  return value;
+}
+
+// Bounded so a run of bad completions can't chain into a latency spiral —
+// the Flutter client's receive timeout is 60s, so more than 2 sequential
+// calls to a slow free model risks the couple seeing a timeout instead of
+// even a degraded-but-honest result.
+const MAX_AI_ATTEMPTS = 2;
 
 // Both endpoints ask for JSON in the prompt itself and extract the first
-// {...} span from the response text.
-async function askGemini(prompt) {
-  const result = await geminiModel.generateContent(prompt);
-  const text = result.response.text();
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  return JSON.parse(text.substring(start, end + 1));
+// {...} span from the response text (response_format is a hint, not a
+// guarantee, on every OpenRouter model). reasoning.exclude keeps a
+// reasoning-capable model's chain-of-thought out of the returned content
+// entirely, and stripping any stray <think> block is a second line of
+// defense for models that ignore that flag. `validate` lets each caller
+// reject a structurally broken result (e.g. the real fields never showed up
+// because the model dumped everything into one narrated string) so a retry
+// gets attempted instead of silently shipping an incomplete plan.
+async function askAI(prompt, validate = () => true) {
+  let lastResult = null;
+  for (let attempt = 0; attempt < MAX_AI_ATTEMPTS; attempt++) {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [
+          { role: 'system', content: PLANNER_PERSONA },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        reasoning: { exclude: true },
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`OpenRouter error ${res.status}: ${errText}`);
+    }
+
+    const data = await res.json();
+    const rawText = data.choices?.[0]?.message?.content ?? '';
+    const text = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    let parsed;
+    try {
+      parsed = JSON.parse(text.substring(start, end + 1));
+    } catch {
+      continue; // malformed JSON entirely — worth one retry before giving up
+    }
+
+    const sanitized = stripLeak(parsed, { leaked: false });
+    lastResult = sanitized;
+    if (validate(sanitized)) return sanitized;
+  }
+
+  if (lastResult === null) {
+    // Never forward the raw model text to the client — it may contain
+    // leaked meta-commentary instead of valid JSON.
+    throw new Error('AI returned a response that could not be understood. Please try again.');
+  }
+  // Every attempt was sanitized (never raw leaked text) but never fully
+  // validated — return the last one anyway rather than hard-failing the
+  // couple's request over an incomplete-but-still-usable plan.
+  return lastResult;
 }
 
 // ── POST /api/wedding-plan ────────────────────────────────────────────────────
@@ -103,15 +186,11 @@ app.post('/api/wedding-plan', async (req, res) => {
     weddingDate,
     styles = [],
     categories = [],
-    topVendorNames = {},
   } = req.body;
 
   const dateStr = weddingDate ? new Date(weddingDate).toLocaleDateString('en-GB') : 'Not set yet';
   const styleStr = styles.length ? styles.join(', ') : 'Not specified';
   const categoriesStr = categories.join(', ');
-  const vendorLines = Object.entries(topVendorNames)
-    .map(([cat, name]) => `  - ${cat}: "${name}"`)
-    .join('\n') || '  (vendors not yet matched)';
 
   const prompt = `
 A couple has come to you for a full wedding plan:
@@ -123,8 +202,6 @@ A couple has come to you for a full wedding plan:
 - Wedding date: ${dateStr}
 - Style preferences: ${styleStr}
 - Vendor categories needed: ${categoriesStr}
-- Top AI-matched vendor per category:
-${vendorLines}
 
 Think it through like you would in a real client consultation: weigh how guest count scales
 per-head costs (catering, venue capacity), how the wedding class shifts spend toward premium
@@ -135,27 +212,141 @@ Respond ONLY with valid JSON:
 {
   "planSummary": "A warm, confident 2-3 sentence personalised summary written like a planner opening a client consultation. Mention location, budget and date if set. Be specific to their choices, not generic.",
   "budgetAdvice": { "CategoryName": percentage_number },
-  "budgetReasoning": { "CategoryName": "2-3 sentences of real planner reasoning for this exact percentage — reference guest-count math, industry-standard allocation ranges for this wedding class, or location cost factors. No filler." },
-  "vendorReasonings": { "CategoryName": "1-2 sentences of specific, expert reasoning for why this vendor is the right fit for this couple." }
+  "budgetReasoning": { "CategoryName": "2-3 sentences of real planner reasoning for this exact percentage — reference guest-count math, industry-standard allocation ranges for this wedding class, or location cost factors. No filler." }
 }
 
 Rules:
 - budgetAdvice must cover every category in [${categoriesStr}] and sum to exactly 100.
 - Use plain numbers for percentages (e.g. 30, not "30%").
 - budgetReasoning must cover every category in [${categoriesStr}] and justify that category's specific percentage — explain why it's higher or lower than an even split in concrete terms.
-- vendorReasonings must cover every category that has a top vendor listed.
 - Confident, expert, professional tone suited to a Zambian wedding market. Never hedge or say "it depends" — give a definitive recommendation.
-- Never invent facts not given above — no couple names (none were provided), no vendor details beyond what's listed, no fabricated menu items or prices. Ground every claim only in the data given.
+- Never invent facts not given above — no couple names (none were provided), no vendor details of any kind (none were given), no fabricated menu items or prices. Ground every claim only in the data given.
 `;
 
+  // Beyond structural presence, catch the model silently dropping a category
+  // or reporting percentages that don't add up — a plan whose numbers don't
+  // add to 100 is just as much a fabrication as an invented fact, even
+  // though every individual field looks well-formed.
+  const validate = (r) => {
+    if (typeof r.planSummary !== 'string' || !r.planSummary.trim()) return false;
+    if (!r.budgetAdvice || typeof r.budgetAdvice !== 'object') return false;
+    if (!r.budgetReasoning || typeof r.budgetReasoning !== 'object') return false;
+    const coversAllCategories = categories.every(
+      (cat) =>
+        typeof r.budgetAdvice[cat] === 'number' &&
+        typeof r.budgetReasoning[cat] === 'string' &&
+        r.budgetReasoning[cat].trim().length > 0,
+    );
+    if (!coversAllCategories) return false;
+    const sum = categories.reduce((s, cat) => s + r.budgetAdvice[cat], 0);
+    return Math.abs(sum - 100) <= 2;
+  };
+
   try {
-    const json = await askGemini(prompt);
+    const json = await askAI(prompt, validate);
     res.json(json);
   } catch (err) {
-    console.error('Gemini error:', err.message);
+    console.error('OpenRouter AI error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
+// The 4 reasoning steps every vendor-match category must always carry (see the
+// prompt below) — "Special request" is the only conditional 5th step. "Budget
+// fit" isn't in this list because the app writes that step entirely itself
+// (see groundedBudgetFitText) — the model only contributes budgetFitSuggestionType.
+const REQUIRED_REASONING_LABELS = ['Reputation', 'Availability', 'Style match', 'Verdict'];
+
+const BUDGET_FIT_SUGGESTION_TYPES = ['negotiate', 'trim_scope', 'reallocate_budget', 'none_needed'];
+
+const BUDGET_CLASS_DISPLAY_NAMES = {
+  highClass: 'High Class',
+  flexible: 'Flexible',
+  budgetFriendly: 'Budget-Friendly',
+};
+
+const BUDGET_FIT_SUGGESTION_CLAUSES = {
+  negotiate: 'asking for a smaller or custom package',
+  trim_scope: 'trimming the scope for this category',
+  reallocate_budget: 'shifting some budget over from a lower-priority category',
+};
+
+// The prompt tells the model to copy rating/feedbackCount/isBookedOnWeddingDate
+// into these two steps "exactly, character-for-character" — but nothing stops
+// a free-tier model from drifting, especially on a retry-exhausted response
+// (see askAI's "return the last one anyway" fallback above). Rewriting these
+// two steps from the same candidate object the model was given closes that
+// gap for good: the couple can never see a star rating, review count, or
+// availability claim that didn't come from the real vendor record — the same
+// guarantee the vendorId check already gives vendor identity, extended to
+// vendor facts. Style match and Verdict stay as the model wrote them — those
+// are legitimate planner judgement calls, not copyable facts.
+function groundedStepText(label, candidate) {
+  if (label === 'Reputation') {
+    const rating = typeof candidate.rating === 'number' ? candidate.rating : null;
+    const feedbackCount = candidate.feedbackCount ?? 0;
+    if (rating === null || feedbackCount === 0) return 'New to WedPilot — no client ratings yet.';
+    return `${rating.toFixed(1)}★ from ${feedbackCount} verified ${feedbackCount === 1 ? 'client' : 'clients'}.`;
+  }
+  if (label === 'Availability') {
+    return candidate.isBookedOnWeddingDate
+      ? 'Already appears booked on your wedding date — confirm availability before committing, or line up a backup.'
+      : 'Open on your wedding date, based on their calendar.';
+  }
+  return null;
+}
+
+// The model only ever contributes a qualitative suggestionType for this step
+// (see the prompt) — every number in the sentence itself (price, budget,
+// delta percent) is inserted here from the real candidate/budget data, so a
+// "you're X% over budget" claim can never drift from what the app itself
+// just computed two lines above.
+function groundedBudgetFitText(cat, budget, priceMin, fitsBudget, budgetDeltaPercent, suggestionType) {
+  if (budget == null) {
+    return `No specific allocation set for ${cat} yet, so price wasn't used as a filter here.`;
+  }
+  if (fitsBudget) {
+    return `Fits within your ~${budget.toFixed(0)} allocation for ${cat}.`;
+  }
+  const clause = BUDGET_FIT_SUGGESTION_CLAUSES[suggestionType] || BUDGET_FIT_SUGGESTION_CLAUSES.reallocate_budget;
+  return `Starts around ${priceMin.toFixed(0)}, about ${budgetDeltaPercent}% over your ~${budget.toFixed(0)} budget for ${cat} — still the closest available fit. You can move forward by ${clause}.`;
+}
+
+function groundedNoteToCouple(cat, budgetClass, fitsBudget, budgetDeltaPercent) {
+  if (fitsBudget) return `Fits your allocated budget for ${cat}.`;
+  const tierName = (BUDGET_CLASS_DISPLAY_NAMES[budgetClass] || 'Flexible').toLowerCase();
+  const deltaClause = budgetDeltaPercent != null ? ` — about ${budgetDeltaPercent}% over your allocation` : '';
+  return `No ${tierName} pick fit your budget for ${cat} exactly, so this is the closest match for that tier${deltaClause}.`;
+}
+
+function groundVendorMatch(json, categories, categoryBudgets, budgetClass) {
+  for (const [cat, entry] of Object.entries(json.categories || {})) {
+    const candidate = (categories[cat] || []).find((c) => c.vendorId === entry.vendorId);
+    if (!candidate) continue; // invalid vendorId — the Flutter-side guard discards the whole result for this
+
+    const budget = categoryBudgets[cat];
+    const priceMin = candidate.priceMin ?? 0;
+    const fitsBudget = budget == null || priceMin <= budget;
+    const budgetDeltaPercent = fitsBudget ? null : Math.round(((priceMin - budget) / budget) * 100);
+    entry.fitsBudget = fitsBudget;
+    entry.budgetDeltaPercent = budgetDeltaPercent;
+    entry.selectionBasis = fitsBudget ? 'exact_budget_match' : 'wedding_class_best_fit';
+    entry.noteToCouple = groundedNoteToCouple(cat, budgetClass, fitsBudget, budgetDeltaPercent);
+
+    const budgetFitStep = {
+      label: 'Budget fit',
+      text: groundedBudgetFitText(cat, budget, priceMin, fitsBudget, budgetDeltaPercent, entry.budgetFitSuggestionType),
+    };
+    const otherSteps = (Array.isArray(entry.reasoningSteps) ? entry.reasoningSteps : [])
+      .filter((step) => step.label !== 'Budget fit')
+      .map((step) => {
+        const text = groundedStepText(step.label, candidate);
+        return text === null ? step : { ...step, text };
+      });
+    entry.reasoningSteps = [budgetFitStep, ...otherSteps];
+  }
+  return json;
+}
 
 // ── POST /api/vendor-match ────────────────────────────────────────────────────
 app.post('/api/vendor-match', async (req, res) => {
@@ -205,12 +396,23 @@ very likely unavailable. Do not silently ignore this — strongly prefer an avai
 candidate of comparable quality over a booked one. Only recommend a booked candidate if there is
 no comparable available alternative in that category.
 
-Each candidate carries priceMin/priceMax (the vendor's actual price range). For any category that
-has an entry in the allocated-budget map above, you must search for and prefer a candidate whose
-priceMin does not exceed that category's allocated amount — never recommend a vendor priced beyond
-the couple's entered budget for that category if a candidate that fits exists. If every candidate in
-that category is priced beyond the allocated amount (their money is simply too low for what's
-available), you must still pick the closest/cheapest candidate rather than returning nothing.
+Each candidate carries priceMin/priceMax (the vendor's actual price range) and priceTier ('low',
+'mid', or 'high', relative to other candidates in its own category). BUDGET FIT AND FALLBACK
+SELECTION — apply this exactly, per category:
+1. A candidate "fits exactly within budget" when that category has an entry in the allocated-budget
+   map above and the candidate's priceMin does not exceed it. If a category has no entry in that map,
+   treat every candidate in it as fitting (no known cap to check against).
+2. If one or more candidates fit exactly within budget: pick your recommendation only from among
+   them, ranked normally by reputationScore, locationScore, style fit, and availability as described
+   elsewhere in this prompt. Do not mention a budget shortfall anywhere in that category's reasoning.
+3. If NO candidate fits exactly within budget: never invent or substitute a vendor outside
+   CANDIDATE_VENDORS to force a fit. Instead, select the candidate whose priceTier best matches the
+   couple's chosen budget class (${budgetClass}: 'highClass' prefers 'high' tier, 'budgetFriendly'
+   prefers 'low' tier, 'flexible' accepts any tier), breaking ties by reputationScore. If the only
+   viable candidate's priceTier differs from what that budget class would normally call for, say so
+   explicitly and plainly in the reasoning (e.g. "No high-tier caterer fits this budget; closest
+   match is mid-tier instead") — never silently substitute an off-class vendor without flagging it.
+   Still pick the closest/best-fitting candidate rather than returning nothing.
 
 CANDIDATE_VENDORS — the only real, verified vendors you may recommend or discuss, grouped by
 category (JSON):
@@ -223,16 +425,22 @@ alter, round, guess, or "helpfully" improve any of these values, and never refer
 isn't in this list. If you are ever unsure whether a value came from CANDIDATE_VENDORS, do not
 state it.
 
+The app — not you — computes and displays the exact price, percentage-over-budget, rating, review
+count, and availability figures, because those must always match the database exactly. So: set
+budgetFitSuggestionType to exactly one of "negotiate" (price is close enough that a trimmed custom
+package is realistic), "trim_scope" (better to reduce what this category covers), "reallocate_budget"
+(better to shift budget from a lower-priority category), or "none_needed" (the pick already fits, or
+no allocated budget was given for this category) — reflecting the budget-fit decision from the rules
+above. Never state a specific price, percentage, rating, review count, or booked/available status
+anywhere in your reasoning text for any step below — describe situations qualitatively only; the app
+fills in every figure itself.
+
 Instead of one run-on explanation, break your justification for each pick into named, ordered steps
 (like a planner walking through their checklist one line at a time). Always include these four:
-1. "Budget fit" — state whether the price fits the couple's allocated budget for this category. If
-   it doesn't fit (or no budget was given), say so plainly and, if it doesn't fit, offer one simple,
-   concrete way to still move forward (e.g. negotiate a smaller/custom package, trim scope or guest
-   count for this category, or shift budget over from a lower-priority category) — keep it
-   encouraging and practical, not just a warning.
-2. "Availability" — state whether isBookedOnWeddingDate is true or false for the picked vendor. If
-   true, say plainly that they already appear booked on the couple's date and that the couple should
-   confirm availability before committing, or consider a backup.
+1. "Reputation" — 1 short sentence on how strong this vendor's track record is, qualitatively (e.g.
+   "well-reviewed and trusted" vs "new to the platform, unproven yet") — no numbers.
+2. "Availability" — 1 short sentence on whether the couple should treat this vendor as available or
+   should double-check, qualitatively — no restating true/false or specific dates.
 3. "Style match" — 2 short sentences. First, state proximity plainly and explicitly: if locationScore
    is high, say this vendor was prioritized for being near the couple (name their location if given);
    if locationScore is low, say plainly that they're further away and that this weighed against them.
@@ -253,8 +461,9 @@ Respond ONLY with valid JSON in this exact shape:
     "<CategoryName>": {
       "vendorId": "...",
       "confidence": 0.0-1.0,
+      "budgetFitSuggestionType": "negotiate" | "trim_scope" | "reallocate_budget" | "none_needed",
       "reasoningSteps": [
-        { "label": "Budget fit", "text": "..." },
+        { "label": "Reputation", "text": "..." },
         { "label": "Availability", "text": "..." },
         { "label": "Style match", "text": "..." },
         { "label": "Verdict", "text": "..." },
@@ -276,11 +485,33 @@ Rules:
   as unknown, not as something you can estimate or fill in.
 `;
 
+  const requestedCategories = Object.keys(categories);
+
+  // Checking vendorId against the real candidate list (not just truthiness)
+  // and requiring the 4 reasoning labels plus a valid budgetFitSuggestionType
+  // means a first attempt that invents a vendor, omits a step, or skips the
+  // suggestion type fails validate() and gets a real retry, instead of
+  // reaching askAI's exhausted-attempts fallback and only getting caught
+  // later by the Flutter-side guard.
+  const validate = (r) =>
+    r.categories &&
+    typeof r.categories === 'object' &&
+    requestedCategories.every((cat) => {
+      const entry = r.categories[cat];
+      if (!entry?.vendorId) return false;
+      const candidateIds = (categories[cat] || []).map((c) => c.vendorId);
+      if (!candidateIds.includes(entry.vendorId)) return false;
+      if (!BUDGET_FIT_SUGGESTION_TYPES.includes(entry.budgetFitSuggestionType)) return false;
+      const labels = new Set((Array.isArray(entry.reasoningSteps) ? entry.reasoningSteps : []).map((s) => s.label));
+      return REQUIRED_REASONING_LABELS.every((label) => labels.has(label));
+    });
+
   try {
-    const json = await askGemini(prompt);
+    const json = await askAI(prompt, validate);
+    groundVendorMatch(json, categories, categoryBudgets, budgetClass);
     res.json(json);
   } catch (err) {
-    console.error('Gemini error:', err.message);
+    console.error('OpenRouter AI error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

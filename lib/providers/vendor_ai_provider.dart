@@ -207,6 +207,10 @@ Future<List<VendorMatch>> _matchWithAi(
         reasoningSteps: entry.value.reasoningSteps,
         rankInCategory: 1,
         totalInCategory: catCounts[entry.key] ?? 1,
+        fitsBudget: entry.value.fitsBudget,
+        budgetDeltaPercent: entry.value.budgetDeltaPercent,
+        selectionBasis: entry.value.selectionBasis,
+        noteToCouple: entry.value.noteToCouple,
       ));
     }
     return results;
@@ -392,6 +396,22 @@ class _AiEngine {
       catRank[s.vendor.category] = rank;
       final steps = _reasonSteps(s.vendor, budgetClass, rank, s.isBookedOnWeddingDate,
           s.categoryBudget, s.overBudgetRatio, styles, specialRequests, s.location);
+
+      // Mirrors the backend's budget-fit/fallback rules (see /api/vendor-match):
+      // a category with no allocated budget, or a pick priced at or under it,
+      // counts as an exact match; eligibility filtering has already restricted
+      // this class's pool to its matching price tier, so anything left over
+      // budget is by construction the class's best remaining tier fit.
+      final fitsBudget = s.categoryBudget == null || s.overBudgetRatio <= 0;
+      final budgetDeltaPercent = (!fitsBudget && s.categoryBudget != null && s.categoryBudget! > 0)
+          ? (((s.vendor.priceMin - s.categoryBudget!) / s.categoryBudget!) * 100).round().toDouble()
+          : null;
+      final noteToCouple = fitsBudget
+          ? 'Fits your allocated budget for ${s.vendor.category}.'
+          : 'No ${budgetClass.displayName.toLowerCase()} pick fit your budget for ${s.vendor.category} '
+              'exactly, so this is the closest match for that tier'
+              '${budgetDeltaPercent != null ? ' — about ${budgetDeltaPercent.toStringAsFixed(0)}% over your allocation' : ''}.';
+
       return VendorMatch(
         vendorId: s.vendor.id,
         vendor: s.vendor,
@@ -404,6 +424,11 @@ class _AiEngine {
         reasoningSteps: steps,
         rankInCategory: rank,
         totalInCategory: catTotal[s.vendor.category]!,
+        fitsBudget: fitsBudget,
+        budgetDeltaPercent: budgetDeltaPercent,
+        selectionBasis:
+            fitsBudget ? SelectionBasis.exactBudgetMatch : SelectionBasis.weddingClassBestFit,
+        noteToCouple: noteToCouple,
       );
     }).toList();
   }
@@ -515,6 +540,10 @@ class _AiEngine {
           'smaller/custom package, trimming scope for $cat, or shifting budget from a lower-priority category.';
     }
 
+    final reputationText = v.rating == null
+        ? 'New to WedPilot — no client ratings yet, so this pick leaned on price and profile fit instead.'
+        : '$stars★ from $rev verified ${rev == 1 ? 'client' : 'clients'}${(v.recommendRate != null && v.recommendRate! > 0) ? ', ${(v.recommendRate! * 100).round()}% would recommend' : ''}.';
+
     final availabilityText = isBooked
         ? 'Already booked on your wedding date — confirm availability before relying on them, or line up a backup in $cat.'
         : 'Open on your wedding date, based on their calendar.';
@@ -566,6 +595,7 @@ class _AiEngine {
 
     final steps = [
       ReasoningStep(label: ReasoningStep.budgetFit, text: budgetText),
+      ReasoningStep(label: ReasoningStep.reputation, text: reputationText),
       ReasoningStep(label: ReasoningStep.availability, text: availabilityText),
       ReasoningStep(label: ReasoningStep.styleMatch, text: styleText),
       ReasoningStep(label: ReasoningStep.verdict, text: verdictText),

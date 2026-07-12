@@ -244,7 +244,6 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         weddingDate: _weddingDate,
         styles: _selectedStyles.toList(),
         categories: categories,
-        topVendorNames: const {},
       );
       if (mounted) {
         setState(() {
@@ -826,6 +825,8 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
             color: AppColors.textSecondary,
           ),
         ),
+        const SizedBox(height: 6),
+        const _AiDisclaimer(color: AppColors.textHint),
         const SizedBox(height: 14),
         aiAsync.when(
           loading: () => const _AiRankingCard(),
@@ -857,11 +858,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                   ),
                   const SizedBox(height: 10),
                   if (bestByCategory[category] != null)
-                    _PlanVendorCard(
-                      match: bestByCategory[category],
-                      overrideReasoning:
-                          _aiPlanResult?.vendorReasonings[category],
-                    )
+                    _PlanVendorCard(match: bestByCategory[category])
                   else
                     Text(
                       'No available $category vendors matched yet — add one yourself below.',
@@ -1141,14 +1138,9 @@ class _PlanVendorCard extends StatelessWidget {
   final VendorMatch? match;
   final VendorProfile? vendor;
   final VoidCallback? onRemove;
-  final String? overrideReasoning;
 
-  const _PlanVendorCard({
-    this.match,
-    this.vendor,
-    this.onRemove,
-    this.overrideReasoning,
-  }) : assert(match != null || vendor != null);
+  const _PlanVendorCard({this.match, this.vendor, this.onRemove})
+    : assert(match != null || vendor != null);
 
   bool get _isBudgetAlternate => match?.kind == VendorMatchKind.budgetAlternate;
 
@@ -1245,8 +1237,39 @@ class _PlanVendorCard extends StatelessWidget {
                 _ContactChip(icon: Icons.sell_outlined, text: priceText),
             ],
           ),
-          if (overrideReasoning == null &&
-              (match?.reasoningSteps.isNotEmpty ?? false)) ...[
+          if (!isCustom &&
+              match != null &&
+              !match!.fitsBudget &&
+              (match!.noteToCouple?.isNotEmpty ?? false)) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.warningBg,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 14,
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      match!.noteToCouple!,
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (match?.reasoningSteps.isNotEmpty ?? false) ...[
             const SizedBox(height: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1286,7 +1309,7 @@ class _PlanVendorCard extends StatelessWidget {
                   ),
               ],
             ),
-          ] else if ((overrideReasoning ?? match?.reasoning) != null) ...[
+          ] else if (match?.reasoning != null) ...[
             const SizedBox(height: 10),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1299,7 +1322,7 @@ class _PlanVendorCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    overrideReasoning ?? match!.reasoning!,
+                    match!.reasoning!,
                     style: AppTextStyles.caption.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -1316,6 +1339,7 @@ class _PlanVendorCard extends StatelessWidget {
 
 IconData _reasoningStepIcon(String label) => switch (label) {
   ReasoningStep.budgetFit => Icons.payments_outlined,
+  ReasoningStep.reputation => Icons.star_rate_rounded,
   ReasoningStep.availability => Icons.event_available_outlined,
   ReasoningStep.styleMatch => Icons.palette_outlined,
   ReasoningStep.verdict => Icons.auto_awesome_rounded,
@@ -1966,9 +1990,36 @@ class _AiPlanSummaryCard extends StatelessWidget {
                     ),
                   ),
             ],
+            const SizedBox(height: 14),
+            const _AiDisclaimer(),
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Shown wherever AI-generated reasoning is displayed — a plain reminder
+/// that the couple should double-check specifics before acting on it, since
+/// even a well-grounded model can still get a detail wrong.
+class _AiDisclaimer extends StatelessWidget {
+  final Color color;
+  const _AiDisclaimer({this.color = Colors.white70});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.info_outline_rounded, size: 13, color: color),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'AI-generated — it can make mistakes, so please double-check details before booking.',
+            style: AppTextStyles.caption.copyWith(color: color),
+          ),
+        ),
+      ],
     );
   }
 }

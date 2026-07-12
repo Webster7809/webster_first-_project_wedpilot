@@ -1,6 +1,9 @@
-// One-off dev seeding script — creates 7 test vendors across Venue, Catering,
-// and Photography with deliberately spread price ranges (budget/mid/luxury)
-// so budget-based AI matching can be exercised manually in the app.
+// One-off dev seeding script — creates 7 test vendors per category with
+// deliberately spread price ranges (budget/mid/luxury) so budget-based AI
+// matching can be exercised manually. A subset per category (goodReputation:
+// true) also gets real booked+service-done bookings and positive feedback
+// from a shared pool of seed couples, so AI matching has vendors with an
+// actual computed rating/CRS to weigh against the untested ones.
 // Usage: node scripts/seedTestVendors.js
 require('dotenv').config();
 const bcrypt = require('bcrypt');
@@ -8,6 +11,9 @@ const sequelize = require('../db/sequelize');
 const User = require('../db/models/user');
 const Vendor = require('../db/models/vendor');
 const VendorService = require('../db/models/vendorService');
+const Inquiry = require('../db/models/inquiry');
+const VendorFeedback = require('../db/models/vendorFeedback');
+const { recalculateVendorStats } = require('../services/vendorStats');
 
 const TEST_PASSWORD = 'VendorTest123!';
 
@@ -538,16 +544,359 @@ const VENDORS = [
     price_max: 1600,
     unit: 'package',
   },
+
+  // ── Top-up to 7 per category — all seeded with real bookings + strong,
+  // genuinely-computed feedback (not fabricated stats) so AI matching has
+  // vendors with real reputations to weigh against the untested ones above.
+
+  // Venue (5 above) — +2
+  {
+    email: 'events@sablehillsvenue.test',
+    business_name: 'Sable Hills Wedding Venue',
+    category: 'Venue',
+    description: 'Elegant hillside venue with panoramic views and an in-house events team.',
+    style_tags: ['Elegant', 'Modern'],
+    location: 'Lusaka',
+    latitude: -15.4167,
+    longitude: 28.2833,
+    price_min: 30000,
+    price_max: 55000,
+    unit: 'package',
+    goodReputation: true,
+  },
+  {
+    email: 'bookings@heritagelodgeestate.test',
+    business_name: 'Heritage Lodge Estate',
+    category: 'Venue',
+    description: 'Traditional-style lodge estate in Ndola with grounds for large receptions.',
+    style_tags: ['Traditional', 'Elegant'],
+    location: 'Ndola',
+    latitude: -12.9587,
+    longitude: 28.6366,
+    price_min: 18000,
+    price_max: 32000,
+    unit: 'package',
+    goodReputation: true,
+  },
+
+  // Catering (5 above) — +2
+  {
+    email: 'hello@copperrosecatering.test',
+    business_name: 'Copper Rose Catering',
+    category: 'Catering',
+    description: 'Elegant plated and buffet catering with a highly-rated tasting menu.',
+    style_tags: ['Elegant', 'Modern'],
+    location: 'Lusaka',
+    latitude: -15.4167,
+    longitude: 28.2833,
+    price_min: 12000,
+    price_max: 22000,
+    unit: 'per event',
+    goodReputation: true,
+  },
+  {
+    email: 'hello@tamarastable.test',
+    business_name: "Tamara's Table Catering",
+    category: 'Catering',
+    description: 'Warm, traditional Zambian catering with a loyal Copperbelt following.',
+    style_tags: ['Traditional', 'Rustic'],
+    location: 'Kitwe',
+    latitude: -12.8024,
+    longitude: 28.2132,
+    price_min: 6000,
+    price_max: 12000,
+    unit: 'per event',
+    goodReputation: true,
+  },
+
+  // Photography (5 above) — +2
+  {
+    email: 'studio@timelessframes.test',
+    business_name: 'Timeless Frames Photography',
+    category: 'Photography',
+    description: 'Award-winning wedding photography blending traditional and elegant styles.',
+    style_tags: ['Elegant', 'Traditional'],
+    location: 'Lusaka',
+    latitude: -15.4167,
+    longitude: 28.2833,
+    price_min: 7000,
+    price_max: 14000,
+    unit: 'package',
+    goodReputation: true,
+  },
+  {
+    email: 'book@apertureandaisle.test',
+    business_name: 'Aperture & Aisle Studios',
+    category: 'Photography',
+    description: 'Highly-reviewed modern and minimalist wedding photography in Ndola.',
+    style_tags: ['Modern', 'Minimalist'],
+    location: 'Ndola',
+    latitude: -12.9587,
+    longitude: 28.6366,
+    price_min: 4500,
+    price_max: 9000,
+    unit: 'package',
+    goodReputation: true,
+  },
+
+  // Decor & flowers (5 above) — +2
+  {
+    email: 'hello@ivoryandbloom.test',
+    business_name: 'Ivory & Bloom Events',
+    category: 'Decor & flowers',
+    description: 'Premium event styling and floral design with a stellar client track record.',
+    style_tags: ['Elegant', 'Modern'],
+    location: 'Lusaka',
+    latitude: -15.4167,
+    longitude: 28.2833,
+    price_min: 9000,
+    price_max: 20000,
+    unit: 'package',
+    goodReputation: true,
+  },
+  {
+    email: 'orders@wildflowercopperbelt.test',
+    business_name: 'Wildflower Copperbelt Decor',
+    category: 'Decor & flowers',
+    description: 'Bohemian and rustic floral styling, a Copperbelt favourite.',
+    style_tags: ['Bohemian', 'Rustic'],
+    location: 'Kitwe',
+    latitude: -12.8024,
+    longitude: 28.2132,
+    price_min: 4000,
+    price_max: 9000,
+    unit: 'package',
+    goodReputation: true,
+  },
+
+  // DJ & MC (5 above) — +2
+  {
+    email: 'book@primesoundent.test',
+    business_name: 'Prime Sound Entertainment',
+    category: 'DJ & MC',
+    description: 'High-energy DJ and MC duo with consistently glowing feedback.',
+    style_tags: ['Modern', 'Elegant'],
+    location: 'Lusaka',
+    latitude: -15.4167,
+    longitude: 28.2833,
+    price_min: 6000,
+    price_max: 12000,
+    unit: 'package',
+    goodReputation: true,
+  },
+  {
+    email: 'mc@voiceofzambia.test',
+    business_name: 'Voice of Zambia MC & DJ',
+    category: 'DJ & MC',
+    description: 'Bilingual MC and sound hire known for keeping receptions on schedule.',
+    style_tags: ['Traditional', 'Modern'],
+    location: 'Ndola',
+    latitude: -12.9587,
+    longitude: 28.6366,
+    price_min: 3000,
+    price_max: 6500,
+    unit: 'package',
+    goodReputation: true,
+  },
+
+  // Transport (4 above) — +3
+  {
+    email: 'book@prestigeweddingcars.test',
+    business_name: 'Prestige Wedding Cars',
+    category: 'Transport',
+    description: 'Chauffeured luxury bridal car hire with a spotless service record.',
+    style_tags: ['Elegant', 'Modern'],
+    location: 'Lusaka',
+    latitude: -15.4167,
+    longitude: 28.2833,
+    price_min: 5000,
+    price_max: 12000,
+    unit: 'per event',
+    goodReputation: true,
+  },
+  {
+    email: 'hello@copperbeltbridalrides.test',
+    business_name: 'Copperbelt Bridal Rides',
+    category: 'Transport',
+    description: 'Reliable, punctual bridal car and guest shuttle service in Kitwe.',
+    style_tags: ['Elegant'],
+    location: 'Kitwe',
+    latitude: -12.8024,
+    longitude: 28.2132,
+    price_min: 3000,
+    price_max: 7000,
+    unit: 'per event',
+    goodReputation: true,
+  },
+  {
+    email: 'book@ndolaroyaltransport.test',
+    business_name: 'Ndola Royal Transport',
+    category: 'Transport',
+    description: 'Traditional and elegant convoy hire, well-reviewed for punctuality.',
+    style_tags: ['Traditional', 'Elegant'],
+    location: 'Ndola',
+    latitude: -12.9587,
+    longitude: 28.6366,
+    price_min: 2500,
+    price_max: 6000,
+    unit: 'per event',
+    goodReputation: true,
+  },
+
+  // Wedding attire (5 above) — +2
+  {
+    email: 'hello@thebridalatelier.test',
+    business_name: 'The Bridal Atelier',
+    category: 'Wedding attire',
+    description: 'Premium designer bridal gowns and suiting with a devoted client base.',
+    style_tags: ['Elegant'],
+    location: 'Lusaka',
+    latitude: -15.4167,
+    longitude: 28.2833,
+    price_min: 10000,
+    price_max: 25000,
+    unit: 'package',
+    goodReputation: true,
+  },
+  {
+    email: 'hello@heritagewearcopperbelt.test',
+    business_name: 'Heritage Wear Copperbelt',
+    category: 'Wedding attire',
+    description: 'Traditional wedding outfits tailored locally, highly recommended in Kitwe.',
+    style_tags: ['Traditional'],
+    location: 'Kitwe',
+    latitude: -12.8024,
+    longitude: 28.2132,
+    price_min: 3500,
+    price_max: 9000,
+    unit: 'package',
+    goodReputation: true,
+  },
+
+  // Cake & sweets (5 above) — +2
+  {
+    email: 'orders@divinecakecouture.test',
+    business_name: 'Divine Cake Couture',
+    category: 'Cake & sweets',
+    description: 'Elegant custom wedding cakes with a consistently 5-star track record.',
+    style_tags: ['Elegant', 'Modern'],
+    location: 'Lusaka',
+    latitude: -15.4167,
+    longitude: 28.2833,
+    price_min: 3500,
+    price_max: 8000,
+    unit: 'package',
+    goodReputation: true,
+  },
+  {
+    email: 'hello@copperbeltsweetcelebrations.test',
+    business_name: 'Copperbelt Sweet Celebrations',
+    category: 'Cake & sweets',
+    description: 'Well-loved traditional and rustic wedding cakes in Ndola.',
+    style_tags: ['Traditional', 'Rustic'],
+    location: 'Ndola',
+    latitude: -12.9587,
+    longitude: 28.6366,
+    price_min: 1200,
+    price_max: 3000,
+    unit: 'package',
+    goodReputation: true,
+  },
 ];
+
+// Reusable pool of couple accounts that "book" every goodReputation vendor —
+// small and shared across vendors since VendorFeedback's uniqueness is per
+// (couple, vendor) pair, not global.
+const SEED_COUPLE_COUNT = 6;
+
+async function ensureSeedCouples(password_hash) {
+  const couples = [];
+  for (let i = 1; i <= SEED_COUPLE_COUNT; i++) {
+    const email = `seed-couple-${String(i).padStart(2, '0')}@test.com`;
+    let user = await User.findOne({ where: { email } });
+    if (!user) {
+      user = await User.create({
+        email,
+        password_hash,
+        name: `Seed Couple ${i}`,
+        role: 'couple',
+        is_verified: true,
+      });
+    }
+    couples.push(user);
+  }
+  return couples;
+}
+
+const POSITIVE_COMMENTS = [
+  'Absolutely wonderful to work with — professional and on time!',
+  'Exceeded our expectations, would recommend to any couple.',
+  'Great communication throughout and beautiful results.',
+  'Made our wedding day stress-free — highly recommend.',
+  'Fantastic value and attention to detail.',
+  'They went above and beyond for us.',
+];
+const RATINGS = [5, 5, 4, 5, 5, 4];
+const ON_TIME = ['yes', 'yes', 'yes', 'no', 'yes', 'not_applicable'];
+
+// Creates real booked + service-done inquiries and matching feedback from
+// the seed-couple pool, then lets recalculateVendorStats compute the
+// vendor's rating/CRS for real — never writes vendor_stats directly, so the
+// numbers stay correct if stats are ever recalculated later.
+async function seedGoodReputation(vendor, meta, coupleUsers) {
+  let created = 0;
+  for (let i = 0; i < coupleUsers.length; i++) {
+    const couple = coupleUsers[i];
+    const existingFeedback = await VendorFeedback.findOne({
+      where: { couple_user_id: couple.user_id, vendor_id: vendor.vendor_id },
+    });
+    if (existingFeedback) continue;
+
+    const now = new Date();
+    const inquiry = await Inquiry.create({
+      couple_user_id: couple.user_id,
+      vendor_id: vendor.vendor_id,
+      message: `Hi! We'd love to book you for our wedding — ${meta.business_name} came highly recommended.`,
+      status: 'booked',
+      responded_at: now,
+      service_done_at: now,
+      rating_reminder_count: 1,
+      rating_reminder_last_sent_at: now,
+    });
+
+    await VendorFeedback.create({
+      couple_user_id: couple.user_id,
+      vendor_id: vendor.vendor_id,
+      inquiry_id: inquiry.inquiry_id,
+      star_rating: RATINGS[i % RATINGS.length],
+      comment: POSITIVE_COMMENTS[i % POSITIVE_COMMENTS.length],
+      on_time: ON_TIME[i % ON_TIME.length],
+    });
+    created++;
+  }
+
+  if (created > 0) {
+    await recalculateVendorStats(vendor.vendor_id);
+    console.log(`  Seeded ${created} feedback entries for ${meta.business_name}.`);
+  } else {
+    console.log(`  ${meta.business_name} already has reputation data — skipped.`);
+  }
+}
 
 async function main() {
   await sequelize.authenticate();
   const password_hash = await bcrypt.hash(TEST_PASSWORD, 10);
 
+  const reputationVendors = [];
+
   for (const v of VENDORS) {
     const existingUser = await User.findOne({ where: { email: v.email } });
     if (existingUser) {
       console.log(`Skipping ${v.business_name} — ${v.email} already exists.`);
+      if (v.goodReputation) {
+        const existingVendor = await Vendor.findOne({ where: { user_id: existingUser.user_id } });
+        if (existingVendor) reputationVendors.push({ vendor: existingVendor, meta: v });
+      }
       continue;
     }
 
@@ -582,6 +931,15 @@ async function main() {
     });
 
     console.log(`Created ${v.business_name} (${v.category}, ${v.price_min}-${v.price_max} ZMW) — login: ${v.email} / ${TEST_PASSWORD}`);
+    if (v.goodReputation) reputationVendors.push({ vendor, meta: v });
+  }
+
+  if (reputationVendors.length) {
+    console.log(`\nSeeding reputations for ${reputationVendors.length} vendors...`);
+    const coupleUsers = await ensureSeedCouples(password_hash);
+    for (const { vendor, meta } of reputationVendors) {
+      await seedGoodReputation(vendor, meta, coupleUsers);
+    }
   }
 
   console.log('Done.');
