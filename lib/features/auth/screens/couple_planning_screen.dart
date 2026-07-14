@@ -37,7 +37,7 @@ class CouplePlanningScreen extends ConsumerStatefulWidget {
 
 class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
   int _step = 0;
-  static const int _totalSteps = 5;
+  static const int _totalSteps = 4;
 
   // Step 0 — Budget & basics
   final _budgetCtrl = TextEditingController();
@@ -72,10 +72,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
   ];
   final Set<String> _selectedStyles = {};
 
-  // Step 3 — Anything else
-  final _specialRequestsCtrl = TextEditingController();
-
-  // AI plan results for step 4
+  // AI plan results for step 3
   WeddingPlanResult? _aiPlanResult;
   bool _aiPlanLoading = false;
   String? _aiPlanError;
@@ -84,7 +81,6 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     "LET'S PLAN YOUR DAY",
     'YOUR WEDDING DATE',
     'STYLE & PREFERENCES',
-    'FINAL DETAILS',
     'YOUR WEDDING PLAN',
   ];
 
@@ -92,7 +88,6 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     "What's your total\nwedding budget?",
     "When's your\nbig day?",
     "What's your\nwedding style?",
-    "Any special\nrequirements?",
     "Your AI-curated\nwedding plan",
   ];
 
@@ -102,7 +97,6 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     _guestsCtrl.dispose();
     _locationCtrl.dispose();
     _customCategoryCtrl.dispose();
-    _specialRequestsCtrl.dispose();
     super.dispose();
   }
 
@@ -203,10 +197,6 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     ref.read(selectedServiceCategoriesProvider.notifier).state = categories;
     ref.read(wizardLocationProvider.notifier).state = _locationCtrl.text.trim();
     ref.read(wizardStylesProvider.notifier).state = _selectedStyles.toList();
-    ref.read(wizardSpecialRequestsProvider.notifier).state =
-        _specialRequestsCtrl.text.trim().isEmpty
-            ? null
-            : _specialRequestsCtrl.text.trim();
     ref.read(budgetClassProvider.notifier).state = switch (_weddingClass) {
       'Low class' => BudgetClass.budgetFriendly,
       'High class' => BudgetClass.highClass,
@@ -313,8 +303,6 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
       case 2:
         return _buildStyleStep();
       case 3:
-        return _buildDetailsStep();
-      case 4:
         return _buildReviewStep();
       default:
         return const SizedBox();
@@ -701,51 +689,6 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           }).toList(),
         ),
         const SizedBox(height: 32),
-        WizardContinueButton(onPressed: _next, label: 'Continue'),
-      ],
-    );
-  }
-
-  // ── Step 3: Details ─────────────────────────────────────────────────────────
-
-  Widget _buildDetailsStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Anything else WedPilot should know when matching vendors for you?',
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 20),
-        TextFormField(
-          controller: _specialRequestsCtrl,
-          maxLines: 5,
-          decoration: InputDecoration(
-            hintText:
-                'e.g. We prefer garden settings, need halal catering options...',
-            hintStyle: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textHint,
-            ),
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.divider),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.divider),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
-            ),
-            contentPadding: const EdgeInsets.all(16),
-          ),
-        ),
-        const SizedBox(height: 32),
         WizardContinueButton(
           onPressed: _createPlan,
           label: 'Create our wedding plan',
@@ -754,7 +697,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     );
   }
 
-  // ── Step 4: AI-curated review ───────────────────────────────────────────────
+  // ── Step 3: AI-curated review ───────────────────────────────────────────────
 
   Widget _buildReviewStep() {
     final aiAsync = ref.watch(aiRecommendedVendorsProvider);
@@ -1343,7 +1286,6 @@ IconData _reasoningStepIcon(String label) => switch (label) {
   ReasoningStep.availability => Icons.event_available_outlined,
   ReasoningStep.styleMatch => Icons.palette_outlined,
   ReasoningStep.verdict => Icons.auto_awesome_rounded,
-  ReasoningStep.specialRequest => Icons.record_voice_over_outlined,
   _ => Icons.auto_awesome_rounded,
 };
 

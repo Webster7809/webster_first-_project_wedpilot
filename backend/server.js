@@ -106,11 +106,18 @@ function stripLeak(value, state) {
   return value;
 }
 
-// Bounded so a run of bad completions can't chain into a latency spiral —
-// the Flutter client's receive timeout is 60s, so more than 2 sequential
-// calls to a slow free model risks the couple seeing a timeout instead of
-// even a degraded-but-honest result.
-const MAX_AI_ATTEMPTS = 2;
+// A retry here means a second full call to the free-tier OpenRouter model —
+// on a tight free-tier quota, that silently doubles how fast a couple burns
+// through it. It's also no longer load-bearing for correctness: every fact
+// that actually reaches the couple (rating, review count, booked status,
+// budget numbers) is rewritten deterministically from real data after the
+// call returns (see groundedStepText/groundedBudgetFitText/groundVendorMatch
+// below), regardless of whether this attempt validated, and the Flutter-side
+// guard already discards a result with a fabricated vendorId for free. So a
+// response that fails validate() (e.g. a missing reasoning label) still ships
+// safely — it's just less complete, not fabricated — making a second
+// OpenRouter call not worth its cost in quota.
+const MAX_AI_ATTEMPTS = 1;
 
 // Both endpoints ask for JSON in the prompt itself and extract the first
 // {...} span from the response text (response_format is a hint, not a
@@ -252,9 +259,9 @@ Rules:
 });
 
 // The 4 reasoning steps every vendor-match category must always carry (see the
-// prompt below) — "Special request" is the only conditional 5th step. "Budget
-// fit" isn't in this list because the app writes that step entirely itself
-// (see groundedBudgetFitText) — the model only contributes budgetFitSuggestionType.
+// prompt below). "Budget fit" isn't in this list because the app writes that
+// step entirely itself (see groundedBudgetFitText) — the model only
+// contributes budgetFitSuggestionType.
 const REQUIRED_REASONING_LABELS = ['Reputation', 'Availability', 'Style match', 'Verdict'];
 
 const BUDGET_FIT_SUGGESTION_TYPES = ['negotiate', 'trim_scope', 'reallocate_budget', 'none_needed'];
@@ -352,10 +359,7 @@ function groundVendorMatch(json, categories, categoryBudgets, budgetClass) {
 app.post('/api/vendor-match', async (req, res) => {
   const {
     budgetClass = 'flexible', location = null, styles = [], categories = {}, categoryBudgets = {},
-    specialRequests = null,
   } = req.body;
-
-  const trimmedRequest = typeof specialRequests === 'string' ? specialRequests.trim() : '';
 
   const prompt = `
 You're vetting vendors for a client. Couple context:
@@ -364,31 +368,24 @@ You're vetting vendors for a client. Couple context:
 - Style preferences: ${styles.length ? styles.join(', ') : 'Not specified'}
 - Allocated budget per category (their money, in local currency; a category absent here has no known cap):
 ${JSON.stringify(categoryBudgets, null, 2)}
-- Free-text note the couple typed in an "anything else we should know?" box: ${trimmedRequest ? `"${trimmedRequest}"` : 'Not provided'}
-
-${trimmedRequest ? `Before using that note, judge it for yourself: is it actually a real, wedding-relevant
-preference or requirement (e.g. a dietary need, a setting/venue preference, an accessibility need, a
-cultural/religious requirement, a style detail)? If it's gibberish, spam, off-topic, or otherwise not a
-genuine wedding-planning instruction, reject it outright — do not reference it anywhere in your reasoning
-and do not let it influence any pick. If it is genuine, then for each category below decide independently
-whether that specific note actually applies to that category's vendors (e.g. "need halal catering" applies
-to Catering, not to DJ & MC; "prefer garden settings" applies to Venue and maybe Decor & flowers, not to
-Photography). Only where it genuinely applies: let it inform which candidate you pick for that category
-(prefer a candidate whose profile/style tags/description are consistent with the request when candidates
-are otherwise close), and add a 5th reasoning step for that category only (see format below). Never claim
-the couple asked for something they didn't, and never bend a category's pick toward an irrelevant note.` : ''}
 
 For each category below, you are given a pre-filtered candidate list. Each candidate already
 passed eligibility rules and has three precomputed 0-1 signal scores: reputationScore (rating/
-reviews/track record), locationScore (proximity to the couple — this is HIGH PRIORITY: treat it as
-at least as important as reputation or price, and strongly prefer a nearby candidate over a
-similarly-qualified one further away), valueScore (price fit for their budget class). Treat these
-scores as inputs, not the final word — weigh them against style tag overlap with the couple's
-preferences and each vendor's profile the way a seasoned planner would weigh a shortlist against a
-client's brief, including trade-offs (e.g. a slightly lower-rated vendor whose style is a much
-better fit). Only pick a candidate with a low locationScore as your primary recommendation when no
-comparable nearby candidate exists in that category. Then commit to the single best vendor per
-category.
+reviews/track record), locationScore (proximity to the couple), valueScore (price fit against the
+couple's allocated budget for that category). Treat these scores as inputs, not the final word —
+weigh them against style tag overlap and each vendor's profile the way a seasoned planner would,
+including trade-offs. Which signal should decide your pick depends on the couple's budget class:
+- 'highClass': reputationScore is the deciding factor, full stop — the couple chose premium/luxury
+  above all else, so the best-reviewed candidate should win. Only let locationScore or valueScore
+  break your pick when two or more candidates are close to tied on reputationScore.
+- 'budgetFriendly': valueScore is the deciding factor — the couple explicitly wants to spend less,
+  so the candidate priced lowest against their allocation should win. Only let reputationScore or
+  locationScore break your pick when two or more candidates are close to tied on valueScore.
+- 'flexible': weigh reputationScore, locationScore, and valueScore roughly evenly — every
+  reputation tier is welcome here, so don't let reputation alone eliminate a candidate.
+Only pick a candidate with a low locationScore as your primary recommendation when no comparable
+alternative exists in that category on whichever signal decides this budget class. Then commit to
+the single best vendor per category.
 
 Each candidate also has an isBookedOnWeddingDate flag: true means that vendor already has a
 confirmed booking on the couple's wedding date (they blocked that date on their calendar) and is
@@ -448,13 +445,6 @@ Instead of one run-on explanation, break your justification for each pick into n
 4. "Verdict" — 1 short sentence final call, read like a planner's professional judgement, not a
    restatement of the numeric scores.
 
-Then, ONLY for a category where you judged the couple's free-text note (above) to be both genuine and
-actually applicable to that category, append a 5th step:
-5. "Special request" — 1 short sentence starting with "You mentioned..." or "As you requested...",
-   naming the specific thing the couple asked for and stating plainly how this vendor does or doesn't
-   meet it. Omit this step entirely for every category the note doesn't genuinely apply to, and omit it
-   everywhere if the note was rejected as not wedding-relevant.
-
 Respond ONLY with valid JSON in this exact shape:
 {
   "categories": {
@@ -466,8 +456,7 @@ Respond ONLY with valid JSON in this exact shape:
         { "label": "Reputation", "text": "..." },
         { "label": "Availability", "text": "..." },
         { "label": "Style match", "text": "..." },
-        { "label": "Verdict", "text": "..." },
-        { "label": "Special request", "text": "..." }
+        { "label": "Verdict", "text": "..." }
       ]
     }
   }
@@ -478,21 +467,20 @@ Rules:
   exact category's list in CANDIDATE_VENDORS — never a vendorId from a different category, never a
   vendorId you constructed or modified, never a placeholder.
 - confidence reflects how strongly you recommend this vendor to this couple specifically.
-- reasoningSteps must always include the 4 required labels in order, each one short, specific sentence — no generic filler. Only add the 5th "Special request" step where it genuinely applies, per the rule above.
+- reasoningSteps must always include all 4 required labels in order, each one short, specific sentence — no generic filler.
 - Never invent facts — no prices, ratings, review counts, styles, or availability beyond what's given
-  in CANDIDATE_VENDORS. Ground every claim only in that data, plus the couple's own free-text note
-  where genuinely applicable. This is your single source of truth — treat anything not present in it
-  as unknown, not as something you can estimate or fill in.
+  in CANDIDATE_VENDORS. Ground every claim only in that data. This is your single source of truth —
+  treat anything not present in it as unknown, not as something you can estimate or fill in.
 `;
 
   const requestedCategories = Object.keys(categories);
 
   // Checking vendorId against the real candidate list (not just truthiness)
   // and requiring the 4 reasoning labels plus a valid budgetFitSuggestionType
-  // means a first attempt that invents a vendor, omits a step, or skips the
-  // suggestion type fails validate() and gets a real retry, instead of
-  // reaching askAI's exhausted-attempts fallback and only getting caught
-  // later by the Flutter-side guard.
+  // still documents what a "good" response looks like even though
+  // MAX_AI_ATTEMPTS = 1 means a failed check no longer buys a retry (see
+  // that constant's comment) — an invented vendorId still gets caught for
+  // free by the Flutter-side guard, which discards it to the local fallback.
   const validate = (r) =>
     r.categories &&
     typeof r.categories === 'object' &&

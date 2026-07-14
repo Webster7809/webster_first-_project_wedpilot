@@ -542,20 +542,34 @@ class _BudgetOverviewCard extends StatelessWidget {
 
   static const _catColors = AppColors.budgetCategoryColors;
 
+  static double _metricFor(dynamic c, bool showingPlanned) =>
+      showingPlanned ? c.allocatedAmount as double : c.spentAmount as double;
+
   @override
   Widget build(BuildContext context) {
     final total = budget.totalAmount as double;
     final spent = budget.totalSpent as double;
+
+    // Nothing spent yet — a fresh AI-generated plan would otherwise render
+    // as an empty gray bar with no legend until the couple logs their first
+    // expense, hiding the very allocation they just reviewed in the wizard.
+    // Preview the *planned* split instead; once real spending starts this
+    // switches back to showing where the money has actually gone.
+    final showingPlanned = spent <= 0;
     final categories =
         (budget.categories as List<dynamic>)
-            .where((c) => (c.spentAmount as double) > 0)
+            .where((c) => _metricFor(c, showingPlanned) > 0)
             .toList()
           ..sort(
-            (a, b) =>
-                (b.spentAmount as double).compareTo(a.spentAmount as double),
+            (a, b) => _metricFor(
+              b,
+              showingPlanned,
+            ).compareTo(_metricFor(a, showingPlanned)),
           );
 
-    final unallocated = (total - spent).clamp(0.0, total);
+    final unallocated = showingPlanned
+        ? (total - (budget.totalAllocated as double)).clamp(0.0, total)
+        : (total - spent).clamp(0.0, total);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -628,7 +642,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                   .map(
                     (c) => _BarSegment(
                       fraction: total > 0
-                          ? (c.spentAmount as double) / total
+                          ? _metricFor(c, showingPlanned) / total
                           : 0,
                       color:
                           _catColors[c.categoryName] ?? AppColors.forestGreen,
@@ -641,6 +655,13 @@ class _BudgetOverviewCard extends StatelessWidget {
                 ),
             ],
           ),
+          if (showingPlanned && categories.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Planned split — switches to actual spending once you log an expense',
+              style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 14,

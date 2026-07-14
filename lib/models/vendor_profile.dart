@@ -366,11 +366,7 @@ class ReasoningStep {
   static const availability = 'Availability';
   static const styleMatch = 'Style match';
   static const verdict = 'Verdict';
-  // Only present when the couple's free-text "anything else" note turned out
-  // to be genuinely applicable to this vendor — omitted entirely otherwise,
-  // rather than shown as a hollow "not applicable" line.
-  static const specialRequest = 'Special request';
-  static const knownLabels = [budgetFit, reputation, availability, styleMatch, verdict, specialRequest];
+  static const knownLabels = [budgetFit, reputation, availability, styleMatch, verdict];
 
   factory ReasoningStep.fromJson(Map<String, dynamic> json) => ReasoningStep(
         label: json['label'] as String? ?? '',

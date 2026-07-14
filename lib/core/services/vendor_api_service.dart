@@ -65,6 +65,8 @@ class VendorApiService {
     double? priceMin,
     double? priceMax,
     bool? verifiedOnly,
+    int? limit,
+    int? offset,
   }) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
@@ -76,6 +78,8 @@ class VendorApiService {
           'price_min': ?priceMin,
           'price_max': ?priceMax,
           if (verifiedOnly == true) 'verified': 'true',
+          'limit': ?limit,
+          'offset': ?offset,
         },
         options: _auth(accessToken),
       );
@@ -86,6 +90,37 @@ class VendorApiService {
     } on DioException catch (e) {
       throw VendorApiException(_extractError(e));
     }
+  }
+
+  /// Pages through the *entire* directory instead of just the first 20
+  /// results — [fetchVendors] alone silently caps at the backend's default
+  /// page size (see routes/vendors.js), so any caller that needs to reason
+  /// about the whole vendor pool (e.g. the wedding-plan AI matcher, which
+  /// must see every category's vendors to score them) has to go through this
+  /// instead, or it silently starves whichever categories fall past page 1.
+  Future<List<VendorProfile>> fetchAllVendors(
+    String accessToken, {
+    String? category,
+    String? location,
+    bool? verifiedOnly,
+  }) async {
+    const pageSize = 100; // backend's hard cap, see routes/vendors.js
+    final all = <VendorProfile>[];
+    var offset = 0;
+    while (true) {
+      final page = await fetchVendors(
+        accessToken,
+        category: category,
+        location: location,
+        verifiedOnly: verifiedOnly,
+        limit: pageSize,
+        offset: offset,
+      );
+      all.addAll(page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
+    return all;
   }
 
   Future<VendorProfile> fetchVendorDetail(String accessToken, String vendorId) async {

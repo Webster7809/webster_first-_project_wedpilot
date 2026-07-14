@@ -74,11 +74,66 @@ async function findOwnBudgetOr404(req, res) {
   return budget;
 }
 
+// Keeps a budget's category rows in sync on every repeat POST — two things:
+//  1. Rescale: a category counts as "still auto-generated" when its
+//     allocated_amount exactly matches what buildCategoriesFor would have
+//     produced for it at the budget's *previous* total — i.e. the couple
+//     never manually re-allocated it via PUT /categories/:id. Only those get
+//     rescaled to track the new total_amount; anything deliberately
+//     customized is left exactly as set. Without this, a category's
+//     allocated_amount stays frozen at whatever number it was first computed
+//     against, silently going nonsensical once total_amount changes — e.g.
+//     "2,499,900% over budget" instead of tracking the couple's real budget.
+//  2. Backfill: any category the couple has now selected (service_categories
+//     on this request) that has no row at all yet — e.g. their very first
+//     budget only covered one category, or they've added more on a later
+//     wizard run — gets created fresh at its template share of the total.
+//     Without this, a category can be permanently missing from the budget
+//     breakdown and from the AI vendor matcher's per-category budget, no
+//     matter how many times total_amount is later corrected.
+// Never deletes or overrides a row the couple hasn't touched via this sync.
+async function syncCategoriesForNewTotal(budget, oldTotal, newTotal, requestedNames) {
+  const [existingCategories, existingCustomItems] = await Promise.all([
+    BudgetCategory.findAll({ where: { budget_id: budget.budget_id } }),
+    BudgetCustomItem.findAll({ where: { budget_id: budget.budget_id } }),
+  ]);
+  const existingNames = existingCategories
+    .map((c) => c.category_name)
+    .filter((n) => n !== 'Custom Items' && n !== 'Contingency');
+  const allNames = [...new Set([...existingNames, ...(Array.isArray(requestedNames) ? requestedNames : [])])];
+  if (allNames.length === 0) return;
+
+  const customItemInputs = existingCustomItems.map((i) => ({ amount: Number(i.amount) }));
+  const oldByName = Object.fromEntries(
+    buildCategoriesFor(oldTotal, allNames, customItemInputs).map((c) => [c.category_name, c.allocated_amount]),
+  );
+  const newTemplate = buildCategoriesFor(newTotal, allNames, customItemInputs);
+  const newByName = Object.fromEntries(newTemplate.map((c) => [c.category_name, c]));
+
+  for (const cat of existingCategories) {
+    const wasTemplate = oldByName[cat.category_name];
+    const nowTemplate = newByName[cat.category_name];
+    if (wasTemplate == null || nowTemplate == null) continue;
+    if (Math.abs(Number(cat.allocated_amount) - wasTemplate) >= 0.01) continue; // manually customized — leave it
+    cat.allocated_amount = Math.max(nowTemplate.allocated_amount, Number(cat.spent_amount));
+    await cat.save();
+  }
+
+  const existingNameSet = new Set(existingCategories.map((c) => c.category_name));
+  const missingNames = allNames.filter((n) => !existingNameSet.has(n));
+  if (missingNames.length) {
+    await BudgetCategory.bulkCreate(
+      missingNames.map((name) => ({ ...newByName[name], budget_id: budget.budget_id })),
+    );
+  }
+}
+
 // ── POST /api/budget ────────────────────────────────────────────────────────────
 // Explicit create/update. Generates categories from the template only when no
-// budget exists yet; on repeat calls it only updates total_amount/currency and
-// leaves existing categories/expenses untouched (reallocating on every budget
-// edit is out of scope — the couple can adjust categories manually).
+// budget exists yet; on repeat calls it updates total_amount/currency and
+// syncs categories (rescale + backfill any missing ones — see
+// syncCategoriesForNewTotal) so the couple's current selection and total are
+// always fully reflected.
 router.post('/', verifyJwt, requireCouple, async (req, res) => {
   const { total_amount, currency, service_categories, custom_items } = req.body;
   if (typeof total_amount !== 'number' || total_amount < 0) {
@@ -88,9 +143,11 @@ router.post('/', verifyJwt, requireCouple, async (req, res) => {
   try {
     let budget = await Budget.findOne({ where: { couple_user_id: req.user.user_id } });
     if (budget) {
+      const oldTotal = Number(budget.total_amount);
       budget.total_amount = total_amount;
       if (currency) budget.currency = currency;
       await budget.save();
+      await syncCategoriesForNewTotal(budget, oldTotal, total_amount, service_categories);
       return res.json({ budget: await serializeBudget(budget) });
     }
 

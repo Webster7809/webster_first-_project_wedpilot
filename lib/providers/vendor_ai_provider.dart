@@ -80,11 +80,6 @@ final wizardLocationProvider = StateProvider<String?>((ref) => null);
 /// Style preferences chosen by the couple in wizard Step 2 — feeds the AI vendor matcher.
 final wizardStylesProvider = StateProvider<List<String>>((ref) => const []);
 
-/// Free-text "anything else" note from wizard Step 3. Passed to the AI
-/// matcher as-is — the AI decides for itself whether it's wedding-relevant
-/// and which categories (if any) it actually applies to.
-final wizardSpecialRequestsProvider = StateProvider<String?>((ref) => null);
-
 final aiRecommendedVendorsProvider =
     FutureProvider<List<VendorMatch>>((ref) async {
   final budgetClass = ref.watch(budgetClassProvider);
@@ -92,7 +87,6 @@ final aiRecommendedVendorsProvider =
   final coupleProfile = ref.watch(coupleProfileProvider);
   final wizardLocation = ref.watch(wizardLocationProvider);
   final wizardStyles = ref.watch(wizardStylesProvider);
-  final specialRequests = ref.watch(wizardSpecialRequestsProvider);
   final savedBudget = ref.watch(budgetProvider).data;
 
   // A budget the couple actually entered is the one grounding fact every
@@ -115,7 +109,7 @@ final aiRecommendedVendorsProvider =
       : null;
 
   final allVendors = await ref.watch(allVendorsProvider.future);
-  final eligible = _AiEngine.filterEligible(allVendors, budgetClass, categories);
+  final eligible = _AiEngine.filterEligible(allVendors, categories);
   final pool = eligible.pool;
 
   // The couple's allocated spend per category. Prefers their actual saved
@@ -142,15 +136,14 @@ final aiRecommendedVendorsProvider =
       pool: pool,
       scored: scored,
       budgetClass: budgetClass,
-      styles: wizardStyles,
-      specialRequests: specialRequests);
+      styles: wizardStyles);
 
   final List<VendorMatch> matches;
   if (scored.isEmpty) {
     matches = localFallback;
   } else {
     matches = await _matchWithAi(scored, localFallback, budgetClass,
-        locationString, wizardStyles, categoryBudgets, specialRequests);
+        locationString, wizardStyles, categoryBudgets);
   }
 
   final alternates = _AiEngine.budgetAlternates(scored, matches, categoryBudgets);
@@ -167,7 +160,6 @@ Future<List<VendorMatch>> _matchWithAi(
   String? locationString,
   List<String> wizardStyles,
   Map<String, double> categoryBudgets,
-  String? specialRequests,
 ) async {
   try {
     final suggestions = await WeddingAiService.instance.matchVendors(
@@ -176,7 +168,6 @@ Future<List<VendorMatch>> _matchWithAi(
       styles: wizardStyles,
       categorized: _AiEngine.buildCandidates(scored),
       categoryBudgets: categoryBudgets,
-      specialRequests: specialRequests,
     );
 
     final requestedCategories = scored.map((s) => s.vendor.category).toSet();
@@ -253,22 +244,24 @@ Future<void> _syncTopMatches(Ref ref, List<VendorMatch> matches) async {
 class _AiEngine {
   _AiEngine._();
 
-  static const double _minRatingHighClass = 4.5;
-  static const double _minRatingBudget = 3.5;
-  static const double _minRatingFlexible = 3.0;
-
+  /// Every vendor in a requested category is always included in the pool —
+  /// wedding class and star rating shape *ranking* (see [scoreAll] and
+  /// [_valueScore]), they never zero out a category outright. A hard
+  /// price-tier/rating gate here used to mean a whole category could come
+  /// back with nothing the moment no vendor cleared its bar (e.g. "High
+  /// class" required both the top price tier *and* a 4.5+ rating) — even
+  /// when the category had plenty of real vendors the couple could see and
+  /// afford. Ranking already degrades gracefully to the "closest available
+  /// fit" (see the budget-fit reasoning text below); it just needs a
+  /// non-empty pool to work with.
   static ({List<VendorProfile> pool, Map<String, VendorPriceTier> tiers}) filterEligible(
     List<VendorProfile> vendors,
-    BudgetClass budgetClass,
     List<String> categories,
   ) {
-    final byCategory = categories.isEmpty
+    final pool = categories.isEmpty
         ? vendors
         : vendors.where((v) => categories.contains(v.category)).toList();
-
-    final tiers = _relativePriceTiers(byCategory);
-    final pool =
-        byCategory.where((v) => _eligible(v, budgetClass, tiers[v.id]!)).toList();
+    final tiers = _relativePriceTiers(pool);
     return (pool: pool, tiers: tiers);
   }
 
@@ -324,10 +317,10 @@ class _AiEngine {
       final tier = priceTiers[v.id] ?? v.priceTier;
       final rep = v.performanceScore;
       final loc = _locationScore(v, coupleLat, coupleLon);
-      final val = _valueScore(v, budgetClass, tier);
+      final categoryBudget = categoryBudgets[v.category];
+      final val = _valueScore(v, budgetClass, categoryBudget);
       final isBooked =
           weddingDateStr != null && v.blockedDates.contains(weddingDateStr);
-      final categoryBudget = categoryBudgets[v.category];
       final overBudgetRatio = categoryBudget != null && categoryBudget > 0
           ? ((v.priceMin - categoryBudget) / categoryBudget).clamp(0.0, 1.0)
           : 0.0;
@@ -381,7 +374,6 @@ class _AiEngine {
     required List<_ScoredVendor> scored,
     required BudgetClass budgetClass,
     List<String> styles = const [],
-    String? specialRequests,
   }) {
     final ranked = [...scored]..sort((a, b) => b.finalScore.compareTo(a.finalScore));
 
@@ -395,7 +387,7 @@ class _AiEngine {
       final rank = (catRank[s.vendor.category] ?? 0) + 1;
       catRank[s.vendor.category] = rank;
       final steps = _reasonSteps(s.vendor, budgetClass, rank, s.isBookedOnWeddingDate,
-          s.categoryBudget, s.overBudgetRatio, styles, specialRequests, s.location);
+          s.categoryBudget, s.overBudgetRatio, styles, s.location);
 
       // Mirrors the backend's budget-fit/fallback rules (see /api/vendor-match):
       // a category with no allocated budget, or a pick priced at or under it,
@@ -433,27 +425,6 @@ class _AiEngine {
     }).toList();
   }
 
-  static bool _eligible(VendorProfile v, BudgetClass bc, VendorPriceTier tier) {
-    // Brand-new vendors have no feedback yet, so they haven't had a chance to
-    // earn a rating — exempt them from the rating floor so they're still
-    // visible to the AI matcher instead of being silently excluded forever.
-    if (v.feedbackCount == 0) {
-      return switch (bc) {
-        BudgetClass.highClass => tier == VendorPriceTier.high,
-        BudgetClass.flexible => true,
-        BudgetClass.budgetFriendly => tier != VendorPriceTier.high,
-      };
-    }
-    final r = v.rating ?? 0;
-    return switch (bc) {
-      BudgetClass.highClass =>
-        tier == VendorPriceTier.high && r >= _minRatingHighClass,
-      BudgetClass.flexible => r >= _minRatingFlexible,
-      BudgetClass.budgetFriendly =>
-        tier != VendorPriceTier.high && r >= _minRatingBudget,
-    };
-  }
-
   static double _locationScore(VendorProfile v, double? lat, double? lon) {
     if (lat == null || lon == null || v.latitude == null || v.longitude == null) {
       return 0.5;
@@ -463,17 +434,33 @@ class _AiEngine {
     return (1.0 - dist / maxKm).clamp(0.0, 1.0);
   }
 
-  static double _valueScore(VendorProfile v, BudgetClass bc, VendorPriceTier tier) {
-    final r = (v.rating ?? 0) / 5.0;
+  /// Price fit, scaled against the couple's *actual* allocated budget for
+  /// this category rather than where the vendor sits relative to its
+  /// siblings — so this genuinely moves as the couple's entered budget
+  /// amount moves, not just as the vendor pool happens to be priced.
+  /// Reputation is deliberately left out here: [_finalScore] gives it its
+  /// own dedicated weight per class, so folding it in again here would
+  /// double-count it.
+  static double _valueScore(VendorProfile v, BudgetClass bc, double? categoryBudget) {
+    // A vendor with no price on file isn't "cheap" (that has to be earned by
+    // an actual low price, or a confirmed-affordable vendor would lose to an
+    // unpriced one purely for having no data) nor "expensive" — treat it as
+    // sitting exactly on the budget line: neither a proven bargain nor a
+    // proven splurge, so it can neither win nor lose a class's dominant
+    // signal just for lacking data.
+    final priceRatio = (categoryBudget != null && categoryBudget > 0 && v.priceMin > 0)
+        ? v.priceMin / categoryBudget
+        : 1.0;
     return switch (bc) {
-      BudgetClass.highClass =>
-        (tier == VendorPriceTier.high ? 0.70 : 0.0) + r * 0.30,
-      BudgetClass.flexible => (r + v.compositeScore / 100.0) / 2.0,
-      BudgetClass.budgetFriendly => switch (tier) {
-          VendorPriceTier.low => 1.00 * 0.55 + r * 0.45,
-          VendorPriceTier.mid => 0.65 * 0.55 + r * 0.45,
-          VendorPriceTier.high => 0.0,
-        },
+      // How "premium" this looks relative to what the couple allocated —
+      // only a light tiebreaker here since reputation already decides High
+      // class almost entirely (see _finalScore).
+      BudgetClass.highClass => priceRatio.clamp(0.0, 1.5) / 1.5,
+      BudgetClass.flexible => (((v.rating ?? 0) / 5.0) + v.compositeScore / 100.0) / 2.0,
+      // Cheaper relative to the couple's allocation wins outright; saturates
+      // once price reaches the allocation itself — how far over that point
+      // a vendor is gets penalized separately via overBudgetRatio.
+      BudgetClass.budgetFriendly => (1.0 - priceRatio).clamp(0.0, 1.0),
     };
   }
 
@@ -488,19 +475,27 @@ class _AiEngine {
   // category fits, but it will rank below anything that does fit.
   static const double _overBudgetWeight = 0.40;
 
-  // Proximity to the couple is treated as a high-priority factor across every
-  // budget class — it now carries as much or more weight than any single
-  // other signal, so a vendor near the couple's entered location is
-  // strongly favoured as the primary pick over an otherwise-similar vendor
-  // further away. (Farther vendors that beat the primary pick on budget
+  // Each wedding class has one deliberately dominant signal — a couple who
+  // picked a class is telling the AI what to optimize for, so that signal
+  // should decide the pick, not just nudge a three-way blend:
+  //   - High class: reputation. "Premium only" means the best-reviewed
+  //     vendor in the category wins, full stop — location/price are minor
+  //     tiebreakers, not co-equal factors.
+  //   - Flexible: a genuine balanced blend across reputation, price, and
+  //     location — every reputation tier stays welcome and no one signal
+  //     dominates.
+  //   - Budget-friendly: price. The couple explicitly wants to spend less,
+  //     so the cheapest-relative-to-their-allocation vendor wins outright,
+  //     with reputation only as a light tiebreaker.
+  // (Farther-but-cheaper vendors that lose out to a closer primary pick
   // aren't lost — see [_AiEngine.budgetAlternates], which surfaces the best
-  // of those separately rather than relying on this weighting to reach them.)
+  // of those separately.)
   static double _finalScore(double rep, double loc, double val,
       BudgetClass bc, bool isBooked, double overBudgetRatio) {
     final base = switch (bc) {
-      BudgetClass.highClass => rep * 0.40 + val * 0.25 + loc * 0.35,
+      BudgetClass.highClass => rep * 0.75 + loc * 0.15 + val * 0.10,
       BudgetClass.flexible => rep * 0.30 + val * 0.30 + loc * 0.40,
-      BudgetClass.budgetFriendly => val * 0.40 + rep * 0.20 + loc * 0.40,
+      BudgetClass.budgetFriendly => val * 0.70 + loc * 0.15 + rep * 0.15,
     };
     final penalized = isBooked ? base - _bookedPenalty : base;
     return penalized - overBudgetRatio * _overBudgetWeight;
@@ -517,7 +512,6 @@ class _AiEngine {
     double? categoryBudget,
     double overBudgetRatio,
     List<String> styles,
-    String? specialRequests,
     double locationScore,
   ) {
     final stars = v.rating?.toStringAsFixed(1) ?? '—';
@@ -601,8 +595,6 @@ class _AiEngine {
       ReasoningStep(label: ReasoningStep.verdict, text: verdictText),
     ];
 
-    final requestStep = _specialRequestStep(v, specialRequests);
-    if (requestStep != null) steps.add(requestStep);
     return steps;
   }
 
@@ -676,34 +668,6 @@ class _AiEngine {
       ));
     }
     return alternates;
-  }
-
-  /// Cheap keyword heuristic for the offline fallback only — real semantic
-  /// judgement of whether the couple's free-text note is even wedding-
-  /// relevant, and whether it applies to this vendor, happens server-side via
-  /// the LLM prompt (see /api/vendor-match). This only ever surfaces a claim
-  /// that's grounded in the couple's own words actually appearing against
-  /// this vendor's real category/description/style data — it never
-  /// fabricates a match, and silently omits the step (i.e. "rejects" the
-  /// note) when nothing lines up.
-  static ReasoningStep? _specialRequestStep(VendorProfile v, String? specialRequests) {
-    final text = specialRequests?.trim() ?? '';
-    if (text.isEmpty) return null;
-    final haystack = [v.category, v.description ?? '', ...v.styleTags]
-        .join(' ')
-        .toLowerCase();
-    final words = text
-        .toLowerCase()
-        .split(RegExp(r'[^a-z0-9]+'))
-        .where((w) => w.length >= 4)
-        .toSet();
-    final hit = words.firstWhere(haystack.contains, orElse: () => '');
-    if (hit.isEmpty) return null;
-    return ReasoningStep(
-      label: ReasoningStep.specialRequest,
-      text: 'You mentioned "$hit" in your notes — this vendor\'s profile lines up with that, '
-          'so it was factored into this pick.',
-    );
   }
 }
 

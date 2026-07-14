@@ -74,12 +74,11 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
   }
 
   Future<void> _pickVendor() async {
-    final useWishlist = ref.read(wishlistProvider).isNotEmpty;
     final selected = await showModalBottomSheet<VendorProfile>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _VendorPickerSheet(useWishlist: useWishlist),
+      builder: (_) => const _VendorPickerSheet(),
     );
     if (selected != null) {
       setState(() => _selectedVendor = selected);
@@ -234,8 +233,7 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
 }
 
 class _VendorPickerSheet extends ConsumerStatefulWidget {
-  final bool useWishlist;
-  const _VendorPickerSheet({required this.useWishlist});
+  const _VendorPickerSheet();
 
   @override
   ConsumerState<_VendorPickerSheet> createState() => _VendorPickerSheetState();
@@ -253,9 +251,7 @@ class _VendorPickerSheetState extends ConsumerState<_VendorPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final vendorsAsync = widget.useWishlist
-        ? ref.watch(wishlistedVendorsProvider)
-        : ref.watch(allVendorsProvider);
+    final vendorsAsync = ref.watch(rateableVendorsProvider);
 
     // The sheet is deliberately height-filled (the Expanded list needs a
     // bounded height to scroll), unlike this app's other content-sized
@@ -303,7 +299,10 @@ class _VendorPickerSheetState extends ConsumerState<_VendorPickerSheet> {
               child: vendorsAsync.when(
                 data: (vendors) {
                   if (vendors.isEmpty) {
-                    return _buildMessage('No vendors available yet.');
+                    return _buildMessage(
+                      'No vendors ready to rate yet — a vendor shows up here once '
+                      "they've marked your booking's service as complete.",
+                    );
                   }
                   final filtered = _query.isEmpty
                       ? vendors

@@ -204,10 +204,6 @@ class WeddingAiService {
     // The couple's allocated spend per category (e.g. 'Venue': 5000), derived
     // from their total wedding budget. Absent categories mean no known cap.
     Map<String, double> categoryBudgets = const {},
-    // Free-text "anything else" note from the couple. The backend judges for
-    // itself whether this is wedding-relevant and which categories (if any)
-    // it actually applies to — never assumed relevant just because it's set.
-    String? specialRequests,
   }) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
@@ -217,7 +213,6 @@ class WeddingAiService {
           'location': location,
           'styles': styles,
           'categoryBudgets': categoryBudgets,
-          'specialRequests': specialRequests,
           'categories': categorized.map(
             (cat, list) => MapEntry(cat, list.map((c) => c.toJson()).toList()),
           ),
