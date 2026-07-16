@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../../widgets/typeahead_field.dart';
 
 class HelpScreen extends StatefulWidget {
   const HelpScreen({super.key});
@@ -70,38 +72,20 @@ class _HelpScreenState extends State<HelpScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
-            child: TextField(
+            child: TypeaheadField<_Faq>(
               controller: _searchCtrl,
               focusNode: _searchFocus,
+              hint: 'Search help topics...',
+              fillColor: AppColors.surface,
               onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: 'Search help topics...',
-                prefixIcon: IconButton(
-                  tooltip: 'Search',
-                  onPressed: () => _searchFocus.requestFocus(),
-                  icon: const Icon(Icons.search),
-                  splashRadius: 20,
-                ),
-                suffixIcon: _searchCtrl.text.isNotEmpty
-                    ? IconButton(
-                        tooltip: 'Clear search',
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() {});
-                          _searchFocus.requestFocus();
-                        },
-                        icon: const Icon(Icons.clear),
-                        splashRadius: 20,
-                      )
-                    : null,
-                filled: true,
-                fillColor: AppColors.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.divider),
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              ),
+              suggestionsCallback: (q) => _faqs
+                  .where((f) =>
+                      f.question.toLowerCase().contains(q.toLowerCase()) ||
+                      f.answer.toLowerCase().contains(q.toLowerCase()))
+                  .take(8)
+                  .toList(),
+              displayStringForOption: (f) => f.question,
+              onSelected: (_) => setState(() {}),
             ),
           ),
           Expanded(
@@ -160,7 +144,7 @@ class _HelpScreenState extends State<HelpScreen> {
                   ),
                   const SizedBox(height: 8),
                 ],
-                ...filtered.map((faq) => _FaqTile(faq: faq)),
+                ...filtered.map((faq) => _FaqTile(faq: faq, query: query)),
               ],
             ),
           ),
@@ -178,7 +162,8 @@ class _Faq {
 
 class _FaqTile extends StatefulWidget {
   final _Faq faq;
-  const _FaqTile({required this.faq});
+  final String query;
+  const _FaqTile({required this.faq, this.query = ''});
 
   @override
   State<_FaqTile> createState() => _FaqTileState();
@@ -192,7 +177,11 @@ class _FaqTileState extends State<_FaqTile> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        title: Text(widget.faq.question, style: AppTextStyles.titleMedium),
+        title: HighlightedText(
+          text: widget.faq.question,
+          query: widget.query,
+          style: AppTextStyles.titleMedium,
+        ),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),

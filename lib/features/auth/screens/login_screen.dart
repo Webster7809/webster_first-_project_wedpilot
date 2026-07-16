@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_button.dart';
@@ -148,7 +147,7 @@ class _HeroSection extends StatelessWidget {
                     Flexible(
                       child: Text(
                         'WedPilot',
-                        style: GoogleFonts.playfairDisplay(
+                        style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
@@ -160,7 +159,7 @@ class _HeroSection extends StatelessWidget {
                 const SizedBox(height: 28),
                 Text(
                   'WELCOME BACK',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: AppColors.amber,
@@ -170,7 +169,7 @@ class _HeroSection extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   'Continue planning\nyour perfect day',
-                  style: GoogleFonts.playfairDisplay(
+                  style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -237,7 +236,7 @@ class _FormCard extends StatelessWidget {
           children: [
             Text(
               'Sign in to your account',
-              style: GoogleFonts.playfairDisplay(
+              style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: AppColors.forestGreen,
@@ -281,7 +280,7 @@ class _FormCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                     child: Text(
                       'Forgot password?',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                         color: AppColors.amber,
@@ -313,7 +312,7 @@ class _FormCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                     child: RichText(
                       text: TextSpan(
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 14,
                           color: AppColors.textSecondary,
                         ),

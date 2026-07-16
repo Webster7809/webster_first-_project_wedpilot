@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/wedding_ai_service.dart';
@@ -13,7 +12,6 @@ import '../../../core/utils/pdf_download.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/format_utils.dart';
-import '../../../models/budget.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/budget_provider.dart';
@@ -70,7 +68,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     'Traditional',
     'Minimalist',
   ];
-  final Set<String> _selectedStyles = {};
+  final List<String> _selectedStyles = [];
 
   // AI plan results for step 3
   WeddingPlanResult? _aiPlanResult;
@@ -151,6 +149,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           _activeCategories();
       ref.read(wizardLocationProvider.notifier).state = _locationCtrl.text
           .trim();
+      ref.read(wizardBudgetProvider.notifier).state = budget;
     }
     if (_step < _totalSteps - 1) {
       setState(() => _step++);
@@ -196,6 +195,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     final categories = _activeCategories();
     ref.read(selectedServiceCategoriesProvider.notifier).state = categories;
     ref.read(wizardLocationProvider.notifier).state = _locationCtrl.text.trim();
+    ref.read(wizardBudgetProvider.notifier).state = totalBudget;
     ref.read(wizardStylesProvider.notifier).state = _selectedStyles.toList();
     ref.read(budgetClassProvider.notifier).state = switch (_weddingClass) {
       'Low class' => BudgetClass.budgetFriendly,
@@ -221,7 +221,23 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
       _aiPlanLoading = true;
       _aiPlanError = null;
     });
+
     try {
+      // The narrative plan's budgetAdvice is itself an AI-generated budget
+      // allocation, so it must be gated behind the same pre-AI validation the
+      // vendor matcher runs — a couple must never see one AI allocation
+      // blocked while another is silently produced anyway.
+      final validation = await ref.read(vendorMatchValidationProvider.future);
+      if (validation.isBlocked) {
+        if (mounted) {
+          setState(() {
+            _aiPlanError = validation.blockingFailure!.message;
+            _aiPlanLoading = false;
+          });
+        }
+        return;
+      }
+
       final result = await WeddingAiService.instance.generateWeddingPlan(
         totalBudget: totalBudget,
         currency: 'ZMW',
@@ -640,7 +656,8 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Pick the vibe that describes your dream wedding.',
+          'Pick the vibe that describes your dream wedding — choose a '
+          'primary style, and optionally a second.',
           style: AppTextStyles.bodyMedium.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -650,7 +667,11 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           spacing: 10,
           runSpacing: 10,
           children: _styleOptions.map((style) {
-            final selected = _selectedStyles.contains(style);
+            final index = _selectedStyles.indexOf(style);
+            final selected = index != -1;
+            final isPrimary = index == 0;
+            final selectedColor =
+                isPrimary ? AppColors.forestGreen : AppColors.tertiary;
             return Material(
               color: Colors.transparent,
               child: InkWell(
@@ -658,8 +679,12 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                 onTap: () => setState(() {
                   if (selected) {
                     _selectedStyles.remove(style);
-                  } else {
+                  } else if (_selectedStyles.length < 2) {
                     _selectedStyles.add(style);
+                  } else {
+                    // Two are already selected — swap this in as the new
+                    // secondary and leave the primary (index 0) untouched.
+                    _selectedStyles[1] = style;
                   }
                 }),
                 child: AnimatedContainer(
@@ -669,19 +694,36 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: selected ? AppColors.forestGreen : AppColors.surface,
+                    color: selected ? selectedColor : AppColors.surface,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: selected ? AppColors.forestGreen : AppColors.divider,
+                      color: selected ? selectedColor : AppColors.divider,
                     ),
                   ),
-                  child: Text(
-                    style,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: selected ? Colors.white : AppColors.textPrimary,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        style,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: selected ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                      if (selected) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          isPrimary ? 'PRIMARY' : '2ND',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white70,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
@@ -701,14 +743,30 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
 
   Widget _buildReviewStep() {
     final aiAsync = ref.watch(aiRecommendedVendorsProvider);
+    final validationResult = ref.watch(vendorMatchValidationProvider).valueOrNull;
+    final excludedCategoryMessages =
+        validationResult?.excludedCategoryMessages ?? const <String, String>{};
+    final budgetExhaustedMessages =
+        validationResult?.budgetExhaustedMessages ?? const <String, String>{};
     final customVendors = ref.watch(customVendorsProvider);
-    final budgetState = ref.watch(budgetProvider);
     final pdfAsync = ref.watch(weddingPlanPdfBytesProvider);
     final categories = _activeCategories();
 
-    final budget = _budgetCtrl.text.isNotEmpty
-        ? 'ZMW ${_budgetCtrl.text}'
-        : 'Not set';
+    // Real spend so far — the sum of what the AI's actually-picked vendors
+    // charge (never a computed/estimated figure), shown against the couple's
+    // entered total once matching has resolved at least one real price.
+    final totalBudgetAmount = _parsedBudget();
+    final usedAmount = (aiAsync.valueOrNull ?? const <VendorMatch>[])
+        .where((m) => m.rankInCategory == 1 && m.vendor.priceMin > 0)
+        .fold<double>(0, (sum, m) => sum + m.vendor.priceMin);
+    final hasRealUsage =
+        totalBudgetAmount != null && totalBudgetAmount > 0 && usedAmount > 0;
+    final remainingAmount = hasRealUsage ? totalBudgetAmount - usedAmount : null;
+    final budget = totalBudgetAmount != null && totalBudgetAmount > 0
+        ? fmtCurrency(totalBudgetAmount)
+        : _budgetCtrl.text.isNotEmpty
+            ? 'ZMW ${_budgetCtrl.text}'
+            : 'Not set';
     final guests = _guestsCtrl.text.isNotEmpty
         ? '${_guestsCtrl.text} guests'
         : 'Not set';
@@ -742,6 +800,17 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           child: Column(
             children: [
               _SummaryRow(label: 'Budget', value: budget),
+              if (hasRealUsage) ...[
+                _SummaryRow(label: 'Budget used', value: fmtCurrency(usedAmount)),
+                _SummaryRow(
+                  label: 'Remaining',
+                  value: remainingAmount! > 0
+                      ? fmtCurrency(remainingAmount)
+                      : remainingAmount < 0
+                          ? 'Over by ${fmtCurrency(remainingAmount.abs())}'
+                          : 'All budget used',
+                ),
+              ],
               _SummaryRow(label: 'Wedding type', value: _weddingType),
               _SummaryRow(label: 'Wedding class', value: _weddingClass),
               _SummaryRow(label: 'Guests', value: guests),
@@ -762,8 +831,8 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          'WedPilot AI prioritizes vendors near you for each category. If a vendor further away fits '
-          'your budget better than anything close by, it\'s shown too so you can compare.',
+          'WedPilot AI picks one best-fit vendor per category — based in your entered location and '
+          'weighed against your allocated budget for that category.',
           style: AppTextStyles.bodySmall.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -773,24 +842,28 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         const SizedBox(height: 14),
         aiAsync.when(
           loading: () => const _AiRankingCard(),
-          error: (e, st) => e is NoBudgetSetException
-              ? _NoBudgetCard(onEnterBudget: () => setState(() => _step = 0))
-              : Text(
-                  "Couldn't reach WedPilot AI right now. Add vendors yourself below.",
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-          data: (matches) {
-            final bestByCategory = <String, VendorMatch>{};
-            final budgetAlternateByCategory = <String, VendorMatch>{};
-            for (final m in matches) {
-              if (m.kind == VendorMatchKind.budgetAlternate) {
-                budgetAlternateByCategory[m.vendor.category] = m;
-              } else if (m.rankInCategory == 1) {
-                bestByCategory[m.vendor.category] = m;
-              }
+          error: (e, st) {
+            if (e is NoBudgetSetException) {
+              return _NoBudgetCard(onEnterBudget: () => setState(() => _step = 0));
             }
+            if (e is VendorValidationException) {
+              return _VendorValidationFailureCard(
+                failure: e.failure,
+                onEditRequirements: () => setState(() => _step = 0),
+              );
+            }
+            return Text(
+              "Couldn't reach WedPilot AI right now. Add vendors yourself below.",
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            );
+          },
+          data: (matches) {
+            final bestByCategory = <String, VendorMatch>{
+              for (final m in matches)
+                if (m.rankInCategory == 1) m.vendor.category: m,
+            };
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -802,17 +875,41 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                   const SizedBox(height: 10),
                   if (bestByCategory[category] != null)
                     _PlanVendorCard(match: bestByCategory[category])
+                  else if (budgetExhaustedMessages[category] != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.errorBg,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.money_off_rounded,
+                            size: 16,
+                            color: AppColors.error,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              budgetExhaustedMessages[category]!,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
                   else
                     Text(
-                      'No available $category vendors matched yet — add one yourself below.',
+                      excludedCategoryMessages[category] ??
+                          'No available $category vendors matched yet — add one yourself below.',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                       ),
                     ),
-                  if (budgetAlternateByCategory[category] != null) ...[
-                    const SizedBox(height: 10),
-                    _PlanVendorCard(match: budgetAlternateByCategory[category]),
-                  ],
                   for (final v in customVendors.where(
                     (v) => v.category == category,
                   )) ...[
@@ -846,20 +943,47 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                   ),
                   const SizedBox(height: 18),
                 ],
+                if (hasRealUsage)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Budget summary',
+                          style: AppTextStyles.titleMedium,
+                        ),
+                        const SizedBox(height: 10),
+                        _SummaryRow(
+                          label: 'Entered amount',
+                          value: fmtCurrency(totalBudgetAmount),
+                        ),
+                        _SummaryRow(
+                          label: 'Allocated amount',
+                          value: fmtCurrency(usedAmount),
+                        ),
+                        _SummaryRow(
+                          label: 'Remaining',
+                          value: remainingAmount! > 0
+                              ? fmtCurrency(remainingAmount)
+                              : remainingAmount < 0
+                                  ? 'Over by ${fmtCurrency(remainingAmount.abs())}'
+                                  : 'All budget used',
+                          isLast: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 20),
               ],
             );
           },
         ),
-        if (budgetState.hasData) ...[
-          const SizedBox(height: 10),
-          WizardSectionLabel(
-            icon: Icons.pie_chart_outline_rounded,
-            label: 'Budget breakdown',
-          ),
-          const SizedBox(height: 12),
-          _BudgetBreakdownCard(budget: budgetState.data!),
-          const SizedBox(height: 24),
-        ],
         pdfAsync.when(
           loading: () => const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
@@ -1075,6 +1199,68 @@ class _NoBudgetCard extends StatelessWidget {
   }
 }
 
+// ── Vendor validation failure — hard stop before any AI runs ────────────────
+
+class _VendorValidationFailureCard extends StatelessWidget {
+  final VendorValidationFailure failure;
+  final VoidCallback onEditRequirements;
+
+  const _VendorValidationFailureCard({
+    required this.failure,
+    required this.onEditRequirements,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.amber.withAlpha(20),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.amber.withAlpha(80)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: AppColors.amber,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "We couldn't build your plan yet",
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            failure.message,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          WedButton(
+            label: 'Edit requirements',
+            onPressed: onEditRequirements,
+            width: 200,
+            height: 40,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Plan vendor card — AI pick or couple-added, with contact details ───────
 
 class _PlanVendorCard extends StatelessWidget {
@@ -1084,8 +1270,6 @@ class _PlanVendorCard extends StatelessWidget {
 
   const _PlanVendorCard({this.match, this.vendor, this.onRemove})
     : assert(match != null || vendor != null);
-
-  bool get _isBudgetAlternate => match?.kind == VendorMatchKind.budgetAlternate;
 
   VendorProfile get _vendor => match?.vendor ?? vendor!;
 
@@ -1123,16 +1307,8 @@ class _PlanVendorCard extends StatelessWidget {
                 ),
               ),
               _Badge(
-                label: isCustom
-                    ? 'Added by you'
-                    : _isBudgetAlternate
-                        ? 'Fits budget, not near you'
-                        : 'AI top pick',
-                color: isCustom
-                    ? AppColors.amber
-                    : _isBudgetAlternate
-                        ? AppColors.info
-                        : AppColors.success,
+                label: isCustom ? 'Added by you' : 'AI top pick',
+                color: isCustom ? AppColors.amber : AppColors.success,
               ),
               if (isCustom && onRemove != null)
                 IconButton(
@@ -1182,22 +1358,25 @@ class _PlanVendorCard extends StatelessWidget {
           ),
           if (!isCustom &&
               match != null &&
-              !match!.fitsBudget &&
+              (!match!.fitsBudget ||
+                  match!.selectionBasis == SelectionBasis.onlyAffordableOption) &&
               (match!.noteToCouple?.isNotEmpty ?? false)) ...[
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: AppColors.warningBg,
+                color: match!.isBudgetUnrealistic ? AppColors.errorBg : AppColors.warningBg,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
+                  Icon(
+                    match!.isBudgetUnrealistic
+                        ? Icons.error_outline_rounded
+                        : Icons.info_outline_rounded,
                     size: 14,
-                    color: AppColors.warning,
+                    color: match!.isBudgetUnrealistic ? AppColors.error : AppColors.warning,
                   ),
                   const SizedBox(width: 6),
                   Expanded(
@@ -1344,84 +1523,6 @@ class _ContactChip extends StatelessWidget {
           padding: const EdgeInsets.all(2),
           child: child,
         ),
-      ),
-    );
-  }
-}
-
-// ── Budget breakdown summary ────────────────────────────────────────────────
-
-class _BudgetBreakdownCard extends StatelessWidget {
-  final Budget budget;
-  const _BudgetBreakdownCard({required this.budget});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final c in budget.categories)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                children: [
-                  Text(c.categoryIcon, style: const TextStyle(fontSize: 16)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      c.categoryName,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Text(
-                    fmtCurrency(c.allocatedAmount, symbol: budget.currency),
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          const Divider(height: 1, color: AppColors.divider),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Total budget',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  fmtCurrency(budget.totalAmount, symbol: budget.currency),
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.forestGreen,
-                  ),
-                  textAlign: TextAlign.right,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -1905,7 +2006,7 @@ class _AiPlanSummaryCard extends StatelessWidget {
           ] else if (result != null) ...[
             Text(
               result!.planSummary,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 14,
                 color: Colors.white,
                 height: 1.55,

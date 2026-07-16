@@ -376,17 +376,12 @@ class ReasoningStep {
   Map<String, dynamic> toJson() => {'label': label, 'text': text};
 }
 
-/// [VendorMatch.kind] distinguishes the AI's main per-category pick from a
-/// secondary suggestion surfaced for comparison — a [budgetAlternate] is a
-/// vendor the primary pick's location weighting passed over for being too
-/// far, but which is shown anyway because it fits the couple's budget better
-/// than anything close by, so they can weigh the trade-off themselves.
-enum VendorMatchKind { primary, budgetAlternate }
-
 /// Why a vendor was picked for its category: matched the couple's stated
-/// budget exactly, or was the best available fit for their wedding class
-/// once nothing in the category fit their allocated budget.
-enum SelectionBasis { exactBudgetMatch, weddingClassBestFit }
+/// budget exactly, was the best available fit for their wedding class once
+/// nothing in the category fit their allocated budget, or was the sole
+/// vendor left once every other option in the category was priced out of
+/// range (see [VendorMatch.isBudgetUnrealistic]).
+enum SelectionBasis { exactBudgetMatch, weddingClassBestFit, onlyAffordableOption }
 
 class VendorMatch {
   final String vendorId;
@@ -400,11 +395,17 @@ class VendorMatch {
   final List<ReasoningStep> reasoningSteps;
   final int rankInCategory;
   final int totalInCategory;
-  final VendorMatchKind kind;
   final bool fitsBudget;
   final double? budgetDeltaPercent;
   final SelectionBasis selectionBasis;
   final String? noteToCouple;
+
+  /// True when literally no vendor in this category is priced at or under
+  /// the couple's allocated budget — i.e. the amount they entered isn't
+  /// just tight, it can't fit any real option. The pick shown is still the
+  /// closest available vendor, but the couple should be told the budget
+  /// itself needs raising, not just that this one pick is "over".
+  final bool isBudgetUnrealistic;
 
   const VendorMatch({
     required this.vendorId,
@@ -418,10 +419,37 @@ class VendorMatch {
     this.reasoningSteps = const [],
     required this.rankInCategory,
     required this.totalInCategory,
-    this.kind = VendorMatchKind.primary,
     this.fitsBudget = true,
     this.budgetDeltaPercent,
     this.selectionBasis = SelectionBasis.exactBudgetMatch,
     this.noteToCouple,
+    this.isBudgetUnrealistic = false,
   });
+
+  VendorMatch copyWith({
+    int? rankInCategory,
+    bool? fitsBudget,
+    double? budgetDeltaPercent,
+    SelectionBasis? selectionBasis,
+    String? noteToCouple,
+    bool? isBudgetUnrealistic,
+  }) =>
+      VendorMatch(
+        vendorId: vendorId,
+        vendor: vendor,
+        finalScore: finalScore,
+        reputationScore: reputationScore,
+        budgetScore: budgetScore,
+        locationScore: locationScore,
+        availabilityScore: availabilityScore,
+        reasoning: reasoning,
+        reasoningSteps: reasoningSteps,
+        rankInCategory: rankInCategory ?? this.rankInCategory,
+        totalInCategory: totalInCategory,
+        fitsBudget: fitsBudget ?? this.fitsBudget,
+        budgetDeltaPercent: budgetDeltaPercent ?? this.budgetDeltaPercent,
+        selectionBasis: selectionBasis ?? this.selectionBasis,
+        noteToCouple: noteToCouple ?? this.noteToCouple,
+        isBudgetUnrealistic: isBudgetUnrealistic ?? this.isBudgetUnrealistic,
+      );
 }

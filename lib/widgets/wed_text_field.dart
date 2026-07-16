@@ -19,6 +19,8 @@ class WedTextField extends StatefulWidget {
   final Color? fillColor;
   final TextCapitalization textCapitalization;
   final bool autofocus;
+  final FocusNode? focusNode;
+  final void Function(String)? onFieldSubmitted;
 
   const WedTextField({
     super.key,
@@ -40,6 +42,8 @@ class WedTextField extends StatefulWidget {
     this.fillColor,
     this.textCapitalization = TextCapitalization.none,
     this.autofocus = false,
+    this.focusNode,
+    this.onFieldSubmitted,
   });
 
   @override
@@ -53,10 +57,12 @@ class _WedTextFieldState extends State<WedTextField> {
   Widget build(BuildContext context) {
     final field = TextFormField(
       controller: widget.controller,
+      focusNode: widget.focusNode,
       obscureText: widget.isPassword && _obscure,
       keyboardType: widget.keyboardType,
       validator: widget.validator,
       onChanged: widget.onChanged,
+      onFieldSubmitted: widget.onFieldSubmitted,
       maxLines: widget.isPassword ? 1 : widget.maxLines,
       readOnly: widget.readOnly,
       onTap: widget.onTap,

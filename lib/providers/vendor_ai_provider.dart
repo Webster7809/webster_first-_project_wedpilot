@@ -1,65 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/budget_class.dart';
 import '../models/vendor_profile.dart';
-import '../core/constants/app_constants.dart';
+import '../models/vendor_validation.dart';
+import '../core/services/budget_validation_service.dart';
 import '../core/services/couple_profile_service.dart';
+import '../core/services/location_validation_service.dart';
+import '../core/services/vendor_filtering_service.dart';
 import '../core/services/wedding_ai_service.dart';
+import '../core/utils/format_utils.dart';
 import '../core/utils/geo_utils.dart';
 import 'auth_provider.dart';
 import 'budget_provider.dart';
 import 'vendor_provider.dart';
 
-// ── Budget Class ────────────────────────────────────────────────────────────
-
-enum BudgetClass {
-  highClass,
-  flexible,
-  budgetFriendly;
-
-  String get displayName => switch (this) {
-        BudgetClass.highClass => 'High Class',
-        BudgetClass.flexible => 'Flexible',
-        BudgetClass.budgetFriendly => 'Budget-Friendly',
-      };
-
-  String get icon => switch (this) {
-        BudgetClass.highClass => '👑',
-        BudgetClass.flexible => '⚖️',
-        BudgetClass.budgetFriendly => '💚',
-      };
-
-  String get subtitle => switch (this) {
-        BudgetClass.highClass => 'Luxury & Premium Only',
-        BudgetClass.flexible => 'Best Value, All Tiers',
-        BudgetClass.budgetFriendly => 'Affordable & Quality',
-      };
-
-  String get description => switch (this) {
-        BudgetClass.highClass =>
-          'Exclusive curation of premium vendors — top-rated, luxury-tier, celebrated for extraordinary weddings.',
-        BudgetClass.flexible =>
-          'AI-optimised mix of top-value vendors across all tiers — the intelligent balanced recommendation.',
-        BudgetClass.budgetFriendly =>
-          'Quality-controlled affordable vendors — proven reliability without compromising your wedding vision.',
-      };
-
-  List<String> get features => switch (this) {
-        BudgetClass.highClass => [
-            '4.5★ or higher only',
-            'Premium tier vendors',
-            'Top portfolio & brand reputation',
-          ],
-        BudgetClass.flexible => [
-            'Best quality-to-price ratio',
-            'All tiers considered',
-            'Intelligent AI-balanced mix',
-          ],
-        BudgetClass.budgetFriendly => [
-            '3.5★ minimum quality floor',
-            'Affordable pricing tier',
-            'Trusted value & reliability',
-          ],
-      };
-}
+export '../models/budget_class.dart';
+export '../models/vendor_validation.dart';
 
 final budgetClassProvider =
     StateProvider<BudgetClass>((ref) => BudgetClass.flexible);
@@ -77,26 +32,182 @@ class NoBudgetSetException implements Exception {
 /// Location entered by the couple in wizard Step 0 — takes priority over profile location.
 final wizardLocationProvider = StateProvider<String?>((ref) => null);
 
+/// Budget entered by the couple in wizard Step 0 — takes priority over the
+/// saved [Budget]/profile total. Both of those are only updated by
+/// fire-and-forget network calls (`_saveProfile`/`budgetProvider.loadBudget`),
+/// so reading them directly here would validate against whatever stale total
+/// happened to be persisted from a previous session while those calls are
+/// still in flight, rather than the amount the couple just typed.
+final wizardBudgetProvider = StateProvider<double?>((ref) => null);
+
 /// Style preferences chosen by the couple in wizard Step 2 — feeds the AI vendor matcher.
 final wizardStylesProvider = StateProvider<List<String>>((ref) => const []);
 
-final aiRecommendedVendorsProvider =
-    FutureProvider<List<VendorMatch>>((ref) async {
+/// Gathers the couple's real budget/location/category context and runs the
+/// pre-AI validation pipeline: hard-stops when there's no real vendor data to
+/// build any plan from at all — nobody in the location, or the entered
+/// budget can't afford even the single cheapest real vendor on file — and
+/// otherwise spends the budget down sequentially, category by category in
+/// the order requested, funding each from whatever's left until the money
+/// runs out (see Step 6 below). A non-null [VendorValidationResult.blockingFailure]
+/// means neither the vendor-matching AI nor the wedding-plan/budget-advice AI
+/// may run — both [aiRecommendedVendorsProvider] and the wizard's
+/// `_loadWeddingAiPlan` gate on this same result so a couple never sees one
+/// AI-generated allocation blocked and another one silently produced anyway.
+final vendorMatchValidationProvider =
+    FutureProvider<VendorValidationResult>((ref) async {
   final budgetClass = ref.watch(budgetClassProvider);
   final categories = ref.watch(selectedServiceCategoriesProvider);
   final coupleProfile = ref.watch(coupleProfileProvider);
   final wizardLocation = ref.watch(wizardLocationProvider);
-  final wizardStyles = ref.watch(wizardStylesProvider);
+  final wizardBudget = ref.watch(wizardBudgetProvider);
   final savedBudget = ref.watch(budgetProvider).data;
 
-  // A budget the couple actually entered is the one grounding fact every
-  // price-based score and every "budget fit" reasoning line depends on.
-  // Without it there's nothing real to weigh a vendor's price against, so
-  // rather than silently matching on price-blind scores, refuse to pick or
-  // rank anyone until the couple sets a real amount.
-  final enteredBudget = savedBudget?.totalAmount ?? coupleProfile?.totalBudget;
+  final enteredBudget = (wizardBudget != null && wizardBudget > 0)
+      ? wizardBudget
+      : savedBudget?.totalAmount ?? coupleProfile?.totalBudget;
   if (enteredBudget == null || enteredBudget <= 0) {
     throw const NoBudgetSetException();
+  }
+
+  final locationString = (wizardLocation != null && wizardLocation.isNotEmpty)
+      ? wizardLocation
+      : coupleProfile?.location;
+
+  final allVendors = await ref.watch(allVendorsProvider.future);
+
+  // Step 1 — filter by category, then hard-restrict to the couple's location.
+  final eligible = VendorFilteringService.filterEligible(allVendors, categories);
+  final locationPool = VendorFilteringService.restrictToLocation(eligible.pool, locationString);
+
+  // Step 2 — a location with literally nobody in it, across every requested
+  // category, is a whole-plan stop: there's nothing real to build a plan from.
+  final locationFailure = LocationValidationService.validate(
+    locationFilteredPool: locationPool,
+    location: locationString,
+  );
+  if (locationFailure != null) {
+    return VendorValidationResult(blockingFailure: locationFailure);
+  }
+
+  final byCategory = VendorFilteringService.groupByCategory(locationPool, categories);
+
+  // Step 3 — per-category coverage. A category with zero vendors is excluded
+  // (soft, single-category message) rather than blocking the whole plan, so
+  // the couple can still add their own vendor for just that gap.
+  final coverage = BudgetValidationService.validateCoverage(
+    byCategory: byCategory,
+    location: locationString,
+  );
+
+  // Step 4 — prefer the couple's wedding-class rating band within each
+  // category (High class → 4.5★+, Budget-friendly → under 4.5★ or unrated,
+  // Flexible → either), falling back to the full category when nobody
+  // matches so a class preference never empties out a category.
+  final ratedByCategory =
+      VendorFilteringService.preferredByWeddingClass(coverage.covered, budgetClass);
+
+  // Step 5 — reject the whole plan outright when the entered budget can't
+  // afford even the single cheapest real vendor available anywhere across
+  // the couple's requested categories/location. There's no honest plan to
+  // build from real data at that amount, so the AI must never run at all.
+  final pricedPool = [for (final vendors in ratedByCategory.values) ...vendors]
+      .where((v) => v.priceMin > 0);
+  if (pricedPool.isNotEmpty) {
+    final cheapestOverall =
+        pricedPool.map((v) => v.priceMin).reduce((a, b) => a < b ? a : b);
+    if (enteredBudget < cheapestOverall) {
+      return VendorValidationResult(
+        blockingFailure: VendorValidationFailure(
+          type: VendorValidationFailureType.budgetTooLowForAnyVendor,
+          message:
+              'Your budget of ${fmtCurrency(enteredBudget)} is too small for any vendor we '
+              'have on file — the cheapest available vendor costs ${fmtCurrency(cheapestOverall)}. '
+              'Please increase your budget to continue.',
+        ),
+      );
+    }
+  }
+
+  // Step 6 — spend the entered budget down sequentially, category by
+  // category in the order requested: fund a category's pick out of whatever
+  // money remains, deduct its real price, then move to the next category
+  // with the remainder. The moment what's left can't cover even the
+  // cheapest real vendor in the next category, stop — that category and
+  // every one after it is marked "money ran out" instead of given a pick, so
+  // the couple is never shown a plan that quietly spends more than they have.
+  final coords = locationString != null ? coordsForLocation(locationString) : null;
+  final weddingDateStr = coupleProfile?.weddingDate != null
+      ? coupleProfile!.weddingDate!.toIso8601String().split('T').first
+      : null;
+
+  var remaining = enteredBudget;
+  var moneyExhausted = false;
+  final fundedByCategory = <String, List<VendorProfile>>{};
+  final categoryBudgets = <String, double>{};
+  final exhaustedMessages = <String, String>{};
+
+  for (final cat in categories) {
+    if (coverage.excludedMessages.containsKey(cat)) continue;
+
+    if (moneyExhausted) {
+      exhaustedMessages[cat] = 'Cannot proceed — your money ends here. Earlier services '
+          'used up your budget before reaching $cat.';
+      continue;
+    }
+
+    final candidates = ratedByCategory[cat] ?? const <VendorProfile>[];
+    final pricedCandidates = candidates.where((v) => v.priceMin > 0);
+    final cheapestInCategory = pricedCandidates.isEmpty
+        ? null
+        : pricedCandidates.map((v) => v.priceMin).reduce((a, b) => a < b ? a : b);
+
+    if (cheapestInCategory != null && cheapestInCategory > remaining) {
+      moneyExhausted = true;
+      exhaustedMessages[cat] =
+          'Cannot proceed — your money ends here. The cheapest real $cat vendor costs '
+          '${fmtCurrency(cheapestInCategory)}, but only ${fmtCurrency(remaining)} of your budget is left.';
+      continue;
+    }
+
+    // Affordable right now — hard-restrict to what fits so whatever the AI
+    // scores/picks for this category is guaranteed within the money actually
+    // left, deterministically, rather than merely penalized for being over.
+    final affordable =
+        candidates.where((v) => v.priceMin <= 0 || v.priceMin <= remaining).toList();
+
+    fundedByCategory[cat] = affordable;
+    categoryBudgets[cat] = remaining;
+
+    final scored = _AiEngine.scoreAll(affordable, budgetClass, coords?[0], coords?[1],
+        weddingDateStr, {cat: remaining}, eligible.tiers);
+    if (scored.isNotEmpty) {
+      final pick = scored.reduce((a, b) => a.finalScore >= b.finalScore ? a : b);
+      if (pick.vendor.priceMin > 0) {
+        remaining -= pick.vendor.priceMin;
+      }
+    }
+  }
+
+  return VendorValidationResult(
+    byCategory: fundedByCategory,
+    tiers: eligible.tiers,
+    categoryBudgets: categoryBudgets,
+    excludedCategoryMessages: coverage.excludedMessages,
+    budgetExhaustedMessages: exhaustedMessages,
+  );
+});
+
+final aiRecommendedVendorsProvider =
+    FutureProvider<List<VendorMatch>>((ref) async {
+  final budgetClass = ref.watch(budgetClassProvider);
+  final coupleProfile = ref.watch(coupleProfileProvider);
+  final wizardLocation = ref.watch(wizardLocationProvider);
+  final wizardStyles = ref.watch(wizardStylesProvider);
+
+  final validation = await ref.watch(vendorMatchValidationProvider.future);
+  if (validation.isBlocked) {
+    throw VendorValidationException(validation.blockingFailure!);
   }
 
   final locationString = (wizardLocation != null && wizardLocation.isNotEmpty)
@@ -108,30 +219,12 @@ final aiRecommendedVendorsProvider =
       ? coupleProfile!.weddingDate!.toIso8601String().split('T').first
       : null;
 
-  final allVendors = await ref.watch(allVendorsProvider.future);
-  final eligible = _AiEngine.filterEligible(allVendors, categories);
-  final pool = eligible.pool;
-
-  // The couple's allocated spend per category. Prefers their actual saved
-  // Budget (which reflects any manual reallocation they've done) when it's
-  // loaded; the Budget is created via an async call fired at the same time
-  // as this provider, so it may still be null/stale here — in that case,
-  // fall back to splitting their entered total budget via the same default
-  // percentages used elsewhere in the app (see AppConstants).
-  final realAllocations = <String, double>{
-    if (savedBudget != null)
-      for (final c in savedBudget.categories) c.categoryName: c.allocatedAmount,
-  };
-  final categoryBudgets = <String, double>{
-    for (final cat in pool.map((v) => v.category).toSet())
-      if (realAllocations[cat] != null)
-        cat: realAllocations[cat]!
-      else if (AppConstants.defaultBudgetAllocation[cat] != null)
-        cat: enteredBudget * AppConstants.defaultBudgetAllocation[cat]!,
-  };
+  final pool = [for (final vendors in validation.byCategory.values) ...vendors];
+  final categoryBudgets = validation.categoryBudgets;
+  final tiers = validation.tiers;
 
   final scored = _AiEngine.scoreAll(pool, budgetClass, coords?[0], coords?[1],
-      weddingDateStr, categoryBudgets, eligible.tiers);
+      weddingDateStr, categoryBudgets, tiers);
   final localFallback = _AiEngine.recommend(
       pool: pool,
       scored: scored,
@@ -146,11 +239,25 @@ final aiRecommendedVendorsProvider =
         locationString, wizardStyles, categoryBudgets);
   }
 
-  final alternates = _AiEngine.budgetAlternates(scored, matches, categoryBudgets);
-  final combined = [...matches, ...alternates];
+  // Neither the local ranking nor the LLM ever refuses to name a "best" pick
+  // — but a pick that's merely the closest available option isn't the same
+  // thing as a pick that actually fits. Re-check every category's top pick
+  // against what's actually affordable and correct the record: flag it when
+  // literally nothing in the category fits the allocated amount (the budget
+  // itself is unrealistic, not just this pick), and force the pick to the
+  // sole affordable vendor when exactly one exists, so the couple is never
+  // shown a "top match" that quietly lost to a cheaper option that fit.
+  final realisticMatches = _AiEngine.enforceBudgetRealism(
+      matches, scored, budgetClass, categoryBudgets, wizardStyles);
 
-  await _syncTopMatches(ref, combined);
-  return combined;
+  // The couple should never see a "budget allocation" that's some computed
+  // split they can't trace to anything real — once a category's winner is
+  // decided, its allocation IS exactly what that vendor charges, full stop.
+  final finalMatches = _AiEngine.realizeCategoryAllocations(
+      realisticMatches, scored, budgetClass, wizardStyles);
+
+  await _syncTopMatches(ref, finalMatches);
+  return finalMatches;
 });
 
 Future<List<VendorMatch>> _matchWithAi(
@@ -236,73 +343,15 @@ Future<void> _syncTopMatches(Ref ref, List<VendorMatch> matches) async {
 
 // ── AI Recommendation Engine ────────────────────────────────────────────────
 //
-// `filterEligible` + `scoreAll` compute the grounding signals sent to the real
-// LLM matcher (see `WeddingAiService.matchVendors`). `recommend` composes them
-// into a fully ranked local result and serves as the offline fallback when the
-// LLM call fails or returns something malformed.
+// `scoreAll` computes the grounding signals sent to the real LLM matcher (see
+// `WeddingAiService.matchVendors`), using the category/location filtering
+// already done by `VendorFilteringService` as part of the pre-AI validation
+// pipeline. `recommend` composes them into a fully ranked local result and
+// serves as the offline fallback when the LLM call fails or returns
+// something malformed.
 
 class _AiEngine {
   _AiEngine._();
-
-  /// Every vendor in a requested category is always included in the pool —
-  /// wedding class and star rating shape *ranking* (see [scoreAll] and
-  /// [_valueScore]), they never zero out a category outright. A hard
-  /// price-tier/rating gate here used to mean a whole category could come
-  /// back with nothing the moment no vendor cleared its bar (e.g. "High
-  /// class" required both the top price tier *and* a 4.5+ rating) — even
-  /// when the category had plenty of real vendors the couple could see and
-  /// afford. Ranking already degrades gracefully to the "closest available
-  /// fit" (see the budget-fit reasoning text below); it just needs a
-  /// non-empty pool to work with.
-  static ({List<VendorProfile> pool, Map<String, VendorPriceTier> tiers}) filterEligible(
-    List<VendorProfile> vendors,
-    List<String> categories,
-  ) {
-    final pool = categories.isEmpty
-        ? vendors
-        : vendors.where((v) => categories.contains(v.category)).toList();
-    final tiers = _relativePriceTiers(pool);
-    return (pool: pool, tiers: tiers);
-  }
-
-  /// Buckets each vendor into low/mid/high relative to other vendors in the
-  /// *same category* who have actually entered pricing — a photographer and
-  /// a venue are priced on completely different scales, so "premium" only
-  /// means anything when compared within the same service type. Vendors
-  /// without priced services yet (nothing to compare) fall back to their
-  /// subscription tier as the best available signal.
-  static Map<String, VendorPriceTier> _relativePriceTiers(
-    List<VendorProfile> vendors,
-  ) {
-    final byCategory = <String, List<VendorProfile>>{};
-    for (final v in vendors) {
-      byCategory.putIfAbsent(v.category, () => []).add(v);
-    }
-
-    final tiers = <String, VendorPriceTier>{};
-    for (final group in byCategory.values) {
-      final priced = group.where((v) => v.priceMax > 0).toList()
-        ..sort((a, b) => (a.priceMin + a.priceMax).compareTo(b.priceMin + b.priceMax));
-
-      for (var i = 0; i < priced.length; i++) {
-        if (priced.length == 1) {
-          tiers[priced[i].id] = VendorPriceTier.mid;
-          continue;
-        }
-        final position = i / (priced.length - 1);
-        tiers[priced[i].id] = position < 1 / 3
-            ? VendorPriceTier.low
-            : position < 2 / 3
-                ? VendorPriceTier.mid
-                : VendorPriceTier.high;
-      }
-
-      for (final v in group) {
-        tiers.putIfAbsent(v.id, () => v.priceTier);
-      }
-    }
-    return tiers;
-  }
 
   static List<_ScoredVendor> scoreAll(
     List<VendorProfile> pool,
@@ -386,43 +435,162 @@ class _AiEngine {
     return ranked.map((s) {
       final rank = (catRank[s.vendor.category] ?? 0) + 1;
       catRank[s.vendor.category] = rank;
-      final steps = _reasonSteps(s.vendor, budgetClass, rank, s.isBookedOnWeddingDate,
-          s.categoryBudget, s.overBudgetRatio, styles, s.location);
-
-      // Mirrors the backend's budget-fit/fallback rules (see /api/vendor-match):
-      // a category with no allocated budget, or a pick priced at or under it,
-      // counts as an exact match; eligibility filtering has already restricted
-      // this class's pool to its matching price tier, so anything left over
-      // budget is by construction the class's best remaining tier fit.
-      final fitsBudget = s.categoryBudget == null || s.overBudgetRatio <= 0;
-      final budgetDeltaPercent = (!fitsBudget && s.categoryBudget != null && s.categoryBudget! > 0)
-          ? (((s.vendor.priceMin - s.categoryBudget!) / s.categoryBudget!) * 100).round().toDouble()
-          : null;
-      final noteToCouple = fitsBudget
-          ? 'Fits your allocated budget for ${s.vendor.category}.'
-          : 'No ${budgetClass.displayName.toLowerCase()} pick fit your budget for ${s.vendor.category} '
-              'exactly, so this is the closest match for that tier'
-              '${budgetDeltaPercent != null ? ' — about ${budgetDeltaPercent.toStringAsFixed(0)}% over your allocation' : ''}.';
-
-      return VendorMatch(
-        vendorId: s.vendor.id,
-        vendor: s.vendor,
-        finalScore: s.finalScore,
-        reputationScore: s.reputation,
-        budgetScore: s.value,
-        locationScore: s.location,
-        availabilityScore: s.isBookedOnWeddingDate ? 0.0 : 1.0,
-        reasoning: steps.map((r) => '${r.label}: ${r.text}').join(' '),
-        reasoningSteps: steps,
-        rankInCategory: rank,
-        totalInCategory: catTotal[s.vendor.category]!,
-        fitsBudget: fitsBudget,
-        budgetDeltaPercent: budgetDeltaPercent,
-        selectionBasis:
-            fitsBudget ? SelectionBasis.exactBudgetMatch : SelectionBasis.weddingClassBestFit,
-        noteToCouple: noteToCouple,
-      );
+      return _buildMatch(s, budgetClass, rank, catTotal[s.vendor.category]!, styles);
     }).toList();
+  }
+
+  static VendorMatch _buildMatch(
+    _ScoredVendor s,
+    BudgetClass budgetClass,
+    int rank,
+    int total,
+    List<String> styles,
+  ) {
+    final steps = _reasonSteps(s.vendor, budgetClass, rank, s.isBookedOnWeddingDate,
+        s.categoryBudget, s.overBudgetRatio, styles, s.location);
+
+    // Mirrors the backend's budget-fit/fallback rules (see /api/vendor-match):
+    // a category with no allocated budget, or a pick priced at or under it,
+    // counts as an exact match; eligibility filtering has already restricted
+    // this class's pool to its matching price tier, so anything left over
+    // budget is by construction the class's best remaining tier fit.
+    final fitsBudget = s.categoryBudget == null || s.overBudgetRatio <= 0;
+    final budgetDeltaPercent = (!fitsBudget && s.categoryBudget != null && s.categoryBudget! > 0)
+        ? (((s.vendor.priceMin - s.categoryBudget!) / s.categoryBudget!) * 100).round().toDouble()
+        : null;
+    final noteToCouple = fitsBudget
+        ? 'You have been allocated ${s.vendor.priceMin > 0 ? '~${s.vendor.priceMin.toStringAsFixed(0)} ' : ''}for ${s.vendor.category}.'
+        : 'No ${budgetClass.displayName.toLowerCase()} pick fit your budget for ${s.vendor.category} '
+            'exactly, so this is the closest match for that tier'
+            '${budgetDeltaPercent != null ? ' — about ${budgetDeltaPercent.toStringAsFixed(0)}% over what you were allocated' : ''}.';
+
+    return VendorMatch(
+      vendorId: s.vendor.id,
+      vendor: s.vendor,
+      finalScore: s.finalScore,
+      reputationScore: s.reputation,
+      budgetScore: s.value,
+      locationScore: s.location,
+      availabilityScore: s.isBookedOnWeddingDate ? 0.0 : 1.0,
+      reasoning: steps.map((r) => '${r.label}: ${r.text}').join(' '),
+      reasoningSteps: steps,
+      rankInCategory: rank,
+      totalInCategory: total,
+      fitsBudget: fitsBudget,
+      budgetDeltaPercent: budgetDeltaPercent,
+      selectionBasis:
+          fitsBudget ? SelectionBasis.exactBudgetMatch : SelectionBasis.weddingClassBestFit,
+      noteToCouple: noteToCouple,
+    );
+  }
+
+  /// Re-grounds every category's top pick in what's actually affordable,
+  /// regardless of whether it came from the LLM (one entry per category) or
+  /// the local fallback (a fully ranked list) — both paths only ever hand
+  /// back "the best of what's there", so this is the one place that checks
+  /// whether "what's there" was ever realistic for the money entered.
+  ///
+  /// Only [rankInCategory] == 1 is ever read by the UI (see
+  /// [couple_planning_screen.dart]'s `bestByCategory`), so lower ranks are
+  /// left untouched — the only correction needed is making sure category's
+  /// #1 is the right vendor and carries the right message.
+  static List<VendorMatch> enforceBudgetRealism(
+    List<VendorMatch> matches,
+    List<_ScoredVendor> scored,
+    BudgetClass budgetClass,
+    Map<String, double> categoryBudgets,
+    List<String> styles,
+  ) {
+    final byCategory = <String, List<_ScoredVendor>>{};
+    for (final s in scored) {
+      byCategory.putIfAbsent(s.vendor.category, () => []).add(s);
+    }
+
+    final result = [...matches];
+
+    for (final entry in byCategory.entries) {
+      final cat = entry.key;
+      final categoryBudget = categoryBudgets[cat];
+      if (categoryBudget == null || categoryBudget <= 0) continue;
+
+      final catScored = entry.value;
+      final affordable = catScored
+          .where((s) => s.vendor.priceMin > 0 && s.vendor.priceMin <= categoryBudget)
+          .toList();
+
+      final topIdx = result.indexWhere(
+        (m) => m.vendor.category == cat && m.rankInCategory == 1,
+      );
+      if (topIdx == -1) continue;
+
+      if (affordable.isEmpty) {
+        result[topIdx] = result[topIdx].copyWith(
+          isBudgetUnrealistic: true,
+          fitsBudget: false,
+          noteToCouple: 'Your budget for $cat looks unrealistically small — no vendor in '
+              '$cat is priced at or under the ~${categoryBudget.toStringAsFixed(0)} you were allocated. '
+              'Raise your budget for this category, or trim scope, to get a real match here.',
+        );
+      } else if (affordable.length == 1) {
+        final solo = affordable.first;
+        final soleNote =
+            'Your budget for $cat only fits one available vendor — ${solo.vendor.businessName}. '
+            "We've matched you to them since nothing else in $cat fits what you were allocated.";
+        result[topIdx] = result[topIdx].vendorId == solo.vendor.id
+            ? result[topIdx].copyWith(
+                selectionBasis: SelectionBasis.onlyAffordableOption,
+                noteToCouple: soleNote,
+              )
+            : _buildMatch(solo, budgetClass, 1, catScored.length, styles).copyWith(
+                selectionBasis: SelectionBasis.onlyAffordableOption,
+                noteToCouple: soleNote,
+              );
+      }
+    }
+
+    return result;
+  }
+
+  /// Rewrites every category's #1 pick so its "budget allocation" is exactly
+  /// that vendor's own real price — never the sequential ledger figure
+  /// (money left when this category was funded) used for ranking. The couple
+  /// should never see an allocation figure they can't trace back to an actual
+  /// vendor; once the winner is decided, the allocation for that category IS
+  /// what they charge, so this always renders as a clean, tautological fit.
+  static List<VendorMatch> realizeCategoryAllocations(
+    List<VendorMatch> matches,
+    List<_ScoredVendor> scored,
+    BudgetClass budgetClass,
+    List<String> styles,
+  ) {
+    final scoredByVendorId = {for (final s in scored) s.vendor.id: s};
+    final result = [...matches];
+
+    for (var i = 0; i < result.length; i++) {
+      final m = result[i];
+      if (m.rankInCategory != 1) continue;
+
+      final s = scoredByVendorId[m.vendorId];
+      // A vendor with no real price on file has nothing to realize an
+      // allocation from — leave its existing "no allocation set" messaging
+      // untouched rather than fabricating a number.
+      if (s == null || s.vendor.priceMin <= 0) continue;
+
+      final realized = _ScoredVendor(
+        vendor: s.vendor,
+        reputation: s.reputation,
+        location: s.location,
+        value: s.value,
+        finalScore: s.finalScore,
+        isBookedOnWeddingDate: s.isBookedOnWeddingDate,
+        categoryBudget: s.vendor.priceMin,
+        overBudgetRatio: 0.0,
+        priceTier: s.priceTier,
+      );
+      result[i] = _buildMatch(realized, budgetClass, m.rankInCategory, m.totalInCategory, styles);
+    }
+
+    return result;
   }
 
   static double _locationScore(VendorProfile v, double? lat, double? lon) {
@@ -487,9 +655,6 @@ class _AiEngine {
   //   - Budget-friendly: price. The couple explicitly wants to spend less,
   //     so the cheapest-relative-to-their-allocation vendor wins outright,
   //     with reputation only as a light tiebreaker.
-  // (Farther-but-cheaper vendors that lose out to a closer primary pick
-  // aren't lost — see [_AiEngine.budgetAlternates], which surfaces the best
-  // of those separately.)
   static double _finalScore(double rep, double loc, double val,
       BudgetClass bc, bool isBooked, double overBudgetRatio) {
     final base = switch (bc) {
@@ -526,12 +691,12 @@ class _AiEngine {
       // so there's no per-category split to compare price against.
       budgetText = 'No specific allocation set for $cat yet, so price wasn\'t used as a filter here.';
     } else if (overBudgetRatio <= 0) {
-      budgetText = 'Fits within your ~${categoryBudget.toStringAsFixed(0)} allocation for $cat.';
+      budgetText = 'You have been allocated ~${categoryBudget.toStringAsFixed(0)} for $cat.';
     } else {
       budgetText =
-          'Starts around ${v.priceMin.toStringAsFixed(0)}, above your ~${categoryBudget.toStringAsFixed(0)} '
-          'budget for $cat — still the closest available fit. You can move forward by asking for a '
-          'smaller/custom package, trimming scope for $cat, or shifting budget from a lower-priority category.';
+          'Starts around ${v.priceMin.toStringAsFixed(0)}, above the ~${categoryBudget.toStringAsFixed(0)} '
+          'you were allocated for $cat — still the closest available fit. You can move forward by asking '
+          'for a smaller/custom package, trimming scope for $cat, or shifting budget from a lower-priority category.';
     }
 
     final reputationText = v.rating == null
@@ -598,77 +763,6 @@ class _AiEngine {
     return steps;
   }
 
-  // A candidate needs to be at least this much farther (on the 0-1 location
-  // score) than the primary pick before it's worth surfacing as a distinct
-  // "not near you, but cheaper" alternative — otherwise it's not telling the
-  // couple anything they don't already get from the primary pick.
-  static const double _farEnoughToMatter = 0.25;
-
-  /// For each category with a known primary pick, finds the best-value
-  /// candidate that (a) actually fits the couple's allocated budget for that
-  /// category and (b) is meaningfully farther away than the primary pick —
-  /// i.e. exactly the vendor the primary's location-first weighting passed
-  /// over. Purely local/deterministic (works the same whether the primary
-  /// picks came from the LLM or the offline fallback) so it never depends on
-  /// an extra AI call succeeding.
-  static List<VendorMatch> budgetAlternates(
-    List<_ScoredVendor> scored,
-    List<VendorMatch> primaryMatches,
-    Map<String, double> categoryBudgets,
-  ) {
-    final byCategory = <String, List<_ScoredVendor>>{};
-    for (final s in scored) {
-      byCategory.putIfAbsent(s.vendor.category, () => []).add(s);
-    }
-    final primaryByCategory = <String, VendorMatch>{
-      for (final m in primaryMatches)
-        if (m.rankInCategory == 1) m.vendor.category: m,
-    };
-
-    final alternates = <VendorMatch>[];
-    for (final entry in byCategory.entries) {
-      final primary = primaryByCategory[entry.key];
-      final budget = categoryBudgets[entry.key];
-      if (primary == null || budget == null || budget <= 0) continue;
-
-      final candidates = entry.value.where((s) =>
-          s.vendor.id != primary.vendorId &&
-          s.vendor.priceMin > 0 &&
-          s.vendor.priceMin <= budget &&
-          (primary.locationScore - s.location) >= _farEnoughToMatter).toList();
-      if (candidates.isEmpty) continue;
-
-      candidates.sort((a, b) => b.finalScore.compareTo(a.finalScore));
-      final alt = candidates.first;
-      final locationName = (alt.vendor.location?.isNotEmpty ?? false)
-          ? alt.vendor.location!
-          : 'a different area';
-      alternates.add(VendorMatch(
-        vendorId: alt.vendor.id,
-        vendor: alt.vendor,
-        finalScore: alt.finalScore,
-        reputationScore: alt.reputation,
-        budgetScore: alt.value,
-        locationScore: alt.location,
-        availabilityScore: alt.isBookedOnWeddingDate ? 0.0 : 1.0,
-        reasoning:
-            'Not near you ($locationName), but fits your ~${budget.toStringAsFixed(0)} '
-            'budget for ${entry.key} better than the closer options.',
-        reasoningSteps: [
-          ReasoningStep(
-            label: ReasoningStep.verdict,
-            text:
-                'Located in $locationName — further from you, so it isn\'t the top pick, but it\'s '
-                'the strongest budget fit for ${entry.key} at ~${budget.toStringAsFixed(0)}.',
-          ),
-        ],
-        rankInCategory: 0,
-        totalInCategory: primary.totalInCategory,
-        kind: VendorMatchKind.budgetAlternate,
-      ));
-    }
-    return alternates;
-  }
 }
 
 class _ScoredVendor {

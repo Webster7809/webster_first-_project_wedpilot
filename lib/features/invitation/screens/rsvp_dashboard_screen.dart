@@ -6,6 +6,8 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/share_helper.dart';
 import '../../../models/invitation.dart';
 import '../../../providers/invitation_provider.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../../widgets/typeahead_field.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 /// Soft, flat shadowed container used throughout this screen instead of
@@ -420,7 +422,7 @@ class _OverviewTab extends StatelessWidget {
 
 // ── Guest list tab ────────────────────────────────────────────────────────────
 
-class _GuestListTab extends StatelessWidget {
+class _GuestListTab extends StatefulWidget {
   final List<Guest> guests;
   final List<RsvpResponse> responses;
   final VoidCallback onAddGuest;
@@ -442,7 +444,36 @@ class _GuestListTab extends StatelessWidget {
   });
 
   @override
+  State<_GuestListTab> createState() => _GuestListTabState();
+}
+
+class _GuestListTabState extends State<_GuestListTab> {
+  final _searchCtrl = TextEditingController();
+  final _searchFocus = FocusNode();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  List<Guest> _filterGuests(List<Guest> guests, String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return guests;
+    return guests
+        .where((g) =>
+            g.name.toLowerCase().contains(q) ||
+            (g.email ?? '').toLowerCase().contains(q) ||
+            (g.phone ?? '').toLowerCase().contains(q))
+        .toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final guests = widget.guests;
+    final responses = widget.responses;
     if (guests.isEmpty) {
       return Center(
         child: Padding(
@@ -470,7 +501,7 @@ class _GuestListTab extends StatelessWidget {
                       .copyWith(color: AppColors.textSecondary)),
               const SizedBox(height: 24),
               ElevatedButton.icon(
-                onPressed: onAddGuest,
+                onPressed: widget.onAddGuest,
                 icon: const Icon(Icons.person_add_outlined, color: Colors.white),
                 label: const Text('Add Guest'),
                 style: ElevatedButton.styleFrom(
@@ -490,24 +521,54 @@ class _GuestListTab extends StatelessWidget {
     }
 
     final responseMap = {for (final r in responses) r.guestId: r};
+    final filtered = _filterGuests(guests, _query);
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: guests.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (_, i) {
-        final g = guests[i];
-        final rsvp = responseMap[g.id];
-        return _GuestCard(
-          guest: g,
-          rsvp: rsvp,
-          onEdit: () => onEditGuest(g),
-          onDelete: () => onDeleteGuest(g.id),
-          onRsvp: () => onSubmitRsvp(g),
-          onShareInvite: () => onShareInvite(g),
-          onResetRsvp: rsvp != null ? () => onResetRsvp(rsvp.id) : null,
-        );
-      },
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: TypeaheadField<Guest>(
+            controller: _searchCtrl,
+            focusNode: _searchFocus,
+            hint: 'Search guests...',
+            prefixIcon: Icons.search,
+            onChanged: (v) => setState(() => _query = v),
+            suggestionsCallback: (q) => _filterGuests(guests, q).take(8).toList(),
+            displayStringForOption: (g) => g.name,
+            onSelected: (g) => setState(() => _query = g.name),
+          ),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Text(
+                    'No guests match "$_query".',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) {
+                    final g = filtered[i];
+                    final rsvp = responseMap[g.id];
+                    return _GuestCard(
+                      guest: g,
+                      rsvp: rsvp,
+                      query: _query,
+                      onEdit: () => widget.onEditGuest(g),
+                      onDelete: () => widget.onDeleteGuest(g.id),
+                      onRsvp: () => widget.onSubmitRsvp(g),
+                      onShareInvite: () => widget.onShareInvite(g),
+                      onResetRsvp:
+                          rsvp != null ? () => widget.onResetRsvp(rsvp.id) : null,
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }
@@ -515,6 +576,7 @@ class _GuestListTab extends StatelessWidget {
 class _GuestCard extends StatelessWidget {
   final Guest guest;
   final RsvpResponse? rsvp;
+  final String query;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onRsvp;
@@ -524,6 +586,7 @@ class _GuestCard extends StatelessWidget {
   const _GuestCard({
     required this.guest,
     required this.rsvp,
+    this.query = '',
     required this.onEdit,
     required this.onDelete,
     required this.onRsvp,
@@ -573,7 +636,11 @@ class _GuestCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(guest.name, style: AppTextStyles.titleMedium),
+                  HighlightedText(
+                    text: guest.name,
+                    query: query,
+                    style: AppTextStyles.titleMedium,
+                  ),
                   if (guest.relation != null)
                     Text(guest.relation!,
                         style: AppTextStyles.caption

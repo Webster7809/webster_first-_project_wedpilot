@@ -1,5 +1,4 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 import 'app_text_styles.dart';
 
@@ -26,7 +25,7 @@ class AppTheme {
           foregroundColor: AppColors.textPrimary,
           elevation: 0,
           centerTitle: true,
-          titleTextStyle: GoogleFonts.playfairDisplay(
+          titleTextStyle: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: AppColors.textPrimary,
@@ -39,7 +38,7 @@ class AppTheme {
             foregroundColor: Colors.white,
             minimumSize: const Size(88, 48),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            textStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600),
+            textStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             elevation: 0,
           ),
         ),
@@ -49,13 +48,13 @@ class AppTheme {
             minimumSize: const Size(88, 48),
             side: const BorderSide(color: AppColors.secondary, width: 1.5),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            textStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600),
+            textStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           ),
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             foregroundColor: AppColors.secondary,
-            textStyle: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+            textStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
@@ -82,9 +81,9 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppColors.error, width: 2),
           ),
-          hintStyle: GoogleFonts.inter(color: AppColors.textHint, fontSize: 14),
-          labelStyle: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 14),
-          floatingLabelStyle: GoogleFonts.inter(color: AppColors.secondary, fontSize: 12),
+          hintStyle: TextStyle(color: AppColors.textHint, fontSize: 14),
+          labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          floatingLabelStyle: TextStyle(color: AppColors.secondary, fontSize: 12),
         ),
         cardTheme: CardThemeData(
           color: AppColors.surface,
@@ -95,7 +94,7 @@ class AppTheme {
         chipTheme: ChipThemeData(
           backgroundColor: AppColors.primary.withAlpha(76),
           selectedColor: AppColors.secondary,
-          labelStyle: GoogleFonts.inter(fontSize: 13),
+          labelStyle: TextStyle(fontSize: 13),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         ),
@@ -104,9 +103,9 @@ class AppTheme {
           indicatorColor: AppColors.primary.withAlpha(128),
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
-              return GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondary);
+              return TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondary);
             }
-            return GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary);
+            return TextStyle(fontSize: 11, color: AppColors.textSecondary);
           }),
           iconTheme: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
@@ -139,8 +138,8 @@ class AppTheme {
           labelColor: AppColors.secondary,
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: AppColors.secondary,
-          labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
-          unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.normal, fontSize: 14),
+          labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          unselectedLabelStyle: TextStyle(fontWeight: FontWeight.normal, fontSize: 14),
         ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: AppColors.secondary,
@@ -184,7 +183,7 @@ class AppTheme {
         foregroundColor: AppColors.darkText,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.playfairDisplay(
+        titleTextStyle: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w600,
           color: AppColors.darkText,
@@ -197,7 +196,7 @@ class AppTheme {
           foregroundColor: Colors.white,
           minimumSize: const Size(88, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          textStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600),
+          textStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           elevation: 0,
         ),
       ),
@@ -207,13 +206,13 @@ class AppTheme {
           minimumSize: const Size(88, 48),
           side: const BorderSide(color: AppColors.secondary, width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          textStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600),
+          textStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.secondary,
-          textStyle: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -240,9 +239,9 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFEF5350), width: 2),
         ),
-        hintStyle: GoogleFonts.inter(color: const Color(0xFF5E6068), fontSize: 14),
-        labelStyle: GoogleFonts.inter(color: AppColors.darkTextSecondary, fontSize: 14),
-        floatingLabelStyle: GoogleFonts.inter(color: AppColors.secondary, fontSize: 12),
+        hintStyle: TextStyle(color: const Color(0xFF5E6068), fontSize: 14),
+        labelStyle: TextStyle(color: AppColors.darkTextSecondary, fontSize: 14),
+        floatingLabelStyle: TextStyle(color: AppColors.secondary, fontSize: 12),
       ),
       cardTheme: CardThemeData(
         color: AppColors.darkSurface,
@@ -256,7 +255,7 @@ class AppTheme {
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.secondary.withAlpha(38),
         selectedColor: AppColors.secondary,
-        labelStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.darkText),
+        labelStyle: TextStyle(fontSize: 13, color: AppColors.darkText),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
@@ -265,9 +264,9 @@ class AppTheme {
         indicatorColor: AppColors.secondary.withAlpha(51),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondary);
+            return TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondary);
           }
-          return GoogleFonts.inter(fontSize: 11, color: AppColors.darkTextSecondary);
+          return TextStyle(fontSize: 11, color: AppColors.darkTextSecondary);
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -290,7 +289,7 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.darkSurfaceVariant,
-        contentTextStyle: GoogleFonts.inter(color: AppColors.darkText),
+        contentTextStyle: TextStyle(color: AppColors.darkText),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -302,8 +301,8 @@ class AppTheme {
         labelColor: AppColors.secondary,
         unselectedLabelColor: AppColors.darkTextSecondary,
         indicatorColor: AppColors.secondary,
-        labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
-        unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.normal, fontSize: 14),
+        labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        unselectedLabelStyle: TextStyle(fontWeight: FontWeight.normal, fontSize: 14),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.secondary,
@@ -336,78 +335,78 @@ class AppTheme {
   }
 
   static TextTheme _buildTextTheme(Color primary, Color secondary) {
-    return GoogleFonts.interTextTheme().copyWith(
-      displayLarge: AppTextStyles.withGlyphFallback(GoogleFonts.playfairDisplay(
+    return const TextTheme().copyWith(
+      displayLarge: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 32,
         fontWeight: FontWeight.bold,
         color: primary,
         height: 1.2,
       )),
-      displayMedium: AppTextStyles.withGlyphFallback(GoogleFonts.playfairDisplay(
+      displayMedium: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 26,
         fontWeight: FontWeight.bold,
         color: primary,
         height: 1.3,
       )),
-      displaySmall: AppTextStyles.withGlyphFallback(GoogleFonts.playfairDisplay(
+      displaySmall: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 22,
         fontWeight: FontWeight.w600,
         color: primary,
         height: 1.3,
       )),
-      headlineLarge: AppTextStyles.withGlyphFallback(GoogleFonts.playfairDisplay(
+      headlineLarge: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: primary,
       )),
-      headlineMedium: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
+      headlineMedium: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: primary,
       )),
-      headlineSmall: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
+      headlineSmall: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: primary,
       )),
-      titleLarge: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
+      titleLarge: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         color: primary,
       )),
-      titleMedium: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
+      titleMedium: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: primary,
       )),
-      bodyLarge: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
+      bodyLarge: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.normal,
         color: primary,
       )),
-      bodyMedium: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
+      bodyMedium: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.normal,
         color: primary,
       )),
-      bodySmall: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
+      bodySmall: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.normal,
         color: secondary,
       )),
-      labelLarge: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
+      labelLarge: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: primary,
         letterSpacing: 0.5,
       )),
-      labelMedium: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
+      labelMedium: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: secondary,
         letterSpacing: 0.3,
       )),
-      labelSmall: AppTextStyles.withGlyphFallback(GoogleFonts.inter(
+      labelSmall: AppTextStyles.withGlyphFallback(TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.normal,
         color: secondary,

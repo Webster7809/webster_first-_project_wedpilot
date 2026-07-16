@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/router/app_routes.dart';
 import '../../../core/services/couple_profile_service.dart';
@@ -390,7 +389,7 @@ class _ProfileHero extends ConsumerWidget {
             const SizedBox(height: 12),
             Text(
               coupleName,
-              style: GoogleFonts.playfairDisplay(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -400,7 +399,7 @@ class _ProfileHero extends ConsumerWidget {
             if (profile?.weddingDate != null)
               Text(
                 _formatDate(profile!.weddingDate!),
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 13,
                   color: Colors.white.withAlpha(204),
                 ),

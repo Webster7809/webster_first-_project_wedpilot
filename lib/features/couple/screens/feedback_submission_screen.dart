@@ -6,6 +6,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/vendor_feedback.dart';
 import '../../../models/vendor_profile.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../../widgets/typeahead_field.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_text_field.dart';
 import '../../../widgets/wed_snack_bar.dart';
@@ -287,11 +289,17 @@ class _VendorPickerSheetState extends ConsumerState<_VendorPickerSheet> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: WedTextField(
+              child: TypeaheadField<VendorProfile>(
                 hint: 'Search vendors...',
                 controller: _searchCtrl,
                 prefixIcon: Icons.search,
                 onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+                suggestionsCallback: (q) => (vendorsAsync.valueOrNull ?? [])
+                    .where((v) => v.businessName.toLowerCase().contains(q.toLowerCase()))
+                    .take(8)
+                    .toList(),
+                displayStringForOption: (v) => v.businessName,
+                onSelected: (v) => Navigator.pop(context, v),
               ),
             ),
             const SizedBox(height: 8),
@@ -329,7 +337,12 @@ class _VendorPickerSheetState extends ConsumerState<_VendorPickerSheet> {
                               ? Text(v.businessName.isNotEmpty ? v.businessName[0].toUpperCase() : '?')
                               : null,
                         ),
-                        title: Text(v.businessName, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        title: HighlightedText(
+                          text: v.businessName,
+                          query: _query,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         subtitle: Text(v.category, maxLines: 1, overflow: TextOverflow.ellipsis),
                         onTap: () => Navigator.pop(context, v),
                       );

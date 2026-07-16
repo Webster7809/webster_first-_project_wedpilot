@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/state/resource.dart';
@@ -73,7 +72,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                 ),
                 Text(
                   _coupleDisplayName(user?.name, couple?.partnerName),
-                  style: GoogleFonts.playfairDisplay(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: AppColors.forestGreen,
@@ -494,7 +493,7 @@ class _CountdownCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   dateLabel,
-                  style: GoogleFonts.playfairDisplay(
+                  style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
@@ -508,7 +507,7 @@ class _CountdownCard extends StatelessWidget {
             children: [
               Text(
                 days,
-                style: GoogleFonts.playfairDisplay(
+                style: TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.w800,
                   color: AppColors.amber,
@@ -619,7 +618,7 @@ class _BudgetOverviewCard extends StatelessWidget {
               children: [
                 TextSpan(
                   text: 'ZMW ${spent.toStringAsFixed(0)} ',
-                  style: GoogleFonts.playfairDisplay(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: AppColors.forestGreen,

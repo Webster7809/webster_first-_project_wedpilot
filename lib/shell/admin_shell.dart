@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../core/router/app_routes.dart';
 import '../core/theme/app_colors.dart';
 import '../widgets/shell_nav_item.dart';
@@ -354,7 +353,7 @@ class _SidebarSection extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
             child: Text(
               label,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
                 color: Colors.white38,
@@ -416,7 +415,7 @@ class _SidebarItem extends StatelessWidget {
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                     color: isActive ? AppColors.amber : Colors.white70,
@@ -464,7 +463,7 @@ class _SidebarRouteItem extends StatelessWidget {
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(fontSize: 14, color: Colors.white70),
+                  style: TextStyle(fontSize: 14, color: Colors.white70),
                 ),
               ),
             ],

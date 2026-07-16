@@ -6,8 +6,25 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../providers/admin_provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../../widgets/typeahead_field.dart';
 import '../../../widgets/wed_avatar.dart';
 import '../../../widgets/wed_snack_bar.dart';
+
+List<AdminUser> filterAdminUsers(
+  List<AdminUser> users,
+  String query,
+  String roleFilter,
+) {
+  final q = query.toLowerCase();
+  return users.where((u) {
+    final matchesFilter = roleFilter == 'All' || u.role == roleFilter.toLowerCase();
+    final matchesSearch = q.isEmpty ||
+        u.name.toLowerCase().contains(q) ||
+        u.email.toLowerCase().contains(q);
+    return matchesFilter && matchesSearch;
+  }).toList();
+}
 
 class UserManagementScreen extends ConsumerStatefulWidget {
   const UserManagementScreen({super.key});
@@ -169,15 +186,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   Widget build(BuildContext context) {
     final users = ref.watch(adminUsersProvider).valueOrNull ?? [];
 
-    final filtered = users.where((u) {
-      final matchesFilter = _filter == 'All' || u.role == _filter.toLowerCase();
-      final query = _searchCtrl.text.toLowerCase();
-      final matchesSearch =
-          query.isEmpty ||
-          u.name.toLowerCase().contains(query) ||
-          u.email.toLowerCase().contains(query);
-      return matchesFilter && matchesSearch;
-    }).toList();
+    final filtered = filterAdminUsers(users, _searchCtrl.text, _filter);
 
     return Scaffold(
       backgroundColor: AppColors.adminPage,
@@ -217,49 +226,17 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
+                TypeaheadField<AdminUser>(
                   controller: _searchCtrl,
                   focusNode: _searchFocus,
+                  hint: 'Search by name or email…',
+                  prefixIcon: Icons.search,
+                  fillColor: AppColors.adminPage,
                   onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText: 'Search by name or email…',
-                    hintStyle: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textHint,
-                    ),
-                    prefixIcon: IconButton(
-                      tooltip: 'Search',
-                      onPressed: () => _searchFocus.requestFocus(),
-                      icon: const Icon(
-                        Icons.search,
-                        size: 20,
-                        color: AppColors.textSecondary,
-                      ),
-                      splashRadius: 20,
-                    ),
-                    suffixIcon: _searchCtrl.text.isNotEmpty
-                        ? IconButton(
-                            tooltip: 'Clear search',
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() {});
-                              _searchFocus.requestFocus();
-                            },
-                            icon: const Icon(
-                              Icons.clear,
-                              size: 20,
-                              color: AppColors.textSecondary,
-                            ),
-                            splashRadius: 20,
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: AppColors.adminPage,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
+                  suggestionsCallback: (q) =>
+                      filterAdminUsers(users, q, _filter).take(8).toList(),
+                  displayStringForOption: (u) => u.name,
+                  onSelected: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 10),
                 SingleChildScrollView(
@@ -364,8 +341,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                         title: Row(
                           children: [
                             Expanded(
-                              child: Text(
-                                user.name,
+                              child: HighlightedText(
+                                text: user.name,
+                                query: _searchCtrl.text,
                                 style: AppTextStyles.titleMedium.copyWith(
                                   color: user.isSuspended
                                       ? AppColors.textSecondary
@@ -395,8 +373,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                               ),
                           ],
                         ),
-                        subtitle: Text(
-                          '${user.email}  ·  Joined ${fmtRelativeTime(user.joinedAt)}',
+                        subtitle: HighlightedText(
+                          text:
+                              '${user.email}  ·  Joined ${fmtRelativeTime(user.joinedAt)}',
+                          query: _searchCtrl.text,
                           style: AppTextStyles.caption.copyWith(
                             color: AppColors.textSecondary,
                           ),

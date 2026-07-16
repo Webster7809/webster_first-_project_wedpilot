@@ -42,7 +42,10 @@ class BudgetShareScreen extends ConsumerWidget {
     }
 
     final budget = budgetState.data!;
-    final categories = budget.categories;
+    // A category with nothing allocated isn't a real line item to share —
+    // drop it rather than showing "Allocated ZMW 0.00" (see the same filter
+    // in couple_planning_screen.dart's budget breakdown).
+    final categories = budget.categories.where((c) => c.allocatedAmount > 0).toList();
     final bookedCount = categories.where((c) => c.spentAmount > 0).length;
     final pendingCount = categories.length - bookedCount;
 

@@ -9,6 +9,7 @@ import '../../../models/vendor_profile.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/loading_shimmer.dart';
+import '../../../widgets/typeahead_field.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../core/constants/app_constants.dart';
 
@@ -35,6 +36,7 @@ class _VendorDiscoveryScreenState
     extends ConsumerState<VendorDiscoveryScreen> {
   String _selectedCategory = kAllVendorCategories;
   int _filterIndex = 0;
+  String _committedSearch = '';
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +45,11 @@ class _VendorDiscoveryScreenState
     }
     final coupleProfile = ref.watch(coupleProfileProvider);
     final city = coupleProfile?.location?.split(',').first.trim() ?? 'your city';
-    final vendorAsync = ref.watch(vendorListProvider(_selectedCategory));
+    final vendorAsync = _committedSearch.isEmpty
+        ? ref.watch(vendorListProvider(_selectedCategory))
+        : ref.watch(vendorSearchResultsProvider(
+            (category: _selectedCategory, search: _committedSearch),
+          ));
     final totalBudget = coupleProfile?.totalBudget ?? 0.0;
     final catBudgets = Map.fromEntries(
       AppConstants.defaultBudgetAllocation.entries.map(
@@ -126,6 +132,37 @@ class _VendorDiscoveryScreenState
                     ],
                   ),
                 ),
+              ),
+            ),
+          ),
+
+          // ── Vendor search ─────────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Container(
+              color: AppColors.forestGreen,
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: TypeaheadField<VendorProfile>(
+                hint: 'Search vendors by name...',
+                prefixIcon: Icons.search_rounded,
+                fillColor: Colors.white,
+                debounceDuration: const Duration(milliseconds: 300),
+                suggestionsCallback: (query) async {
+                  if (query.isEmpty) {
+                    if (_committedSearch.isNotEmpty && mounted) {
+                      setState(() => _committedSearch = '');
+                    }
+                    return <VendorProfile>[];
+                  }
+                  final results = await ref.read(
+                    vendorSearchResultsProvider(
+                      (category: _selectedCategory, search: query),
+                    ).future,
+                  );
+                  if (mounted) setState(() => _committedSearch = query);
+                  return results;
+                },
+                displayStringForOption: (v) => v.businessName,
+                onSelected: (v) => setState(() => _committedSearch = v.businessName),
               ),
             ),
           ),

@@ -104,8 +104,15 @@ async function syncCategoriesForNewTotal(budget, oldTotal, newTotal, requestedNa
   if (allNames.length === 0) return;
 
   const customItemInputs = existingCustomItems.map((i) => ({ amount: Number(i.amount) }));
+  // What each existing category's amount *should* have been under the
+  // selection that was actually active last time (existingNames) — not
+  // allNames. Using allNames here would pull in categories the couple is
+  // only adding *now*, shifting the weight-renormalization base for every
+  // pre-existing category and making the diff check below spuriously think
+  // the couple had manually customized it, freezing it at its old amount
+  // forever instead of rescaling it to the new total.
   const oldByName = Object.fromEntries(
-    buildCategoriesFor(oldTotal, allNames, customItemInputs).map((c) => [c.category_name, c.allocated_amount]),
+    buildCategoriesFor(oldTotal, existingNames, customItemInputs).map((c) => [c.category_name, c.allocated_amount]),
   );
   const newTemplate = buildCategoriesFor(newTotal, allNames, customItemInputs);
   const newByName = Object.fromEntries(newTemplate.map((c) => [c.category_name, c]));

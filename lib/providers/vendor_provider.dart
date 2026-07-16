@@ -9,8 +9,6 @@ final selectedCategoryProvider = StateProvider<String>((ref) => 'Photography');
 
 final selectedServiceCategoriesProvider = StateProvider<List<String>>((ref) => []);
 
-final vendorSearchQueryProvider = StateProvider<String>((ref) => '');
-
 // ── Location-aware vendor list ──────────────────────────────────────────────
 
 /// Passing the literal 'All' skips the category filter entirely, returning
@@ -41,6 +39,24 @@ final vendorListProvider = FutureProvider.family<List<VendorProfile>, String>(
       return scoreB.compareTo(scoreA);
     });
     return sorted;
+  },
+);
+
+/// Backs the vendor discovery screen's typeahead search — a network call per
+/// query, so `.autoDispose` (the only such provider in this file) lets
+/// Riverpod garbage-collect the cache entry for each distinct search string
+/// once nothing watches it anymore, instead of retaining one instance per
+/// keystroke ever typed for the life of the app.
+final vendorSearchResultsProvider = FutureProvider.autoDispose
+    .family<List<VendorProfile>, ({String category, String search})>(
+  (ref, params) async {
+    final token = ref.watch(authProvider.notifier).accessToken;
+    if (token == null || params.search.isEmpty) return [];
+    return VendorApiService.instance.fetchVendors(
+      token,
+      category: params.category == kAllVendorCategories ? null : params.category,
+      search: params.search,
+    );
   },
 );
 

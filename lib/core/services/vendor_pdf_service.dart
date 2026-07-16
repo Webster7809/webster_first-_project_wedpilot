@@ -88,7 +88,7 @@ class VendorPdfService {
                 _tableCell('Allocated', bold: true),
                 _tableCell('% of budget', bold: true),
               ]),
-              for (final c in budget.categories)
+              for (final c in budget.categories.where((c) => c.allocatedAmount > 0))
                 pw.TableRow(children: [
                   _tableCell('${c.categoryIcon}  ${c.categoryName}'),
                   _tableCell(

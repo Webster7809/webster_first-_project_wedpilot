@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../models/user.dart';
@@ -130,7 +129,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                 const SizedBox(width: 10),
                                 Text(
                                   'WedPilot',
-                                  style: GoogleFonts.playfairDisplay(
+                                  style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
@@ -141,7 +140,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                             const SizedBox(height: 20),
                             Text(
                               'GET STARTED',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.amber,
@@ -151,7 +150,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                             const SizedBox(height: 6),
                             Text(
                               'Plan the wedding\nyou both deserve',
-                              style: GoogleFonts.playfairDisplay(
+                              style: TextStyle(
                                 fontSize: 26,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
@@ -197,11 +196,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                   ),
                                   labelColor: AppColors.forestGreen,
                                   unselectedLabelColor: AppColors.textHint,
-                                  labelStyle: GoogleFonts.inter(
+                                  labelStyle: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                   ),
-                                  unselectedLabelStyle: GoogleFonts.inter(
+                                  unselectedLabelStyle: TextStyle(
                                     fontSize: 14,
                                   ),
                                   tabs: const [
@@ -255,7 +254,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                         ),
                                         child: Text(
                                           '&',
-                                          style: GoogleFonts.playfairDisplay(
+                                          style: TextStyle(
                                             fontSize: 20,
                                             color: AppColors.amber,
                                             fontWeight: FontWeight.w600,
@@ -346,7 +345,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                 child: RichText(
                                   textAlign: TextAlign.center,
                                   text: TextSpan(
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       fontSize: 11,
                                       color: AppColors.textHint,
                                     ),
@@ -395,7 +394,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                               child: RichText(
                                 text: TextSpan(
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.white60,
                                   ),

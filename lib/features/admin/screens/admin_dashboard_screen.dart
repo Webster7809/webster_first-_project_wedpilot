@@ -10,7 +10,20 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../providers/admin_provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../../widgets/typeahead_field.dart';
 import '../../../widgets/wed_snack_bar.dart';
+
+List<AdminVendor> filterAdminVendors(List<AdminVendor> vendors, String query) {
+  if (query.isEmpty) return vendors;
+  final q = query.toLowerCase();
+  return vendors
+      .where((v) =>
+          v.name.toLowerCase().contains(q) ||
+          v.category.toLowerCase().contains(q) ||
+          (v.location ?? '').toLowerCase().contains(q))
+      .toList();
+}
 
 // ── Category helpers ──────────────────────────────────────────────────────────
 
@@ -73,6 +86,7 @@ class AdminDashboardScreen extends ConsumerStatefulWidget {
 
 class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
   String _searchQuery = '';
 
   @override
@@ -86,18 +100,12 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
-  List<AdminVendor> _filtered(List<AdminVendor> vendors) {
-    if (_searchQuery.isEmpty) return vendors;
-    return vendors
-        .where((v) =>
-            v.name.toLowerCase().contains(_searchQuery) ||
-            v.category.toLowerCase().contains(_searchQuery) ||
-            (v.location ?? '').toLowerCase().contains(_searchQuery))
-        .toList();
-  }
+  List<AdminVendor> _filtered(List<AdminVendor> vendors) =>
+      filterAdminVendors(vendors, _searchQuery);
 
   @override
   Widget build(BuildContext context) {
@@ -137,35 +145,17 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           if (isWide) ...[
             SizedBox(
               width: 260,
-              height: 40,
-              child: TextField(
+              child: TypeaheadField<AdminVendor>(
                 controller: _searchController,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Search vendors...',
-                  hintStyle: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.textHint),
-                  prefixIcon: const Icon(Icons.search_rounded,
-                      color: AppColors.textHint, size: 18),
-                  filled: true,
-                  fillColor: Theme.of(context).colorScheme.surface,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: const BorderSide(color: AppColors.divider),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: const BorderSide(color: AppColors.divider),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: const BorderSide(
-                        color: AppColors.forestGreen, width: 1.5),
-                  ),
-                ),
+                focusNode: _searchFocus,
+                hint: 'Search vendors...',
+                prefixIcon: Icons.search_rounded,
+                borderRadius: 20,
+                fillColor: Theme.of(context).colorScheme.surface,
+                suggestionsCallback: (q) =>
+                    filterAdminVendors(pendingVendors, q).take(8).toList(),
+                displayStringForOption: (v) => v.name,
+                onSelected: (_) => setState(() {}),
               ),
             ),
             const SizedBox(width: 4),
@@ -295,10 +285,12 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 final wide = constraints.maxWidth >= AppDimensions.tabletMin;
                 final signups = _RecentSignupsPanel(
                   vendors: filteredVendors,
+                  query: _searchQuery,
                   onViewAll: () => context.go(AppRoutes.adminVendors),
                 );
                 final queue = _VerificationQueuePanel(
                   vendors: filteredVendors,
+                  query: _searchQuery,
                   onApprove: (id) async {
                     final vendor = pendingVendors.firstWhere((v) => v.id == id);
                     final token = ref.read(authProvider.notifier).accessToken;
@@ -380,16 +372,7 @@ class _VendorSearchDelegate extends SearchDelegate<String> {
   @override
   String get searchFieldLabel => 'Search vendors...';
 
-  List<AdminVendor> get _results {
-    if (query.isEmpty) return vendors;
-    final q = query.toLowerCase();
-    return vendors
-        .where((v) =>
-            v.name.toLowerCase().contains(q) ||
-            v.category.toLowerCase().contains(q) ||
-            (v.location ?? '').toLowerCase().contains(q))
-        .toList();
-  }
+  List<AdminVendor> get _results => filterAdminVendors(vendors, query);
 
   @override
   List<Widget> buildActions(BuildContext context) => [
@@ -438,7 +421,11 @@ class _VendorSearchDelegate extends SearchDelegate<String> {
             child: Icon(_iconForCategory(v.category),
                 size: 18, color: _colorForCategory(v.category)),
           ),
-          title: Text(v.name, style: AppTextStyles.bodySmall),
+          title: HighlightedText(
+            text: v.name,
+            query: query,
+            style: AppTextStyles.bodySmall,
+          ),
           subtitle: Text('${v.category} · ${v.location}',
               style: AppTextStyles.caption
                   .copyWith(color: AppColors.textSecondary)),
@@ -603,10 +590,12 @@ class _FlaggedContentBanner extends StatelessWidget {
 
 class _RecentSignupsPanel extends StatelessWidget {
   final List<AdminVendor> vendors;
+  final String query;
   final VoidCallback onViewAll;
 
   const _RecentSignupsPanel({
     required this.vendors,
+    this.query = '',
     required this.onViewAll,
   });
 
@@ -736,8 +725,9 @@ class _RecentSignupsPanel extends StatelessWidget {
                               ),
                               const SizedBox(width: 10),
                               Flexible(
-                                child: Text(
-                                  v.name,
+                                child: HighlightedText(
+                                  text: v.name,
+                                  query: query,
                                   style: AppTextStyles.bodySmall.copyWith(
                                     color: AppColors.textPrimary,
                                     fontWeight: FontWeight.w600,
@@ -789,11 +779,13 @@ class _RecentSignupsPanel extends StatelessWidget {
 
 class _VerificationQueuePanel extends StatelessWidget {
   final List<AdminVendor> vendors;
+  final String query;
   final ValueChanged<String> onApprove;
   final ValueChanged<String> onReject;
 
   const _VerificationQueuePanel({
     required this.vendors,
+    this.query = '',
     required this.onApprove,
     required this.onReject,
   });
@@ -887,8 +879,9 @@ class _VerificationQueuePanel extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                v.name,
+                              HighlightedText(
+                                text: v.name,
+                                query: query,
                                 style: AppTextStyles.bodySmall.copyWith(
                                   color: AppColors.textPrimary,
                                   fontWeight: FontWeight.w700,
