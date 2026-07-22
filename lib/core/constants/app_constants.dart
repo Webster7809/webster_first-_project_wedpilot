@@ -23,7 +23,6 @@ class AppConstants {
   static const List<String> weddingTypes = [
     'White wedding',
     'Traditional',
-    'Both',
   ];
 
   static const List<String> weddingStyles = [

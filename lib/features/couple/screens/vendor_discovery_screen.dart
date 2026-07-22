@@ -8,6 +8,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/loading_shimmer.dart';
 import '../../../widgets/typeahead_field.dart';
 import '../../../core/utils/format_utils.dart';
@@ -67,6 +68,7 @@ class _VendorDiscoveryScreenState
             backgroundColor: AppColors.forestGreen,
             expandedHeight: 160,
             automaticallyImplyLeading: false,
+            leading: const HamburgerMenuButton(color: Colors.white),
             elevation: 0,
             flexibleSpace: FlexibleSpaceBar(
               background: SafeArea(

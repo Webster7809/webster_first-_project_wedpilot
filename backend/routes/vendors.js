@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const express = require('express');
 const { Op, fn, col } = require('sequelize');
 const Vendor = require('../db/models/vendor');
@@ -90,6 +91,7 @@ async function serializeVendor(vendor, { includeDetail = false, statsInfo = null
     address: vendor.address,
     instagram_handle: vendor.instagram_handle,
     blocked_dates: vendor.blocked_dates,
+    packages: vendor.packages ?? [],
     // Public CRS + badges only — sourced from vendor_stats, never from raw
     // vendor_feedback (no comments, no reviewer identity ever leave that table).
     rating: stats.avg_star_rating,
@@ -426,6 +428,64 @@ router.patch('/me/blocked-dates', verifyJwt, requireVendor, async (req, res) => 
   } catch (err) {
     console.error('Update blocked dates error:', err.message);
     res.status(500).json({ error: 'Could not update blocked dates.' });
+  }
+});
+
+// ── Wedding-class packages ───────────────────────────────────────────────────────
+// Replaces the vendor's full package list. Registering a qualifying package is
+// one of the criteria for reaching the Flexible / High Class wedding classes
+// (see the Flutter-side VendorClassService), so the shape is validated strictly.
+
+router.patch('/me/packages', verifyJwt, requireVendor, async (req, res) => {
+  try {
+    const vendor = await ownVendorOr404(req, res);
+    if (!vendor) return;
+    const { packages } = req.body;
+    if (!Array.isArray(packages)) {
+      return res.status(400).json({ error: 'packages must be an array.' });
+    }
+    if (packages.length > 6) {
+      return res.status(400).json({ error: 'A vendor can register at most 6 packages.' });
+    }
+
+    const cleaned = [];
+    for (const p of packages) {
+      if (!p || typeof p !== 'object') {
+        return res.status(400).json({ error: 'Each package must be an object.' });
+      }
+      if (!['luxury', 'starter'].includes(p.tier)) {
+        return res.status(400).json({ error: 'Package tier must be "luxury" or "starter".' });
+      }
+      if (typeof p.title !== 'string' || !p.title.trim()) {
+        return res.status(400).json({ error: 'Each package needs a title.' });
+      }
+      const inclusions = Array.isArray(p.inclusions)
+        ? p.inclusions.map((i) => (typeof i === 'string' ? i.trim() : '')).filter(Boolean)
+        : [];
+      if (inclusions.length === 0 || inclusions.length > 10) {
+        return res.status(400).json({ error: 'Each package needs 1–10 inclusions.' });
+      }
+      const price = p.price == null ? null : Number(p.price);
+      if (price != null && (!Number.isFinite(price) || price < 0)) {
+        return res.status(400).json({ error: 'Package price must be a positive number.' });
+      }
+      cleaned.push({
+        package_id: typeof p.package_id === 'string' && p.package_id
+          ? p.package_id
+          : crypto.randomUUID(),
+        tier: p.tier,
+        title: p.title.trim(),
+        inclusions,
+        price,
+      });
+    }
+
+    vendor.packages = cleaned;
+    await vendor.save();
+    res.json({ packages: vendor.packages });
+  } catch (err) {
+    console.error('Update vendor packages error:', err.message);
+    res.status(500).json({ error: 'Could not update packages.' });
   }
 });
 

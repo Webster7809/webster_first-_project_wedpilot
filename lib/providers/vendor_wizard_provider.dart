@@ -1,49 +1,10 @@
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 import '../models/vendor_profile.dart';
 import '../core/services/vendor_pdf_service.dart';
 import 'auth_provider.dart';
 import 'budget_provider.dart';
 import 'vendor_ai_provider.dart';
-
-// ── Custom (couple-added) vendors ───────────────────────────────────────────
-
-final customVendorsProvider =
-    StateNotifierProvider<CustomVendorsNotifier, List<VendorProfile>>(
-  (ref) => CustomVendorsNotifier(),
-);
-
-class CustomVendorsNotifier extends StateNotifier<List<VendorProfile>> {
-  CustomVendorsNotifier() : super(const []);
-
-  VendorProfile add({
-    required String businessName,
-    required String category,
-    String? phone,
-    String? location,
-    String? notes,
-  }) {
-    final vendor = VendorProfile(
-      id: 'custom-${const Uuid().v4()}',
-      userId: 'couple-added',
-      businessName: businessName,
-      description: notes,
-      category: category,
-      location: location,
-      tier: VendorTier.free,
-      verificationStatus: VerificationStatus.pending,
-      phone: phone,
-      isCustomEntry: true,
-    );
-    state = [...state, vendor];
-    return vendor;
-  }
-
-  void remove(String vendorId) {
-    state = state.where((v) => v.id != vendorId).toList();
-  }
-}
 
 // ── AI-curated plan ──────────────────────────────────────────────────────────
 
@@ -53,12 +14,9 @@ final aiTopMatchesProvider = Provider<List<VendorMatch>>((ref) {
   return matches.where((m) => m.rankInCategory == 1).toList();
 });
 
-/// Final vendor list for the plan: AI's top pick per category plus any
-/// vendors the couple added themselves (e.g. for categories AI found none for).
+/// Final vendor list for the plan: the AI's top pick per category.
 final finalChosenVendorsProvider = Provider<List<VendorProfile>>((ref) {
-  final aiPicks = ref.watch(aiTopMatchesProvider).map((m) => m.vendor).toList();
-  final custom = ref.watch(customVendorsProvider);
-  return [...aiPicks, ...custom];
+  return ref.watch(aiTopMatchesProvider).map((m) => m.vendor).toList();
 });
 
 // ── PDF generation ───────────────────────────────────────────────────────────

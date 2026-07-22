@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/constants/class_packages.dart';
 import '../../../core/services/wedding_ai_service.dart';
 import '../../../core/utils/pdf_download.dart';
 import '../../../core/theme/app_colors.dart';
@@ -22,7 +24,6 @@ import '../../../widgets/loading_shimmer.dart';
 import '../../../widgets/wed_avatar.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
-import '../../../widgets/wed_text_field.dart';
 import '../../../widgets/wizard_widgets.dart';
 
 class CouplePlanningScreen extends ConsumerStatefulWidget {
@@ -43,18 +44,10 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
   final _locationCtrl = TextEditingController();
   String _weddingType = 'White wedding';
   String _weddingClass = 'Flexible';
-  final Map<String, bool> _vendorCategories = {
-    'Venue': false,
-    'Catering': false,
-    'Photography': false,
-    'Decor & flowers': false,
-    'DJ & MC': false,
-    'Transport': false,
-    'Wedding attire': false,
-    'Cake & sweets': false,
-  };
-  final _customCategoryCtrl = TextEditingController();
-  final List<String> _customCategories = [];
+  // Categories the couple has ticked. The selectable list itself is dynamic —
+  // built-in categories merged with whatever categories vendors have actually
+  // registered under (see availableVendorCategoriesProvider).
+  final Set<String> _selectedCategories = {};
 
   // Step 1 — Date
   DateTime? _weddingDate;
@@ -75,6 +68,24 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
   bool _aiPlanLoading = false;
   String? _aiPlanError;
 
+  // Anchors for each category's AI-matched vendor section in the review step,
+  // so the "Vendors needed" chips can jump straight to the picked vendor.
+  final Map<String, GlobalKey> _categorySectionKeys = {};
+
+  GlobalKey _categorySectionKey(String category) =>
+      _categorySectionKeys.putIfAbsent(category, () => GlobalKey());
+
+  void _scrollToCategory(String category) {
+    final ctx = _categorySectionKeys[category]?.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeInOut,
+      alignment: 0.06,
+    );
+  }
+
   static const _stepLabels = [
     "LET'S PLAN YOUR DAY",
     'YOUR WEDDING DATE',
@@ -94,39 +105,20 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     _budgetCtrl.dispose();
     _guestsCtrl.dispose();
     _locationCtrl.dispose();
-    _customCategoryCtrl.dispose();
     super.dispose();
   }
 
+  List<String> _availableCategories() =>
+      ref.read(availableVendorCategoriesProvider).valueOrNull ??
+      AppConstants.vendorCategories;
+
   List<String> _activeCategories() {
-    final fixed = _vendorCategories.entries
-        .where((e) => e.value)
-        .map((e) => e.key)
-        .toList();
-    final merged = [...fixed, ..._customCategories];
-    return merged.isNotEmpty ? merged : _vendorCategories.keys.toList();
-  }
-
-  void _addCustomCategory() {
-    final raw = _customCategoryCtrl.text.trim();
-    if (raw.isEmpty) return;
-    final exists =
-        _vendorCategories.keys.any(
-          (c) => c.toLowerCase() == raw.toLowerCase(),
-        ) ||
-        _customCategories.any((c) => c.toLowerCase() == raw.toLowerCase());
-    if (exists) {
-      _customCategoryCtrl.clear();
-      return;
-    }
-    setState(() {
-      _customCategories.add(raw);
-      _customCategoryCtrl.clear();
-    });
-  }
-
-  void _removeCustomCategory(String category) {
-    setState(() => _customCategories.remove(category));
+    // Preserve the checklist's display order rather than tick order.
+    final selected =
+        _availableCategories().where(_selectedCategories.contains).toList();
+    return selected.isNotEmpty
+        ? selected
+        : List.of(AppConstants.vendorCategories);
   }
 
   double? _parsedBudget() => double.tryParse(
@@ -180,6 +172,13 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
   }
 
   void _createPlan() {
+    // Guards against a fast double-tap/double-click firing this twice before
+    // the step-3 rebuild removes this button — without this, two overlapping
+    // calls would each hit the AI backend independently (generateWeddingPlan
+    // is a plain async call, not a deduped Riverpod provider), spending two
+    // AI requests for one tap. _step flips to 3 synchronously below, so this
+    // check alone is enough to reject the second call.
+    if (_step != 2) return;
     final totalBudget = _parsedBudget() ?? 0;
     if (totalBudget <= 0) {
       showWedSnackBar(
@@ -192,6 +191,10 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
       return;
     }
     unawaited(_saveProfile());
+    // Re-fetch the vendor pool for every plan run — packages and ratings
+    // vendors registered since the last fetch must reach this couple's
+    // matching, not a session-old cached list.
+    ref.invalidate(allVendorsProvider);
     final categories = _activeCategories();
     ref.read(selectedServiceCategoriesProvider.notifier).state = categories;
     ref.read(wizardLocationProvider.notifier).state = _locationCtrl.text.trim();
@@ -260,19 +263,58 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     } on WeddingAiException catch (e) {
       if (mounted) {
         setState(() {
-          _aiPlanError = e.message;
+          _aiPlanResult =
+              _localPlanFallback(totalBudget, categories, e.message);
           _aiPlanLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _aiPlanError =
-              "Couldn't reach WedPilot AI right now. Please try again.";
+          _aiPlanResult = _localPlanFallback(totalBudget, categories,
+              "Couldn't reach WedPilot AI right now.");
           _aiPlanLoading = false;
         });
       }
     }
+  }
+
+  /// Grounded stand-in for the AI narrative plan when the AI can't be
+  /// reached (backend offline, rate limit, timeout): WedPilot's standard
+  /// allocation percentages, renormalized over just the categories the
+  /// couple selected. Every figure is deterministic app data — nothing here
+  /// is generated, so nothing here can be fabricated.
+  WeddingPlanResult _localPlanFallback(
+    double totalBudget,
+    List<String> categories,
+    String reason,
+  ) {
+    final weights = {
+      for (final c in categories)
+        // Custom categories the couple added have no standard share — give
+        // them a small planning slice rather than zero.
+        c: AppConstants.defaultBudgetAllocation[c] ?? 0.05,
+    };
+    final sum = weights.values.fold(0.0, (a, b) => a + b);
+    final advice = sum <= 0
+        ? <String, double>{}
+        : {
+            for (final e in weights.entries)
+              e.key: ((e.value / sum) * 100).roundToDouble(),
+          };
+    return WeddingPlanResult(
+      planSummary:
+          '$reason Meanwhile, here is WedPilot\'s standard planner split for '
+          'your ${fmtCurrency(totalBudget)} budget across your '
+          '${categories.length} selected services — and your vendor matches '
+          'below are computed from real vendor data on file, unaffected.',
+      budgetAdvice: advice,
+      budgetReasoning: {
+        for (final c in categories)
+          c: 'WedPilot\'s standard allocation for $c, scaled to the set of '
+              'services you selected.',
+      },
+    );
   }
 
   @override
@@ -354,7 +396,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         ),
         const SizedBox(height: 10),
         _TypePills(
-          options: const ['White wedding', 'Traditional', 'Both'],
+          options: const ['White wedding', 'Traditional'],
           selected: _weddingType,
           onChanged: (v) => setState(() => _weddingType = v),
         ),
@@ -399,165 +441,26 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         ),
         const SizedBox(height: 24),
 
-        // Vendor categories
+        // Vendor categories — a tickable checklist. The list itself is live:
+        // built-in categories plus any category a vendor has registered under.
         WizardSectionLabel(
           icon: Icons.grid_view_outlined,
           label: 'Vendors you\'ll need',
         ),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _vendorCategories.keys.map((cat) {
-            final selected = _vendorCategories[cat]!;
-            return Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => setState(() => _vendorCategories[cat] = !selected),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? AppColors.amber.withAlpha(30)
-                        : AppColors.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: selected ? AppColors.amber : AppColors.divider,
-                      width: selected ? 1.5 : 1,
-                    ),
-                  ),
-                  child: Text(
-                    cat,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                      color: selected ? AppColors.amber : AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        if (_customCategories.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _customCategories.map((cat) {
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.forestGreen.withAlpha(20),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.forestGreen, width: 1.5),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        cat,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.forestGreen,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Material(
-                      color: Colors.transparent,
-                      shape: const CircleBorder(),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => _removeCustomCategory(cat),
-                        child: const Padding(
-                          padding: EdgeInsets.all(3),
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 14,
-                            color: AppColors.forestGreen,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-        const SizedBox(height: 10),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _customCategoryCtrl,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _addCustomCategory(),
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.textPrimary,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Add another vendor type, e.g. Hair & Makeup',
-                  hintStyle: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textHint,
-                  ),
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.divider),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.divider),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(
-                      color: AppColors.amber,
-                      width: 1.5,
-                    ),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Material(
-              color: AppColors.forestGreen,
-              borderRadius: BorderRadius.circular(10),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: _addCustomCategory,
-                child: const SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Icon(Icons.add_rounded, color: Colors.white),
-                ),
-              ),
-            ),
-          ],
+        _CategoryChecklist(
+          categories: ref.watch(availableVendorCategoriesProvider).valueOrNull ??
+              AppConstants.vendorCategories,
+          selected: _selectedCategories,
+          onToggle: (cat) => setState(() {
+            if (!_selectedCategories.remove(cat)) {
+              _selectedCategories.add(cat);
+            }
+          }),
         ),
         const SizedBox(height: 6),
         Text(
-          'Add as many vendor types as you need — WedPilot AI will search and rank the best match for each.',
+          'Tick every service you need — WedPilot AI will search and rank the best match for each.',
           style: AppTextStyles.bodySmall.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -748,17 +651,21 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         validationResult?.excludedCategoryMessages ?? const <String, String>{};
     final budgetExhaustedMessages =
         validationResult?.budgetExhaustedMessages ?? const <String, String>{};
-    final customVendors = ref.watch(customVendorsProvider);
     final pdfAsync = ref.watch(weddingPlanPdfBytesProvider);
     final categories = _activeCategories();
+    final budgetClass = ref.watch(budgetClassProvider);
 
     // Real spend so far — the sum of what the AI's actually-picked vendors
     // charge (never a computed/estimated figure), shown against the couple's
     // entered total once matching has resolved at least one real price.
+    // Must read priceForClass(budgetClass) — the exact figure the ledger
+    // budgeted against and the one shown as "Package price" on each vendor
+    // card — never the raw priceMin, which can be a completely different,
+    // unrelated number once a vendor has a class-specific package price on file.
     final totalBudgetAmount = _parsedBudget();
     final usedAmount = (aiAsync.valueOrNull ?? const <VendorMatch>[])
-        .where((m) => m.rankInCategory == 1 && m.vendor.priceMin > 0)
-        .fold<double>(0, (sum, m) => sum + m.vendor.priceMin);
+        .where((m) => m.rankInCategory == 1 && m.vendor.priceForClass(budgetClass) > 0)
+        .fold<double>(0, (sum, m) => sum + m.vendor.priceForClass(budgetClass));
     final hasRealUsage =
         totalBudgetAmount != null && totalBudgetAmount > 0 && usedAmount > 0;
     final remainingAmount = hasRealUsage ? totalBudgetAmount - usedAmount : null;
@@ -816,10 +723,9 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
               _SummaryRow(label: 'Guests', value: guests),
               _SummaryRow(label: 'Location', value: location),
               _SummaryRow(label: 'Date', value: dateStr),
-              _SummaryRow(
-                label: 'Vendors needed',
-                value: categories.join(', '),
-                isLast: true,
+              _VendorsNeededRow(
+                categories: categories,
+                onCategoryTap: _scrollToCategory,
               ),
             ],
           ),
@@ -853,28 +759,42 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
               );
             }
             return Text(
-              "Couldn't reach WedPilot AI right now. Add vendors yourself below.",
+              "Couldn't reach WedPilot AI right now. Please try again in a moment.",
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.textSecondary,
               ),
             );
           },
           data: (matches) {
-            final bestByCategory = <String, VendorMatch>{
-              for (final m in matches)
-                if (m.rankInCategory == 1) m.vendor.category: m,
-            };
+            // Up to 3 per category (rank 1-3, sorted), not just the winner —
+            // seeing the runners-up alongside the top pick is what actually
+            // lets a couple sanity-check the ranking instead of trusting a
+            // single name on faith (see AiEngine.attachAlternates).
+            final rankedByCategory = <String, List<VendorMatch>>{};
+            for (final m in matches) {
+              rankedByCategory.putIfAbsent(m.vendor.category, () => []).add(m);
+            }
+            for (final list in rankedByCategory.values) {
+              list.sort((a, b) => a.rankInCategory.compareTo(b.rankInCategory));
+            }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (final category in categories) ...[
                   WizardSectionLabel(
+                    key: _categorySectionKey(category),
                     icon: categoryIcon(category),
                     label: category,
                   ),
                   const SizedBox(height: 10),
-                  if (bestByCategory[category] != null)
-                    _PlanVendorCard(match: bestByCategory[category])
+                  if ((rankedByCategory[category]?.isNotEmpty ?? false))
+                    for (final match in rankedByCategory[category]!.take(3)) ...[
+                      _PlanVendorCard(
+                        match: match,
+                        budgetClass: ref.watch(budgetClassProvider),
+                      ),
+                      const SizedBox(height: 10),
+                    ]
                   else if (budgetExhaustedMessages[category] != null)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -905,80 +825,13 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                   else
                     Text(
                       excludedCategoryMessages[category] ??
-                          'No available $category vendors matched yet — add one yourself below.',
+                          'No available $category vendors matched yet.',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                       ),
                     ),
-                  for (final v in customVendors.where(
-                    (v) => v.category == category,
-                  )) ...[
-                    const SizedBox(height: 10),
-                    _PlanVendorCard(
-                      vendor: v,
-                      onRemove: () =>
-                          ref.read(customVendorsProvider.notifier).remove(v.id),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: () => showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) =>
-                            _AddCustomVendorSheet(category: category),
-                      ),
-                      icon: const Icon(Icons.add_rounded, size: 16),
-                      label: const Text('Add your own vendor'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.forestGreen,
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(0, 32),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 18),
                 ],
-                if (hasRealUsage)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.divider),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Budget summary',
-                          style: AppTextStyles.titleMedium,
-                        ),
-                        const SizedBox(height: 10),
-                        _SummaryRow(
-                          label: 'Entered amount',
-                          value: fmtCurrency(totalBudgetAmount),
-                        ),
-                        _SummaryRow(
-                          label: 'Allocated amount',
-                          value: fmtCurrency(usedAmount),
-                        ),
-                        _SummaryRow(
-                          label: 'Remaining',
-                          value: remainingAmount! > 0
-                              ? fmtCurrency(remainingAmount)
-                              : remainingAmount < 0
-                                  ? 'Over by ${fmtCurrency(remainingAmount.abs())}'
-                                  : 'All budget used',
-                          isLast: true,
-                        ),
-                      ],
-                    ),
-                  ),
                 const SizedBox(height: 20),
               ],
             );
@@ -1261,28 +1114,46 @@ class _VendorValidationFailureCard extends StatelessWidget {
   }
 }
 
-// ── Plan vendor card — AI pick or couple-added, with contact details ───────
+// ── Plan vendor card — the AI's top pick, with contact details ─────────────
 
 class _PlanVendorCard extends StatelessWidget {
-  final VendorMatch? match;
-  final VendorProfile? vendor;
-  final VoidCallback? onRemove;
+  final VendorMatch match;
 
-  const _PlanVendorCard({this.match, this.vendor, this.onRemove})
-    : assert(match != null || vendor != null);
+  /// Wedding class the plan was built for — drives the bundled package shown
+  /// on AI picks (High Class: full luxury package, Flexible: starter package,
+  /// Budget-Friendly: none).
+  final BudgetClass? budgetClass;
 
-  VendorProfile get _vendor => match?.vendor ?? vendor!;
+  const _PlanVendorCard({required this.match, this.budgetClass});
 
   @override
   Widget build(BuildContext context) {
-    final v = _vendor;
-    final isCustom = vendor != null;
+    final v = match.vendor;
     final servicesText = v.services.isNotEmpty
         ? v.services.map((s) => s.title).join(', ')
         : (v.description ?? '');
     final priceText = v.priceMax > 0
         ? '${fmtCurrency(v.priceMin)} – ${fmtCurrency(v.priceMax)}'
         : null;
+    // The package shown with a class pick: the vendor's own registered
+    // package for that tier when they have one (their real, syncing offer —
+    // exactly what the couple gets and why the class is worth it), falling
+    // back to the standard class package catalog otherwise. Budget-Friendly
+    // gets neither by design.
+    final wantedTier = switch (budgetClass) {
+      BudgetClass.highClass => VendorPackageTier.luxury,
+      BudgetClass.flexible => VendorPackageTier.starter,
+      _ => null,
+    };
+    final vendorPackage = wantedTier != null
+        ? v.packages
+            .where((p) => p.tier == wantedTier && p.inclusions.isNotEmpty)
+            .firstOrNull
+        : null;
+    final packageInclusions = vendorPackage?.inclusions ??
+        (budgetClass != null
+            ? ClassPackages.inclusionsFor(budgetClass!, v.category)
+            : const <String>[]);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1306,23 +1177,10 @@ class _PlanVendorCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              _Badge(
-                label: isCustom ? 'Added by you' : 'AI top pick',
-                color: isCustom ? AppColors.amber : AppColors.success,
+              const _Badge(
+                label: 'AI top pick',
+                color: AppColors.success,
               ),
-              if (isCustom && onRemove != null)
-                IconButton(
-                  tooltip: 'Remove',
-                  onPressed: onRemove,
-                  icon: const Icon(
-                    Icons.delete_outline_rounded,
-                    size: 18,
-                    color: AppColors.textHint,
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  visualDensity: VisualDensity.compact,
-                ),
             ],
           ),
           if (servicesText.isNotEmpty) ...[
@@ -1356,32 +1214,38 @@ class _PlanVendorCard extends StatelessWidget {
                 _ContactChip(icon: Icons.sell_outlined, text: priceText),
             ],
           ),
-          if (!isCustom &&
-              match != null &&
-              (!match!.fitsBudget ||
-                  match!.selectionBasis == SelectionBasis.onlyAffordableOption) &&
-              (match!.noteToCouple?.isNotEmpty ?? false)) ...[
+          if (packageInclusions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _ClassPackageSection(
+              budgetClass: budgetClass!,
+              inclusions: packageInclusions,
+              vendorPackage: vendorPackage,
+            ),
+          ],
+          if ((!match.fitsBudget ||
+                  match.selectionBasis == SelectionBasis.onlyAffordableOption) &&
+              (match.noteToCouple?.isNotEmpty ?? false)) ...[
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: match!.isBudgetUnrealistic ? AppColors.errorBg : AppColors.warningBg,
+                color: match.isBudgetUnrealistic ? AppColors.errorBg : AppColors.warningBg,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    match!.isBudgetUnrealistic
+                    match.isBudgetUnrealistic
                         ? Icons.error_outline_rounded
                         : Icons.info_outline_rounded,
                     size: 14,
-                    color: match!.isBudgetUnrealistic ? AppColors.error : AppColors.warning,
+                    color: match.isBudgetUnrealistic ? AppColors.error : AppColors.warning,
                   ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      match!.noteToCouple!,
+                      match.noteToCouple!,
                       style: AppTextStyles.caption.copyWith(
                         color: AppColors.textPrimary,
                       ),
@@ -1391,12 +1255,12 @@ class _PlanVendorCard extends StatelessWidget {
               ),
             ),
           ],
-          if (match?.reasoningSteps.isNotEmpty ?? false) ...[
+          if (_visibleReasoningSteps(match).isNotEmpty) ...[
             const SizedBox(height: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final step in match!.reasoningSteps)
+                for (final step in _visibleReasoningSteps(match))
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Row(
@@ -1431,7 +1295,7 @@ class _PlanVendorCard extends StatelessWidget {
                   ),
               ],
             ),
-          ] else if (match?.reasoning != null) ...[
+          ] else if (match.reasoning != null) ...[
             const SizedBox(height: 10),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1444,7 +1308,7 @@ class _PlanVendorCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    match!.reasoning!,
+                    match.reasoning!,
                     style: AppTextStyles.caption.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -1458,6 +1322,145 @@ class _PlanVendorCard extends StatelessWidget {
     );
   }
 }
+
+/// The bundled package that comes with the couple's wedding class, rendered
+/// on every AI pick. High Class gets the full dark-green/gold luxury
+/// treatment so it visibly reads as premium; Flexible a modest cream card;
+/// Budget-Friendly never reaches this widget (no package at all).
+class _ClassPackageSection extends StatelessWidget {
+  final BudgetClass budgetClass;
+  final List<String> inclusions;
+
+  /// The vendor's own registered package, when they have one for this tier —
+  /// its title and price are shown so the couple sees the vendor's real
+  /// offer, not just the generic class catalog.
+  final VendorPackage? vendorPackage;
+
+  const _ClassPackageSection({
+    required this.budgetClass,
+    required this.inclusions,
+    this.vendorPackage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLuxury = budgetClass == BudgetClass.highClass;
+    final label = ClassPackages.labelFor(budgetClass)!;
+    final tagline = vendorPackage != null
+        ? 'Registered by this vendor — exactly what comes with your booking.'
+        : ClassPackages.taglineFor(budgetClass);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: isLuxury
+            ? const LinearGradient(
+                colors: [AppColors.forestGreen, AppColors.coupleMagenta],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+        color: isLuxury ? null : AppColors.creamDark.withAlpha(120),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isLuxury ? AppColors.amber : AppColors.divider,
+          width: isLuxury ? 1.2 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isLuxury ? Icons.workspace_premium_rounded : Icons.card_giftcard_rounded,
+                size: 15,
+                color: isLuxury ? AppColors.amber : AppColors.budgetGreen,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTextStyles.caption.copyWith(
+                    color: isLuxury ? AppColors.amber : AppColors.budgetGreen,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (vendorPackage != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              vendorPackage!.title,
+              style: AppTextStyles.titleMedium.copyWith(
+                color: isLuxury ? Colors.white : AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          if (tagline != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              tagline,
+              style: AppTextStyles.caption.copyWith(
+                color: isLuxury
+                    ? Colors.white.withAlpha(200)
+                    : AppColors.textSecondary,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          for (final item in inclusions)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    isLuxury ? Icons.diamond_outlined : Icons.check_rounded,
+                    size: 13,
+                    color: isLuxury ? AppColors.amber : AppColors.budgetGreen,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: AppTextStyles.caption.copyWith(
+                        color: isLuxury ? Colors.white : AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (vendorPackage?.price != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Package price: ${fmtCurrency(vendorPackage!.price!)}',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: isLuxury ? AppColors.amber : AppColors.forestGreen,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// The couple already sees the category's allocated amount elsewhere on the
+// card (and in the budget recap) — the "Budget fit" reasoning step just
+// repeats that same figure, so it's dropped here while every other step
+// (reputation, availability, style match, verdict) still renders as-is.
+List<ReasoningStep> _visibleReasoningSteps(VendorMatch match) => match
+    .reasoningSteps
+    .where((s) => s.label != ReasoningStep.budgetFit)
+    .toList();
 
 IconData _reasoningStepIcon(String label) => switch (label) {
   ReasoningStep.budgetFit => Icons.payments_outlined,
@@ -1522,116 +1525,6 @@ class _ContactChip extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(2),
           child: child,
-        ),
-      ),
-    );
-  }
-}
-
-// ── Add custom vendor sheet ─────────────────────────────────────────────────
-
-class _AddCustomVendorSheet extends ConsumerStatefulWidget {
-  final String category;
-  const _AddCustomVendorSheet({required this.category});
-
-  @override
-  ConsumerState<_AddCustomVendorSheet> createState() =>
-      _AddCustomVendorSheetState();
-}
-
-class _AddCustomVendorSheetState extends ConsumerState<_AddCustomVendorSheet> {
-  final _nameCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _locationCtrl = TextEditingController();
-  final _notesCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _locationCtrl.dispose();
-    _notesCtrl.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    if (_nameCtrl.text.trim().isEmpty) {
-      showWedSnackBar(
-        context,
-        'Enter a business name to add this vendor',
-        type: SnackType.warning,
-      );
-      return;
-    }
-    ref
-        .read(customVendorsProvider.notifier)
-        .add(
-          businessName: _nameCtrl.text.trim(),
-          category: widget.category,
-          phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-          location: _locationCtrl.text.trim().isEmpty
-              ? null
-              : _locationCtrl.text.trim(),
-          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        );
-    Navigator.of(context).pop();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.cream,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Add a ${widget.category} vendor',
-                style: AppTextStyles.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              WedTextField(
-                label: 'Business name',
-                hint: 'e.g. Aunt Grace Catering',
-                controller: _nameCtrl,
-              ),
-              const SizedBox(height: 12),
-              WedTextField(
-                label: 'Phone (optional)',
-                hint: '+260 ...',
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone,
-              ),
-              const SizedBox(height: 12),
-              WedTextField(
-                label: 'Location (optional)',
-                hint: 'e.g. Ndola, Copperbelt',
-                controller: _locationCtrl,
-              ),
-              const SizedBox(height: 12),
-              WedTextField(
-                label: 'Notes (optional)',
-                hint: 'Anything else worth remembering',
-                controller: _notesCtrl,
-                maxLines: 2,
-              ),
-              const SizedBox(height: 20),
-              WedButton(
-                label: 'Add vendor',
-                variant: WedButtonVariant.primaryDark,
-                onPressed: _submit,
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -1898,15 +1791,231 @@ class _WeddingClassCards extends StatelessWidget {
 
 // ── Summary row ───────────────────────────────────────────────────────────────
 
+// A collapsible drawer-style panel of vendor categories. Closed, it's a
+// single tidy row summarising the selection; opened, it reveals a scrollable
+// tick list (bounded height, so a growing category list — it expands as
+// vendors register new services — never swallows the wizard page).
+class _CategoryChecklist extends StatefulWidget {
+  final List<String> categories;
+  final Set<String> selected;
+  final ValueChanged<String> onToggle;
+
+  const _CategoryChecklist({
+    required this.categories,
+    required this.selected,
+    required this.onToggle,
+  });
+
+  @override
+  State<_CategoryChecklist> createState() => _CategoryChecklistState();
+}
+
+class _CategoryChecklistState extends State<_CategoryChecklist> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.selected.length;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _expanded ? AppColors.amber : AppColors.divider,
+          width: _expanded ? 1.5 : 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Material(
+          color: AppColors.surface,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InkWell(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.checklist_rounded,
+                        size: 20,
+                        color: AppColors.amber,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          count == 0
+                              ? 'Select the services you need'
+                              : '$count service${count == 1 ? '' : 's'} selected',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      AnimatedRotation(
+                        turns: _expanded ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 22,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                alignment: Alignment.topCenter,
+                child: _expanded
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Divider(height: 1, color: AppColors.divider),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 280),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              padding: EdgeInsets.zero,
+                              itemCount: widget.categories.length,
+                              separatorBuilder: (_, _) => const Divider(
+                                height: 1,
+                                color: AppColors.divider,
+                              ),
+                              itemBuilder: (context, index) {
+                                final category = widget.categories[index];
+                                final isTicked =
+                                    widget.selected.contains(category);
+                                return InkWell(
+                                  onTap: () => widget.onToggle(category),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 12,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          isTicked
+                                              ? Icons.check_box_rounded
+                                              : Icons
+                                                  .check_box_outline_blank_rounded,
+                                          size: 22,
+                                          color: isTicked
+                                              ? AppColors.amber
+                                              : AppColors.textHint,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            category,
+                                            style: AppTextStyles.bodyMedium
+                                                .copyWith(
+                                              color: isTicked
+                                                  ? AppColors.textPrimary
+                                                  : AppColors.textSecondary,
+                                              fontWeight: isTicked
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      )
+                    : const SizedBox(width: double.infinity),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VendorsNeededRow extends StatelessWidget {
+  final List<String> categories;
+  final ValueChanged<String> onCategoryTap;
+
+  const _VendorsNeededRow({
+    required this.categories,
+    required this.onCategoryTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              'Vendors needed',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final category in categories)
+                  InkWell(
+                    onTap: () => onCategoryTap(category),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(18),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        category,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SummaryRow extends StatelessWidget {
   final String label;
   final String value;
-  final bool isLast;
 
   const _SummaryRow({
     required this.label,
     required this.value,
-    this.isLast = false,
   });
 
   @override
@@ -1941,7 +2050,7 @@ class _SummaryRow extends StatelessWidget {
             ],
           ),
         ),
-        if (!isLast) const Divider(height: 1, color: AppColors.divider),
+        const Divider(height: 1, color: AppColors.divider),
       ],
     );
   }

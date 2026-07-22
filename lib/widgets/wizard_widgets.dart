@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/inherited/shell_scaffold.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import 'dash_progress_bar.dart';
@@ -49,7 +50,27 @@ class WizardHeader extends StatelessWidget {
                       ),
                     )
                   else
-                    const SizedBox(width: 36),
+                    Builder(builder: (context) {
+                      // Only the couple shell's Budget tab renders this inside
+                      // a ShellScaffold — the same wizard header used for
+                      // standalone onboarding (couple + vendor) has no drawer
+                      // to open, so it keeps the plain spacer there.
+                      final shell = ShellScaffold.of(context);
+                      if (shell == null) return const SizedBox(width: 36);
+                      return Material(
+                        color: Colors.white.withAlpha(30),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => shell.scaffoldKey.currentState?.openDrawer(),
+                          child: const SizedBox(
+                            width: 36,
+                            height: 36,
+                            child: Icon(Icons.menu_rounded, color: Colors.white, size: 22),
+                          ),
+                        ),
+                      );
+                    }),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(

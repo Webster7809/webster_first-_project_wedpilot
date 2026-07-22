@@ -92,6 +92,13 @@ const Vendor = sequelize.define('Vendor', {
     allowNull: false,
     defaultValue: [],
   },
+  // Wedding-class packages the vendor registers themselves:
+  // [{ package_id, tier: 'luxury'|'starter', title, inclusions: [..], price }]
+  packages: {
+    type: DataTypes.JSON,
+    allowNull: false,
+    defaultValue: [],
+  },
   is_custom_entry: {
     type: DataTypes.BOOLEAN,
     allowNull: false,

@@ -313,6 +313,29 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
     return updateService(existing.copyWith(isActive: !existing.isActive));
   }
 
+  // ── Wedding-class packages ─────────────────────────────────────────────────
+
+  /// Replaces the vendor's registered package list — used for add, edit, and
+  /// remove alike since packages live as one JSON list on the profile.
+  Future<String?> savePackages(List<VendorPackage> packages) async {
+    final token = _token;
+    if (token == null) return 'Not signed in.';
+    final current = state.data;
+    final profile = current?.profile;
+    if (current == null || profile == null) return 'No vendor profile yet.';
+    try {
+      final saved = await _service.setPackages(token, packages);
+      final updatedProfile = profile.copyWith(packages: saved);
+      _ref.read(authProvider.notifier).setVendorProfile(updatedProfile);
+      state = state.copyWith(data: current.copyWith(profile: updatedProfile));
+      return null;
+    } on VendorApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+  }
+
   // ── Media / Portfolio ──────────────────────────────────────────────────────
 
   Future<String?> addMedia(Uint8List bytes, String filename, {bool isFeatured = false}) async {
@@ -466,6 +489,10 @@ final vendorServicesProvider = Provider<List<VendorService>>(
 
 final vendorMediaProvider = Provider<List<VendorMedia>>(
   (ref) => ref.watch(vendorOwnProvider).data?.media ?? [],
+);
+
+final vendorPackagesProvider = Provider<List<VendorPackage>>(
+  (ref) => ref.watch(vendorOwnProvider).data?.profile?.packages ?? [],
 );
 
 final vendorInquiriesProvider = Provider<List<Inquiry>>(

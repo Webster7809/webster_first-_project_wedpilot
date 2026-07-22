@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/admin_provider.dart';
+import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_card.dart';
 
 enum _DateRange { week, month, year }
@@ -84,6 +85,7 @@ class _PlatformAnalyticsScreenState extends ConsumerState<PlatformAnalyticsScree
         elevation: 0,
         scrolledUnderElevation: 0.5,
         shadowColor: AppColors.divider,
+        leading: const HamburgerMenuButton(color: AppColors.forestGreen),
         title: Text(
           'Reports & Analytics',
           style: AppTextStyles.headlineSmall

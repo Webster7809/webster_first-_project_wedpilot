@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/messaging.dart';
 import '../../../providers/vendor_own_provider.dart';
+import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
 
@@ -68,6 +69,7 @@ class _LeadInboxScreenState extends ConsumerState<LeadInboxScreen> {
             expandedHeight: 120,
             elevation: 0,
             automaticallyImplyLeading: false,
+            leading: const HamburgerMenuButton(color: Colors.white),
             flexibleSpace: FlexibleSpaceBar(
               background: SafeArea(
                 bottom: false,

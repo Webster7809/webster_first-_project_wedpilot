@@ -7,6 +7,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../providers/admin_provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
@@ -25,6 +26,7 @@ class VendorVerificationScreen extends ConsumerWidget {
         elevation: 0,
         scrolledUnderElevation: 0.5,
         shadowColor: AppColors.divider,
+        leading: const HamburgerMenuButton(color: AppColors.forestGreen),
         title: Text(
           'Vendor Approval',
           style: AppTextStyles.headlineSmall

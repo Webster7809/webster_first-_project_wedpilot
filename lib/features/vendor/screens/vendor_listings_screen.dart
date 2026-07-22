@@ -3,12 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
+import '../../../core/services/vendor_class_service.dart';
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/format_utils.dart';
+import '../../../models/budget_class.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_own_provider.dart';
+import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
@@ -28,7 +32,7 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => setState(() {}));
   }
 
@@ -68,6 +72,15 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
     );
   }
 
+  void _showAddPackageSheet({VendorPackage? existing}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PackageFormSheet(existing: existing),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (ref.watch(vendorOwnProvider).status == ResourceStatus.initial) {
@@ -77,7 +90,8 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
     }
     final services = ref.watch(vendorServicesProvider);
     final media = ref.watch(vendorMediaProvider);
-    final isServicesTab = _tabController.index == 0;
+    final packages = ref.watch(vendorPackagesProvider);
+    final tabIndex = _tabController.index;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -88,6 +102,7 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
             sliver: SliverAppBar(
               backgroundColor: AppColors.forestGreen,
               automaticallyImplyLeading: false,
+              leading: const HamburgerMenuButton(color: Colors.white),
               floating: true,
               snap: true,
               title: Text(
@@ -107,6 +122,7 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
                 labelStyle: AppTextStyles.labelLarge,
                 tabs: [
                   Tab(text: 'Services (${services.length})'),
+                  Tab(text: 'Packages (${packages.length})'),
                   Tab(text: 'Portfolio (${media.length})'),
                 ],
               ),
@@ -117,6 +133,7 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
           controller: _tabController,
           children: [
             _ServicesTab(onAddService: _showAddServiceSheet),
+            _PackagesTab(onAddPackage: _showAddPackageSheet),
             _PortfolioTab(
               onDeleteMedia: (id) async {
                 final confirmed = await showDialog<bool>(
@@ -156,14 +173,16 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.amber,
         foregroundColor: Colors.white,
-        onPressed: isServicesTab
-            ? () => _showAddServiceSheet()
-            : _pickAndAddImage,
-        child: Icon(
-          isServicesTab
-              ? Icons.add_rounded
-              : Icons.add_photo_alternate_outlined,
-        ),
+        onPressed: switch (tabIndex) {
+          0 => () => _showAddServiceSheet(),
+          1 => () => _showAddPackageSheet(),
+          _ => _pickAndAddImage,
+        },
+        child: Icon(switch (tabIndex) {
+          0 => Icons.add_rounded,
+          1 => Icons.card_giftcard_rounded,
+          _ => Icons.add_photo_alternate_outlined,
+        }),
       ),
     );
   }
@@ -779,6 +798,587 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
               const SizedBox(height: 24),
               WedButton(
                 label: isEdit ? 'Save changes' : 'Add service',
+                onPressed: _save,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Packages tab ──────────────────────────────────────────────────────────────
+
+class _PackagesTab extends ConsumerWidget {
+  final void Function({VendorPackage? existing}) onAddPackage;
+
+  const _PackagesTab({required this.onAddPackage});
+
+  Future<void> _deletePackage(
+      BuildContext context, WidgetRef ref, VendorPackage pkg) async {
+    final notifier = ref.read(vendorOwnProvider.notifier);
+    final remaining =
+        ref.read(vendorPackagesProvider).where((p) => p.id != pkg.id).toList();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete package'),
+        content: Text('Remove "${pkg.title}"? If this was your qualifying '
+            'package, your wedding class may drop.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Delete', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final error = await notifier.savePackages(remaining);
+    if (!context.mounted) return;
+    if (error != null) {
+      showWedSnackBar(context, error, type: SnackType.error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(vendorOwnProfileProvider);
+    final packages = ref.watch(vendorPackagesProvider);
+
+    return CustomScrollView(
+      slivers: [
+        SliverOverlapInjector(
+          handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              if (profile != null) ...[
+                _ClassStatusCard(profile: profile),
+                const SizedBox(height: 20),
+              ],
+              Text(
+                'Your packages',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.forestGreen,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Packages are what couples see bundled with your match. A '
+                'starter package counts toward Flexible class; a luxury '
+                'package with 3+ inclusions counts toward High Class.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (packages.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.card_giftcard_rounded,
+                          size: 20, color: AppColors.forestGreen.withAlpha(120)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'No packages yet — tap the button below to register '
+                          'your first one.',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                for (final pkg in packages) ...[
+                  _PackageCard(
+                    package: pkg,
+                    onEdit: () => onAddPackage(existing: pkg),
+                    onDelete: () => _deletePackage(context, ref, pkg),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Shows the wedding class this vendor has currently earned, plus the exact
+/// criteria checklist toward the classes they haven't reached yet — so
+/// "how do I become High Class?" is answered right on the screen.
+class _ClassStatusCard extends StatelessWidget {
+  final VendorProfile profile;
+
+  const _ClassStatusCard({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final current = VendorClassService.classify(profile);
+    final (badgeColor, badgeBg) = switch (current) {
+      BudgetClass.highClass => (AppColors.amber, AppColors.adminAmberBg),
+      BudgetClass.flexible => (AppColors.budgetGreen, AppColors.successBg),
+      BudgetClass.budgetFriendly => (AppColors.neutralDark, AppColors.adminNeutralBg),
+    };
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(current.icon, style: const TextStyle(fontSize: 22)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your wedding class',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    Text(
+                      current.displayName,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.forestGreen,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  current.subtitle,
+                  style: AppTextStyles.caption.copyWith(
+                    color: badgeColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (current == BudgetClass.highClass) ...[
+            const SizedBox(height: 10),
+            Text(
+              'You\'ve earned the top class — couples choosing High Class '
+              'weddings see you first. Keep your rating and packages up to stay here.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ] else ...[
+            if (current == BudgetClass.budgetFriendly) ...[
+              const SizedBox(height: 14),
+              _CriteriaChecklist(
+                title: 'To qualify as Flexible class',
+                criteria: VendorClassService.flexibleCriteria(profile),
+              ),
+            ],
+            const SizedBox(height: 14),
+            _CriteriaChecklist(
+              title: 'To qualify as High Class',
+              criteria: VendorClassService.highClassCriteria(profile),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CriteriaChecklist extends StatelessWidget {
+  final String title;
+  final List<ClassCriterion> criteria;
+
+  const _CriteriaChecklist({required this.title, required this.criteria});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTextStyles.labelMedium.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (final c in criteria)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  c.met
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked,
+                  size: 16,
+                  color: c.met ? AppColors.budgetGreen : AppColors.textHint,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    c.label,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: c.met
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _PackageCard extends StatelessWidget {
+  final VendorPackage package;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _PackageCard({
+    required this.package,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLuxury = package.tier == VendorPackageTier.luxury;
+    final tierColor = isLuxury ? AppColors.amber : AppColors.budgetGreen;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isLuxury ? AppColors.amber.withAlpha(120) : AppColors.divider,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: tierColor.withAlpha(28),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  isLuxury ? 'LUXURY' : 'STARTER',
+                  style: AppTextStyles.caption.copyWith(
+                    color: tierColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 9,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  package.title,
+                  style: AppTextStyles.titleMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Edit',
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined,
+                    size: 18, color: AppColors.textSecondary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 10),
+              IconButton(
+                tooltip: 'Delete',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline_rounded,
+                    size: 18, color: AppColors.error),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final item in package.inclusions)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    isLuxury ? Icons.diamond_outlined : Icons.check_rounded,
+                    size: 13,
+                    color: tierColor,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (package.price != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              fmtCurrency(package.price!),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.forestGreen,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Package form sheet ────────────────────────────────────────────────────────
+
+class _PackageFormSheet extends ConsumerStatefulWidget {
+  final VendorPackage? existing;
+
+  const _PackageFormSheet({this.existing});
+
+  @override
+  ConsumerState<_PackageFormSheet> createState() => _PackageFormSheetState();
+}
+
+class _PackageFormSheetState extends ConsumerState<_PackageFormSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _priceCtrl;
+  late final TextEditingController _inclusionsCtrl;
+  late VendorPackageTier _tier;
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.existing;
+    _titleCtrl = TextEditingController(text: p?.title ?? '');
+    _priceCtrl = TextEditingController(
+      text: p?.price != null ? p!.price!.toStringAsFixed(0) : '',
+    );
+    _inclusionsCtrl =
+        TextEditingController(text: p?.inclusions.join('\n') ?? '');
+    _tier = p?.tier ?? VendorPackageTier.starter;
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _priceCtrl.dispose();
+    _inclusionsCtrl.dispose();
+    super.dispose();
+  }
+
+  List<String> get _inclusions => _inclusionsCtrl.text
+      .split('\n')
+      .map((l) => l.trim())
+      .where((l) => l.isNotEmpty)
+      .toList();
+
+  Future<void> _save() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final notifier = ref.read(vendorOwnProvider.notifier);
+    final existing = ref.read(vendorPackagesProvider);
+    final price = _priceCtrl.text.trim().isEmpty
+        ? null
+        : double.tryParse(_priceCtrl.text.trim());
+
+    final pkg = VendorPackage(
+      id: widget.existing?.id ?? const Uuid().v4(),
+      tier: _tier,
+      title: _titleCtrl.text.trim(),
+      inclusions: _inclusions,
+      price: price,
+    );
+    final updated = widget.existing != null
+        ? existing.map((p) => p.id == pkg.id ? pkg : p).toList()
+        : [...existing, pkg];
+
+    final error = await notifier.savePackages(updated);
+    if (!mounted) return;
+    if (error != null) {
+      showWedSnackBar(context, error, type: SnackType.error);
+      return;
+    }
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.existing != null;
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                isEdit ? 'Edit package' : 'New package',
+                style: AppTextStyles.headlineMedium.copyWith(
+                  color: AppColors.forestGreen,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Package tier',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  for (final tier in VendorPackageTier.values)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(tier == VendorPackageTier.luxury
+                            ? '👑 Luxury'
+                            : '🎁 Starter'),
+                        selected: _tier == tier,
+                        onSelected: (_) => setState(() => _tier = tier),
+                        selectedColor: AppColors.forestGreen,
+                        labelStyle: AppTextStyles.labelMedium.copyWith(
+                          color: _tier == tier
+                              ? Colors.white
+                              : AppColors.textPrimary,
+                        ),
+                        side: BorderSide(
+                          color: _tier == tier
+                              ? AppColors.forestGreen
+                              : AppColors.divider,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _tier == VendorPackageTier.luxury
+                    ? 'Counts toward High Class (needs 3+ inclusions).'
+                    : 'Counts toward Flexible class.',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              WedTextField(
+                label: 'Package title',
+                hint: 'e.g. Signature Luxury Experience',
+                controller: _titleCtrl,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Title is required'
+                    : null,
+              ),
+              const SizedBox(height: 14),
+              WedTextField(
+                label: 'What\'s included — one item per line',
+                hint: 'Champagne welcome reception\nDedicated coordinator\nValet parking',
+                controller: _inclusionsCtrl,
+                maxLines: 6,
+                validator: (v) {
+                  final items = _inclusions;
+                  if (items.isEmpty) return 'Add at least one inclusion';
+                  if (items.length > 10) return 'At most 10 inclusions';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              WedTextField(
+                label: 'Package price (ZMW, optional)',
+                hint: 'Leave empty to price on request',
+                controller: _priceCtrl,
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final n = double.tryParse(v.trim());
+                  if (n == null || n < 0) return 'Numbers only';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              WedButton(
+                label: isEdit ? 'Save changes' : 'Register package',
                 onPressed: _save,
               ),
             ],

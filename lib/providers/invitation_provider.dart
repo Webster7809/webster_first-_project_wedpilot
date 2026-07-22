@@ -82,6 +82,19 @@ class InvitationNotifier extends StateNotifier<List<Invitation>> {
     }
   }
 
+  /// Returns the server error message, or null on success.
+  Future<String?> delete(String invitationId) async {
+    final token = _token;
+    if (token == null) return 'Please sign in to delete invitations.';
+    try {
+      await InvitationApiService.instance.deleteInvitation(token, invitationId);
+      state = state.where((inv) => inv.id != invitationId).toList();
+      return null;
+    } on InvitationApiException catch (e) {
+      return e.message;
+    }
+  }
+
   /// Uploads the invitation's background photo, persisting it server-side
   /// so it survives beyond this editing session. Returns the resulting
   /// `backgroundImageUrl`, or null on failure.

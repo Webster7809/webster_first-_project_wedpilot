@@ -131,6 +131,28 @@ router.post('/:id/photo', verifyJwt, requireCouple, photoUploader.single('file')
   }
 });
 
+router.delete('/:id', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const invitation = await Invitation.findOne({
+      where: { invitation_id: req.params.id, couple_user_id: req.user.user_id },
+    });
+    if (!invitation) return res.status(404).json({ error: 'Invitation not found.' });
+
+    // Clean up everything hanging off this invitation: its RSVPs, and any
+    // per-guest invite links pointing at it (the guests themselves stay).
+    await RsvpResponse.destroy({ where: { invitation_id: invitation.invitation_id } });
+    await Guest.update(
+      { invite_invitation_id: null, invite_token: null },
+      { where: { invite_invitation_id: invitation.invitation_id } },
+    );
+    await invitation.destroy();
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('Delete invitation error:', err.message);
+    res.status(500).json({ error: 'Could not delete invitation.' });
+  }
+});
+
 // ── Public, unauthenticated guest-facing routes ────────────────────────────────────
 // Reached via the app's own /i/:shareToken deep link — no Authorization header,
 // since the guest opening the link has never logged in.

@@ -1,43 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../core/utils/logout_dialog.dart';
 import '../providers/auth_provider.dart';
 
-class AppDrawer extends ConsumerWidget {
-  const AppDrawer({super.key});
+/// Admin-shell equivalent of [AppDrawer]/[VendorDrawer] — mobile-only (the
+/// desktop layout already has a permanent sidebar, see `_AdminSidebar` in
+/// `admin_shell.dart`). Replaces the mobile bottom nav's 4 tabs
+/// (Dashboard/Users/Vendors/Analytics) plus the standalone logout icon that
+/// used to float over the mobile layout.
+class AdminDrawer extends ConsumerWidget {
+  const AdminDrawer({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final coupleProfile = ref.watch(coupleProfileProvider);
-
-    final displayName = user?.name ?? 'Guest';
+    final displayName = user?.name ?? 'Admin';
     final email = user?.email ?? '';
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
-    final subtitle = coupleProfile?.weddingDate != null
-        ? 'Wedding: ${_formatDate(coupleProfile!.weddingDate!)}'
-        : email;
 
     return Drawer(
       child: Column(
         children: [
-          // ── Drawer Header ────────────────────────────────────────
           // A plain Container (not DrawerHeader) so it sizes to its content
           // instead of DrawerHeader's own imposed minimum height, which
           // clipped this header's bottom line once a subtitle was added.
           Container(
             width: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppColors.forestGreen, AppColors.budgetGreen],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
+            decoration: const BoxDecoration(color: AppColors.forestGreen),
             child: SafeArea(
               bottom: false,
               child: Container(
@@ -47,37 +39,27 @@ class AppDrawer extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    // Avatar circle
                     Container(
                       width: 60,
                       height: 60,
                       decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(64),
+                        color: AppColors.amber,
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: Colors.white.withAlpha(128),
                           width: 2,
                         ),
                       ),
-                      child: coupleProfile?.photoUrl != null
-                          ? ClipOval(
-                              child: Image.network(
-                                resolveMediaUrl(coupleProfile!.photoUrl!),
-                                width: 60,
-                                height: 60,
-                                fit: BoxFit.cover,
-                              ),
-                            )
-                          : Center(
-                              child: Text(
-                                initial,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
+                      child: Center(
+                        child: Text(
+                          initial,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -90,7 +72,7 @@ class AppDrawer extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
+                      email,
                       style: AppTextStyles.bodySmall.copyWith(
                         color: Colors.white.withAlpha(204),
                       ),
@@ -102,50 +84,40 @@ class AppDrawer extends ConsumerWidget {
               ),
             ),
           ),
-
-          // ── Navigation Items ─────────────────────────────────────
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
                 _DrawerItem(
-                  icon: Icons.home_rounded,
-                  label: 'Home',
+                  icon: Icons.dashboard_rounded,
+                  label: 'Dashboard',
                   onTap: () {
                     Navigator.of(context).pop();
-                    context.go('/couple/dashboard');
+                    context.go('/admin/dashboard');
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.mail_rounded,
-                  label: 'Invitations',
+                  icon: Icons.people_rounded,
+                  label: 'Users',
                   onTap: () {
                     Navigator.of(context).pop();
-                    context.go('/couple/invitations');
+                    context.go('/admin/users');
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.account_balance_wallet_rounded,
-                  label: 'Budget',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    context.go('/couple/budget');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.storefront_rounded,
+                  icon: Icons.verified_rounded,
                   label: 'Vendors',
                   onTap: () {
                     Navigator.of(context).pop();
-                    context.go('/couple/vendors');
+                    context.go('/admin/vendors');
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.person_rounded,
-                  label: 'Profile',
+                  icon: Icons.bar_chart_rounded,
+                  label: 'Analytics',
                   onTap: () {
                     Navigator.of(context).pop();
-                    context.go('/couple/profile');
+                    context.go('/admin/analytics');
                   },
                 ),
 
@@ -160,26 +132,6 @@ class AppDrawer extends ConsumerWidget {
                   onTap: () {
                     Navigator.of(context).pop();
                     context.push('/settings');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.info_outline_rounded,
-                  label: 'About',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    showAboutDialog(
-                      context: context,
-                      applicationName: 'Wedpilot',
-                      applicationVersion: '1.0.0',
-                      applicationIcon: const Icon(
-                        Icons.favorite_rounded,
-                        color: AppColors.secondary,
-                        size: 36,
-                      ),
-                      applicationLegalese:
-                          '© 2024 Wedpilot. All rights reserved.\n'
-                          'Your perfect wedding planning companion.',
-                    );
                   },
                 ),
 
@@ -199,7 +151,6 @@ class AppDrawer extends ConsumerWidget {
                   },
                 ),
 
-                // ── Footer inside list so it never overflows ──────
                 SafeArea(
                   top: false,
                   child: Padding(
@@ -221,27 +172,7 @@ class AppDrawer extends ConsumerWidget {
       ),
     );
   }
-
-  static String _formatDate(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
-  }
 }
-
-// ── Single drawer row ──────────────────────────────────────────────────────────
 
 class _DrawerItem extends StatelessWidget {
   final IconData icon;

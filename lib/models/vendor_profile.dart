@@ -1,4 +1,5 @@
 import '../core/utils/enum_utils.dart';
+import 'budget_class.dart';
 
 enum VerificationStatus { pending, verified, rejected }
 enum VendorTier { free, pro, premium }
@@ -37,6 +38,9 @@ class VendorProfile {
   final double? recommendRate;
   final List<VendorService> services;
   final List<VendorMedia> media;
+
+  /// Wedding-class packages this vendor has registered (see [VendorPackage]).
+  final List<VendorPackage> packages;
   final bool isCustomEntry;
 
   const VendorProfile({
@@ -69,6 +73,7 @@ class VendorProfile {
     this.recommendRate,
     this.services = const [],
     this.media = const [],
+    this.packages = const [],
     this.isCustomEntry = false,
   });
 
@@ -100,6 +105,7 @@ class VendorProfile {
     double? recommendRate,
     List<VendorService>? services,
     List<VendorMedia>? media,
+    List<VendorPackage>? packages,
     bool? isCustomEntry,
   }) => VendorProfile(
         id: id,
@@ -131,6 +137,7 @@ class VendorProfile {
         recommendRate: recommendRate ?? this.recommendRate,
         services: services ?? this.services,
         media: media ?? this.media,
+        packages: packages ?? this.packages,
         isCustomEntry: isCustomEntry ?? this.isCustomEntry,
       );
 
@@ -159,6 +166,33 @@ class VendorProfile {
   double get priceMax {
     if (services.isEmpty) return 0;
     return services.map((s) => s.priceMax).reduce((a, b) => a > b ? a : b);
+  }
+
+  /// The price a couple should realistically budget for this vendor under a
+  /// given wedding class — must always match whatever package price the
+  /// couple is actually shown for that class (see couple_planning_screen.dart's
+  /// `_PlanVendorCard`/`wantedTier` selection, mirrored here) or the budget
+  /// ledger silently tracks a different number than the one on screen. High
+  /// Class books the registered luxury package price when one is set,
+  /// Flexible the registered starter package price, both falling back to the
+  /// vendor's price range (top for High Class, minimum otherwise) when no
+  /// matching package is registered. Budget-Friendly never has a package by
+  /// design, so it always budgets from the vendor's minimum price.
+  double priceForClass(BudgetClass bc) {
+    final wantedTier = switch (bc) {
+      BudgetClass.highClass => VendorPackageTier.luxury,
+      BudgetClass.flexible => VendorPackageTier.starter,
+      BudgetClass.budgetFriendly => null,
+    };
+    if (wantedTier != null) {
+      for (final p in packages) {
+        if (p.tier == wantedTier && p.inclusions.isNotEmpty && (p.price ?? 0) > 0) {
+          return p.price!;
+        }
+      }
+    }
+    if (bc == BudgetClass.highClass) return priceMax > 0 ? priceMax : priceMin;
+    return priceMin;
   }
 
   factory VendorProfile.fromJson(Map<String, dynamic> json) => VendorProfile(
@@ -195,6 +229,9 @@ class VendorProfile {
         media: (json['media'] as List<dynamic>? ?? [])
             .map((m) => VendorMedia.fromJson(m as Map<String, dynamic>))
             .toList(),
+        packages: (json['packages'] as List<dynamic>? ?? [])
+            .map((p) => VendorPackage.fromJson(p as Map<String, dynamic>))
+            .toList(),
         isCustomEntry: json['is_custom_entry'] as bool? ?? false,
       );
 
@@ -228,7 +265,64 @@ class VendorProfile {
         'recommend_rate': recommendRate,
         'services': services.map((s) => s.toJson()).toList(),
         'media': media.map((m) => m.toJson()).toList(),
+        'packages': packages.map((p) => p.toJson()).toList(),
         'is_custom_entry': isCustomEntry,
+      };
+}
+
+/// Which wedding-class experience a registered package is pitched at.
+/// Luxury packages count toward High Class qualification; starter packages
+/// toward Flexible (see `VendorClassService`).
+enum VendorPackageTier { luxury, starter }
+
+/// A bundled offering the vendor registers themselves — what a couple gets
+/// on top of the base service when matched through a wedding class. Distinct
+/// from [VendorService] (the priced listing): a package describes the
+/// experience inclusions, not the base price.
+class VendorPackage {
+  final String id;
+  final VendorPackageTier tier;
+  final String title;
+  final List<String> inclusions;
+  final double? price;
+
+  const VendorPackage({
+    required this.id,
+    required this.tier,
+    required this.title,
+    required this.inclusions,
+    this.price,
+  });
+
+  VendorPackage copyWith({
+    VendorPackageTier? tier,
+    String? title,
+    List<String>? inclusions,
+    double? price,
+  }) =>
+      VendorPackage(
+        id: id,
+        tier: tier ?? this.tier,
+        title: title ?? this.title,
+        inclusions: inclusions ?? this.inclusions,
+        price: price ?? this.price,
+      );
+
+  factory VendorPackage.fromJson(Map<String, dynamic> json) => VendorPackage(
+        id: json['package_id'] as String? ?? '',
+        tier: enumByName(VendorPackageTier.values, json['tier'] as String?,
+            VendorPackageTier.starter),
+        title: json['title'] as String? ?? '',
+        inclusions: List<String>.from(json['inclusions'] ?? []),
+        price: (json['price'] as num?)?.toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'package_id': id,
+        'tier': tier.name,
+        'title': title,
+        'inclusions': inclusions,
+        'price': price,
       };
 }
 

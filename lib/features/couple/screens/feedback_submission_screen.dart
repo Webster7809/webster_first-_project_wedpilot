@@ -30,6 +30,7 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
   int _rating = 5;
   OnTimeAnswer? _onTime;
   final _commentCtrl = TextEditingController();
+  final _vendorSearchCtrl = TextEditingController();
   VendorProfile? _selectedVendor;
   bool _submitting = false;
   bool _resolvedInitialVendor = false;
@@ -37,6 +38,7 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
   @override
   void dispose() {
     _commentCtrl.dispose();
+    _vendorSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -75,18 +77,6 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
     }
   }
 
-  Future<void> _pickVendor() async {
-    final selected = await showModalBottomSheet<VendorProfile>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _VendorPickerSheet(),
-    );
-    if (selected != null) {
-      setState(() => _selectedVendor = selected);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     // Resolve a pre-selected vendor (e.g. arriving from "Rate this vendor" on
@@ -97,11 +87,15 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
         if (!_resolvedInitialVendor) {
           _resolvedInitialVendor = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _selectedVendor = v);
+            if (!mounted) return;
+            _vendorSearchCtrl.text = v.businessName;
+            setState(() => _selectedVendor = v);
           });
         }
       });
     }
+
+    final vendorsAsync = ref.watch(rateableVendorsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -144,31 +138,82 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
 
                     Text('Select Vendor', style: AppTextStyles.labelLarge),
                     const SizedBox(height: 8),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: _pickVendor,
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        ),
+                    TypeaheadField<VendorProfile>(
+                      hint: "Search a vendor you've booked...",
+                      controller: _vendorSearchCtrl,
+                      prefixIcon: Icons.search_rounded,
+                      suggestionsCallback: (query) {
+                        final vendors = vendorsAsync.valueOrNull ?? const <VendorProfile>[];
+                        if (query.isEmpty) return vendors;
+                        final q = query.toLowerCase();
+                        return vendors.where((v) => v.businessName.toLowerCase().contains(q)).toList();
+                      },
+                      displayStringForOption: (v) => v.businessName,
+                      onSelected: (v) => setState(() => _selectedVendor = v),
+                      itemBuilder: (context, v, query, isHighlighted) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         child: Row(
                           children: [
+                            CircleAvatar(
+                              radius: 16,
+                              backgroundColor: AppColors.creamDark,
+                              backgroundImage:
+                                  v.logoUrl != null ? NetworkImage(resolveMediaUrl(v.logoUrl!)) : null,
+                              onBackgroundImageError: v.logoUrl != null ? (_, _) {} : null,
+                              child: v.logoUrl == null
+                                  ? Text(v.businessName.isNotEmpty ? v.businessName[0].toUpperCase() : '?')
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
                             Expanded(
-                              child: Text(
-                                _selectedVendor?.businessName ?? 'Choose a vendor you\'ve booked',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _selectedVendor == null
-                                    ? AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)
-                                    : AppTextStyles.bodyMedium,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  HighlightedText(
+                                    text: v.businessName,
+                                    query: query,
+                                    style: AppTextStyles.bodyMedium,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    v.category,
+                                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
                             ),
-                            const Icon(Icons.expand_more, color: AppColors.textSecondary),
                           ],
                         ),
                       ),
                     ),
+                    if (vendorsAsync.hasValue && (vendorsAsync.value ?? const []).isEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'No vendors ready to rate yet — a vendor shows up here once '
+                        "they've marked your booking's service as complete.",
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                      ),
+                    ],
+                    if (_selectedVendor != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 16),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Rating ${_selectedVendor!.businessName} · ${_selectedVendor!.category}',
+                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 20),
 
                     Text('Your Rating', style: AppTextStyles.labelLarge),
@@ -232,143 +277,4 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
       ),
     );
   }
-}
-
-class _VendorPickerSheet extends ConsumerStatefulWidget {
-  const _VendorPickerSheet();
-
-  @override
-  ConsumerState<_VendorPickerSheet> createState() => _VendorPickerSheetState();
-}
-
-class _VendorPickerSheetState extends ConsumerState<_VendorPickerSheet> {
-  final _searchCtrl = TextEditingController();
-  String _query = '';
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final vendorsAsync = ref.watch(rateableVendorsProvider);
-
-    // The sheet is deliberately height-filled (the Expanded list needs a
-    // bounded height to scroll), unlike this app's other content-sized
-    // sheets — so unlike them it must subtract the keyboard inset itself,
-    // or the search field's keyboard would push it past the screen edge.
-    final viewInsets = MediaQuery.viewInsetsOf(context).bottom;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.85 - viewInsets;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: viewInsets),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight.clamp(280.0, double.infinity)),
-        child: Material(
-          color: AppColors.background,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              child: Text('Select Vendor', style: AppTextStyles.headlineSmall),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: TypeaheadField<VendorProfile>(
-                hint: 'Search vendors...',
-                controller: _searchCtrl,
-                prefixIcon: Icons.search,
-                onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
-                suggestionsCallback: (q) => (vendorsAsync.valueOrNull ?? [])
-                    .where((v) => v.businessName.toLowerCase().contains(q.toLowerCase()))
-                    .take(8)
-                    .toList(),
-                displayStringForOption: (v) => v.businessName,
-                onSelected: (v) => Navigator.pop(context, v),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: vendorsAsync.when(
-                data: (vendors) {
-                  if (vendors.isEmpty) {
-                    return _buildMessage(
-                      'No vendors ready to rate yet — a vendor shows up here once '
-                      "they've marked your booking's service as complete.",
-                    );
-                  }
-                  final filtered = _query.isEmpty
-                      ? vendors
-                      : vendors
-                          .where((v) => v.businessName.toLowerCase().contains(_query))
-                          .toList();
-                  if (filtered.isEmpty) {
-                    return _buildMessage('No vendors match "$_query".');
-                  }
-                  return ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1, color: AppColors.divider),
-                    itemBuilder: (context, i) {
-                      final v = filtered[i];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.creamDark,
-                          backgroundImage: v.logoUrl != null
-                              ? NetworkImage(resolveMediaUrl(v.logoUrl!))
-                              : null,
-                          onBackgroundImageError: v.logoUrl != null ? (_, _) {} : null,
-                          child: v.logoUrl == null
-                              ? Text(v.businessName.isNotEmpty ? v.businessName[0].toUpperCase() : '?')
-                              : null,
-                        ),
-                        title: HighlightedText(
-                          text: v.businessName,
-                          query: _query,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(v.category, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        onTap: () => Navigator.pop(context, v),
-                      );
-                    },
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (_, _) => _buildMessage('Could not load vendors. Please try again.'),
-              ),
-            ),
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
-          ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMessage(String message) => Padding(
-        padding: const EdgeInsets.all(32),
-        child: Center(
-          child: Text(
-            message,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-          ),
-        ),
-      );
 }

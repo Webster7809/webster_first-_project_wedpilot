@@ -106,7 +106,6 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
             onDeleteGuest: (id) => _confirmDeleteGuest(context, id),
             onSubmitRsvp: (g) => _showRsvpForm(context, g),
             onShareInvite: (g) => _shareGuestInvite(context, g),
-            onResetRsvp: (rsvpId) => _resetGuestRsvp(context, rsvpId),
           ),
         ],
       ),
@@ -199,6 +198,8 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
       builder: (_) => _RsvpFormSheet(
         guest: guest,
         existing: existing,
+        onReset:
+            existing != null ? () => _resetGuestRsvp(context, existing.id) : null,
         onSave: (status, count, meal, notes, message) async {
           final error =
               await ref.read(guestRsvpProvider.notifier).submitRsvp(
@@ -430,7 +431,6 @@ class _GuestListTab extends StatefulWidget {
   final ValueChanged<String> onDeleteGuest;
   final ValueChanged<Guest> onSubmitRsvp;
   final ValueChanged<Guest> onShareInvite;
-  final ValueChanged<String> onResetRsvp;
 
   const _GuestListTab({
     required this.guests,
@@ -440,7 +440,6 @@ class _GuestListTab extends StatefulWidget {
     required this.onDeleteGuest,
     required this.onSubmitRsvp,
     required this.onShareInvite,
-    required this.onResetRsvp,
   });
 
   @override
@@ -562,8 +561,6 @@ class _GuestListTabState extends State<_GuestListTab> {
                       onDelete: () => widget.onDeleteGuest(g.id),
                       onRsvp: () => widget.onSubmitRsvp(g),
                       onShareInvite: () => widget.onShareInvite(g),
-                      onResetRsvp:
-                          rsvp != null ? () => widget.onResetRsvp(rsvp.id) : null,
                     );
                   },
                 ),
@@ -581,7 +578,6 @@ class _GuestCard extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onRsvp;
   final VoidCallback onShareInvite;
-  final VoidCallback? onResetRsvp;
 
   const _GuestCard({
     required this.guest,
@@ -591,7 +587,6 @@ class _GuestCard extends StatelessWidget {
     required this.onDelete,
     required this.onRsvp,
     required this.onShareInvite,
-    required this.onResetRsvp,
   });
 
   Color get _statusColor => switch (rsvp?.attending) {
@@ -608,113 +603,173 @@ class _GuestCard extends StatelessWidget {
         null => 'Pending',
       };
 
-  String get _statusIcon => switch (rsvp?.attending) {
-        AttendingStatus.yes => '✅',
-        AttendingStatus.no => '❌',
-        AttendingStatus.maybe => '🤔',
-        null => '⏳',
-      };
+  @override
+  Widget build(BuildContext context) {
+    final initial = guest.name.isNotEmpty ? guest.name[0].toUpperCase() : '?';
+    // One quiet caption line under the name: relation, one contact detail,
+    // and the party size when they've confirmed with extra guests.
+    final subtitleParts = <String>[
+      if (guest.relation?.isNotEmpty ?? false) guest.relation!,
+      if (guest.email?.isNotEmpty ?? false)
+        guest.email!
+      else if (guest.phone?.isNotEmpty ?? false)
+        guest.phone!,
+      if (rsvp != null &&
+          rsvp!.attending == AttendingStatus.yes &&
+          rsvp!.guestCount > 1)
+        '${rsvp!.guestCount} guests',
+    ];
+
+    return _SoftCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Guest info ────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _statusColor.withAlpha(22),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    initial,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: _statusColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      HighlightedText(
+                        text: guest.name,
+                        query: query,
+                        style: AppTextStyles.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (subtitleParts.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitleParts.join(' · '),
+                          style: AppTextStyles.caption
+                              .copyWith(color: AppColors.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _statusColor.withAlpha(26),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _statusLabel,
+                    style: AppTextStyles.caption.copyWith(
+                      color: _statusColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Always-visible actions — no hidden menus ──────────
+          const Divider(height: 1, color: AppColors.divider),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _GuestAction(
+                    icon: Icons.how_to_reg_outlined,
+                    label: rsvp == null ? 'RSVP' : 'Update',
+                    onTap: onRsvp,
+                  ),
+                ),
+                Expanded(
+                  child: _GuestAction(
+                    icon: Icons.ios_share_outlined,
+                    label: 'Share',
+                    onTap: onShareInvite,
+                  ),
+                ),
+                Expanded(
+                  child: _GuestAction(
+                    icon: Icons.edit_outlined,
+                    label: 'Edit',
+                    onTap: onEdit,
+                  ),
+                ),
+                Expanded(
+                  child: _GuestAction(
+                    icon: Icons.delete_outline,
+                    label: 'Remove',
+                    color: AppColors.error,
+                    onTap: onDelete,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One labeled action in a guest card's bottom action row — icon + text so
+/// every action (especially Remove) is visible at a glance, never buried in
+/// an overflow menu.
+class _GuestAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color? color;
+  final VoidCallback onTap;
+
+  const _GuestAction({
+    required this.icon,
+    required this.label,
+    this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return _SoftCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: _statusColor.withAlpha(20),
-                shape: BoxShape.circle,
-              ),
-              child: Text(_statusIcon, style: const TextStyle(fontSize: 18)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  HighlightedText(
-                    text: guest.name,
-                    query: query,
-                    style: AppTextStyles.titleMedium,
-                  ),
-                  if (guest.relation != null)
-                    Text(guest.relation!,
-                        style: AppTextStyles.caption
-                            .copyWith(color: AppColors.textSecondary)),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: _statusColor.withAlpha(26),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      _statusLabel,
-                      style: AppTextStyles.caption.copyWith(
-                        color: _statusColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              onPressed: onDelete,
-              tooltip: 'Remove guest',
-              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
-              constraints: const BoxConstraints(),
-              padding: const EdgeInsets.all(8),
-              visualDensity: VisualDensity.compact,
-            ),
-            PopupMenuButton<String>(
-              onSelected: (v) {
-                if (v == 'rsvp') onRsvp();
-                if (v == 'share') onShareInvite();
-                if (v == 'reset') onResetRsvp?.call();
-                if (v == 'edit') onEdit();
-              },
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                    value: 'rsvp',
-                    child: ListTile(
-                        leading: Icon(Icons.how_to_reg_outlined),
-                        title: Text('Record RSVP'),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true)),
-                const PopupMenuItem(
-                    value: 'share',
-                    child: ListTile(
-                        leading: Icon(Icons.ios_share_outlined),
-                        title: Text('Share invite link'),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true)),
-                if (rsvp != null)
-                  const PopupMenuItem(
-                      value: 'reset',
-                      child: ListTile(
-                          leading: Icon(Icons.restart_alt),
-                          title: Text('Reset RSVP'),
-                          contentPadding: EdgeInsets.zero,
-                          dense: true)),
-                const PopupMenuItem(
-                    value: 'edit',
-                    child: ListTile(
-                        leading: Icon(Icons.edit_outlined),
-                        title: Text('Edit guest'),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true)),
-              ],
-              child: Icon(Icons.more_vert,
-                  color: AppColors.textSecondary, size: 20),
-            ),
-          ],
+    final c = color ?? AppColors.textSecondary;
+    return TextButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 16, color: c),
+      label: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTextStyles.caption.copyWith(
+          color: c,
+          fontWeight: FontWeight.w600,
         ),
+      ),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
     );
   }
 }
@@ -1047,10 +1102,15 @@ class _RsvpFormSheet extends StatefulWidget {
     String? message,
   ) onSave;
 
+  /// Clears the existing response (with its own confirmation) — only
+  /// offered when there is a response to clear.
+  final VoidCallback? onReset;
+
   const _RsvpFormSheet({
     required this.guest,
     required this.existing,
     required this.onSave,
+    this.onReset,
   });
 
   @override
@@ -1259,6 +1319,26 @@ class _RsvpFormSheetState extends State<_RsvpFormSheet> {
                   ),
                 ),
               ),
+              if (widget.existing != null && widget.onReset != null) ...[
+                const SizedBox(height: 8),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      widget.onReset!();
+                    },
+                    icon: const Icon(Icons.restart_alt,
+                        size: 16, color: AppColors.error),
+                    label: Text(
+                      'Reset this RSVP',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

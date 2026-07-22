@@ -46,6 +46,13 @@ class VendorValidationResult {
   /// whole-plan [blockingFailure]: earlier categories still get real picks.
   final Map<String, String> budgetExhaustedMessages;
 
+  /// The couple's real total budget this whole plan was funded against —
+  /// exposed so [aiRecommendedVendorsProvider] can re-verify the AI's actual
+  /// picks never sum to more than this, without re-deriving the
+  /// wizard-budget/saved-budget/profile-budget fallback chain a second time
+  /// (see `enforceTotalBudgetCeiling`).
+  final double enteredBudget;
+
   const VendorValidationResult({
     this.blockingFailure,
     this.byCategory = const {},
@@ -53,6 +60,7 @@ class VendorValidationResult {
     this.categoryBudgets = const {},
     this.excludedCategoryMessages = const {},
     this.budgetExhaustedMessages = const {},
+    this.enteredBudget = 0,
   });
 
   bool get isBlocked => blockingFailure != null;

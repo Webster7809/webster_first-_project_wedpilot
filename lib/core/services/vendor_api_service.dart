@@ -308,6 +308,26 @@ class VendorApiService {
     }
   }
 
+  // ── Wedding-class packages ───────────────────────────────────────────────────
+
+  /// Replaces the vendor's registered package list; returns the saved list.
+  Future<List<VendorPackage>> setPackages(
+      String accessToken, List<VendorPackage> packages) async {
+    try {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/api/vendors/me/packages',
+        data: {'packages': packages.map((p) => p.toJson()).toList()},
+        options: _auth(accessToken),
+      );
+      final data = response.data ?? {};
+      return (data['packages'] as List<dynamic>? ?? [])
+          .map((p) => VendorPackage.fromJson(p as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      throw VendorApiException(_extractError(e));
+    }
+  }
+
   // ── Blocked dates ────────────────────────────────────────────────────────────
 
   Future<List<String>> setBlockedDates(String accessToken, List<String> dates) async {

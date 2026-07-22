@@ -1,5 +1,6 @@
 import '../../models/budget_class.dart';
 import '../../models/vendor_profile.dart';
+import 'vendor_class_service.dart';
 
 /// Step 1 of the pre-AI validation pipeline: narrows the full vendor pool
 /// down to real candidates for the couple's requested categories and location.
@@ -103,27 +104,52 @@ class VendorFilteringService {
   }
 
   /// Narrows each category to the vendors matching the couple's wedding
-  /// class's rating band before picking: High class prefers 4.5★+ vendors,
-  /// Budget-friendly prefers vendors under 4.5★ or with no rating yet, and
-  /// Flexible has no rating preference (either band is fine). A category
-  /// with nobody in the matching band falls back to its full vendor list
-  /// rather than coming back empty — wedding class is a soft preference for
-  /// picking, never a reason to show nothing.
+  /// class, in two graceful layers — both of them a strict partition, so a
+  /// vendor belongs to exactly one class and can never surface as a pick
+  /// under more than one:
+  ///
+  /// 1. Vendors who have genuinely *earned* the couple's class per
+  ///    [VendorClassService.classify] — verification, rating track record,
+  ///    and a registered qualifying package. `classify` itself already
+  ///    returns exactly one class per vendor (High Class first, then
+  ///    Flexible, else Budget-Friendly), so this layer alone guarantees no
+  ///    overlap: a vendor good enough to have earned High Class is *only*
+  ///    in the High Class pool, never Flexible's or Budget-Friendly's too.
+  /// 2. Failing that, the class's star-rating band (High → 4.5★+,
+  ///    Flexible → 3.5★–4.5★, Budget-friendly → under 3.5★ or unrated) —
+  ///    same partition, just on the raw rating, so young marketplaces where
+  ///    nobody has earned a class yet still rank sensibly without doubling
+  ///    a vendor up across bands.
+  ///
+  /// A category with nobody in either layer falls back to its full vendor
+  /// list rather than coming back empty — wedding class is a soft preference
+  /// for picking, never a reason to show nothing. In practice this only
+  /// happens for a category with no class-earning coverage at all — the
+  /// seeded curated vendors (backend/scripts/seedCuratedVendors.js) guarantee
+  /// every built-in category has real earners for every class.
   static Map<String, List<VendorProfile>> preferredByWeddingClass(
     Map<String, List<VendorProfile>> byCategory,
     BudgetClass budgetClass,
   ) {
-    bool matches(VendorProfile v) => switch (budgetClass) {
-          BudgetClass.highClass => (v.rating ?? 0) >= 4.5,
-          BudgetClass.budgetFriendly => v.rating == null || v.rating! < 4.5,
-          BudgetClass.flexible => true,
-        };
+    bool bandMatches(VendorProfile v) {
+      final rating = v.rating ?? 0;
+      return switch (budgetClass) {
+        BudgetClass.highClass => rating >= 4.5,
+        BudgetClass.flexible => rating >= 3.5 && rating < 4.5,
+        BudgetClass.budgetFriendly => v.rating == null || rating < 3.5,
+      };
+    }
+
+    bool earnedClass(VendorProfile v) =>
+        VendorClassService.classify(v) == budgetClass;
 
     return {
       for (final entry in byCategory.entries)
         entry.key: (() {
-          final preferred = entry.value.where(matches).toList();
-          return preferred.isEmpty ? entry.value : preferred;
+          final earned = entry.value.where(earnedClass).toList();
+          if (earned.isNotEmpty) return earned;
+          final band = entry.value.where(bandMatches).toList();
+          return band.isEmpty ? entry.value : band;
         })(),
     };
   }

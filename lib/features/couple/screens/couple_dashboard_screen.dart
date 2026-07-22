@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
@@ -14,6 +15,7 @@ import '../../../providers/invitation_provider.dart';
 import '../../../providers/notification_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../providers/vendor_provider.dart';
+import '../../../widgets/hamburger_menu_button.dart';
 
 class CoupleDashboardScreen extends ConsumerWidget {
   const CoupleDashboardScreen({super.key});
@@ -55,10 +57,11 @@ class CoupleDashboardScreen extends ConsumerWidget {
             pinned: false,
             floating: true,
             snap: true,
-            backgroundColor: AppColors.cream,
+            backgroundColor: AppColors.forestGreen,
             elevation: 0,
             scrolledUnderElevation: 0,
             automaticallyImplyLeading: false,
+            leading: const HamburgerMenuButton(color: Colors.white),
             toolbarHeight: 68,
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,15 +70,17 @@ class CoupleDashboardScreen extends ConsumerWidget {
                 Text(
                   'Welcome back',
                   style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
+                    color: AppColors.amber,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.6,
                   ),
                 ),
                 Text(
                   _coupleDisplayName(user?.name, couple?.partnerName),
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.forestGreen,
+                    color: Colors.white,
                   ),
                 ),
               ],
@@ -94,7 +99,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       tooltip: 'Notifications',
                       icon: const Icon(
                         Icons.notifications_outlined,
-                        color: AppColors.forestGreen,
+                        color: Colors.white,
                         size: 26,
                       ),
                       onPressed: () => context.push('/notifications'),
@@ -119,7 +124,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
                 tooltip: 'Log out',
                 icon: const Icon(
                   Icons.logout_rounded,
-                  color: AppColors.forestGreen,
+                  color: Colors.white,
                   size: 26,
                 ),
                 onPressed: () => _confirmLogout(context, ref),
@@ -206,6 +211,11 @@ class CoupleDashboardScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _categoryEmoji(String category) {
+  final i = AppConstants.vendorCategories.indexOf(category);
+  return i >= 0 ? AppConstants.vendorCategoryIcons[i] : '💍';
 }
 
 String _coupleDisplayName(String? name1, String? name2) {
@@ -1016,12 +1026,17 @@ class _ShortlistScroll extends StatelessWidget {
     }
 
     return SizedBox(
-      height: 140,
+      height: 172,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: vendors.length,
+        // +1 for the trailing "Discover more" tile, so a short shortlist
+        // still reads as an inviting row instead of one lonely card.
+        itemCount: vendors.length + 1,
         separatorBuilder: (context, index) => const SizedBox(width: 10),
         itemBuilder: (_, i) {
+          if (i == vendors.length) {
+            return _DiscoverMoreCard(onTap: onDiscover);
+          }
           final v = vendors[i];
           return _ShortlistCard(vendor: v, onTap: () => onTap(v.id as String));
         },
@@ -1038,8 +1053,9 @@ class _ShortlistCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rating = vendor.rating as double?;
     return Container(
-      width: 120,
+      width: 150,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         boxShadow: AppShadows.sm,
@@ -1049,55 +1065,139 @@ class _ShortlistCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 88,
-              color: AppColors.cream,
-              child: vendor.logoUrl != null
-                  ? Image.network(
-                      resolveMediaUrl(vendor.logoUrl as String),
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    )
-                  : Center(
-                      child: Icon(
-                        Icons.photo_camera_outlined,
-                        color: AppColors.amber.withAlpha(153),
-                        size: 28,
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 92,
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppColors.creamDark, AppColors.cream],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: vendor.logoUrl != null
+                    ? Image.network(
+                        resolveMediaUrl(vendor.logoUrl as String),
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      )
+                    : Center(
+                        child: Text(
+                          _categoryEmoji(vendor.category as String),
+                          style: const TextStyle(fontSize: 30),
+                        ),
                       ),
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    vendor.businessName as String,
-                    style: AppTextStyles.caption.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.forestGreen,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    vendor.category as String,
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                      fontSize: 10,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
               ),
-            ),
-          ],
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        vendor.businessName as String,
+                        style: AppTextStyles.caption.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.forestGreen,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              vendor.category as String,
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.textSecondary,
+                                fontSize: 10,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (rating != null) ...[
+                            const Icon(
+                              Icons.star_rounded,
+                              size: 12,
+                              color: AppColors.amber,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              rating.toStringAsFixed(1),
+                              style: AppTextStyles.caption.copyWith(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Trailing tile of the shortlist row — keeps the row from ending on one
+/// lonely card and gives a one-tap path back to vendor discovery.
+class _DiscoverMoreCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _DiscoverMoreCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 150,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.amber.withAlpha(28),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.add_rounded,
+                  color: AppColors.amber,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Discover more',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1130,12 +1230,41 @@ class _ChecklistPreview extends StatelessWidget {
               ...tasks.map((t) => _ChecklistRow(task: t)),
               if (tasks.isEmpty)
                 Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'No tasks yet — tap to set up your checklist',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.forestGreen.withAlpha(15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.checklist_rounded,
+                          color: AppColors.forestGreen,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'No tasks yet',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.forestGreen,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap to set up your planning checklist — WedPilot '
+                        'builds it around your wedding date.',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
             ],

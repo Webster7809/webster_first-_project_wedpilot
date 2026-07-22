@@ -7,25 +7,23 @@ import '../core/theme/app_text_styles.dart';
 import '../core/utils/logout_dialog.dart';
 import '../providers/auth_provider.dart';
 
-class AppDrawer extends ConsumerWidget {
-  const AppDrawer({super.key});
+/// Vendor-shell equivalent of [AppDrawer] — replaces the vendor bottom nav's
+/// 4 tabs (Dashboard/Listings/Inquiries/Account) with drawer items.
+class VendorDrawer extends ConsumerWidget {
+  const VendorDrawer({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final coupleProfile = ref.watch(coupleProfileProvider);
+    final vendorProfile = ref.watch(vendorProfileProvider);
 
-    final displayName = user?.name ?? 'Guest';
+    final displayName = vendorProfile?.businessName ?? user?.name ?? 'Vendor';
     final email = user?.email ?? '';
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
-    final subtitle = coupleProfile?.weddingDate != null
-        ? 'Wedding: ${_formatDate(coupleProfile!.weddingDate!)}'
-        : email;
 
     return Drawer(
       child: Column(
         children: [
-          // ── Drawer Header ────────────────────────────────────────
           // A plain Container (not DrawerHeader) so it sizes to its content
           // instead of DrawerHeader's own imposed minimum height, which
           // clipped this header's bottom line once a subtitle was added.
@@ -33,7 +31,7 @@ class AppDrawer extends ConsumerWidget {
             width: double.infinity,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppColors.forestGreen, AppColors.budgetGreen],
+                colors: [AppColors.forestGreen, AppColors.vendorIndigo],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -47,7 +45,6 @@ class AppDrawer extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    // Avatar circle
                     Container(
                       width: 60,
                       height: 60,
@@ -59,10 +56,10 @@ class AppDrawer extends ConsumerWidget {
                           width: 2,
                         ),
                       ),
-                      child: coupleProfile?.photoUrl != null
+                      child: vendorProfile?.logoUrl != null
                           ? ClipOval(
                               child: Image.network(
-                                resolveMediaUrl(coupleProfile!.photoUrl!),
+                                resolveMediaUrl(vendorProfile!.logoUrl!),
                                 width: 60,
                                 height: 60,
                                 fit: BoxFit.cover,
@@ -90,7 +87,7 @@ class AppDrawer extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
+                      email,
                       style: AppTextStyles.bodySmall.copyWith(
                         color: Colors.white.withAlpha(204),
                       ),
@@ -102,50 +99,40 @@ class AppDrawer extends ConsumerWidget {
               ),
             ),
           ),
-
-          // ── Navigation Items ─────────────────────────────────────
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
                 _DrawerItem(
-                  icon: Icons.home_rounded,
-                  label: 'Home',
+                  icon: Icons.dashboard_rounded,
+                  label: 'Dashboard',
                   onTap: () {
                     Navigator.of(context).pop();
-                    context.go('/couple/dashboard');
+                    context.go('/vendor/dashboard');
+                  },
+                ),
+                _DrawerItem(
+                  icon: Icons.grid_view_rounded,
+                  label: 'Listings',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.go('/vendor/listings');
                   },
                 ),
                 _DrawerItem(
                   icon: Icons.mail_rounded,
-                  label: 'Invitations',
+                  label: 'Inquiries',
                   onTap: () {
                     Navigator.of(context).pop();
-                    context.go('/couple/invitations');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.account_balance_wallet_rounded,
-                  label: 'Budget',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    context.go('/couple/budget');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.storefront_rounded,
-                  label: 'Vendors',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    context.go('/couple/vendors');
+                    context.go('/vendor/leads');
                   },
                 ),
                 _DrawerItem(
                   icon: Icons.person_rounded,
-                  label: 'Profile',
+                  label: 'Account',
                   onTap: () {
                     Navigator.of(context).pop();
-                    context.go('/couple/profile');
+                    context.go('/vendor/account');
                   },
                 ),
 
@@ -160,26 +147,6 @@ class AppDrawer extends ConsumerWidget {
                   onTap: () {
                     Navigator.of(context).pop();
                     context.push('/settings');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.info_outline_rounded,
-                  label: 'About',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    showAboutDialog(
-                      context: context,
-                      applicationName: 'Wedpilot',
-                      applicationVersion: '1.0.0',
-                      applicationIcon: const Icon(
-                        Icons.favorite_rounded,
-                        color: AppColors.secondary,
-                        size: 36,
-                      ),
-                      applicationLegalese:
-                          '© 2024 Wedpilot. All rights reserved.\n'
-                          'Your perfect wedding planning companion.',
-                    );
                   },
                 ),
 
@@ -199,7 +166,6 @@ class AppDrawer extends ConsumerWidget {
                   },
                 ),
 
-                // ── Footer inside list so it never overflows ──────
                 SafeArea(
                   top: false,
                   child: Padding(
@@ -221,27 +187,7 @@ class AppDrawer extends ConsumerWidget {
       ),
     );
   }
-
-  static String _formatDate(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
-  }
 }
-
-// ── Single drawer row ──────────────────────────────────────────────────────────
 
 class _DrawerItem extends StatelessWidget {
   final IconData icon;

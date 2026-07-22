@@ -113,11 +113,21 @@ class VendorMatchSuggestion {
 
   factory VendorMatchSuggestion.fromJson(Map<String, dynamic> json) {
     final rawSteps = (json['reasoningSteps'] as List<dynamic>?) ?? const [];
+    // Every step's text goes through the same leak guard as planSummary/
+    // budgetReasoning below — this path used to skip it entirely, so a
+    // model that spilled raw JSON/meta-commentary into a "Style match" or
+    // "Verdict" step (the only two the backend leaves as free-form prose;
+    // everything else is grounded from real data) would reach the couple
+    // verbatim instead of being trimmed at the leak boundary.
     final steps = rawSteps
         .whereType<Map<String, dynamic>>()
-        .map(ReasoningStep.fromJson)
+        .map((s) => ReasoningStep(
+              label: s['label'] as String? ?? '',
+              text: WeddingAiService._stripJsonLeak((s['text'] as String?) ?? ''),
+            ))
         .where((s) => s.text.isNotEmpty)
         .toList();
+    final rawNote = json['noteToCouple'] as String?;
     return VendorMatchSuggestion(
       vendorId: json['vendorId'] as String,
       confidence: (json['confidence'] as num).toDouble(),
@@ -128,7 +138,7 @@ class VendorMatchSuggestion {
           : [
               ReasoningStep(
                 label: ReasoningStep.verdict,
-                text: json['reasoning'] as String? ?? '',
+                text: WeddingAiService._stripJsonLeak(json['reasoning'] as String? ?? ''),
               ),
             ],
       fitsBudget: json['fitsBudget'] as bool? ?? true,
@@ -136,7 +146,9 @@ class VendorMatchSuggestion {
       selectionBasis: json['selectionBasis'] == 'wedding_class_best_fit'
           ? SelectionBasis.weddingClassBestFit
           : SelectionBasis.exactBudgetMatch,
-      noteToCouple: json['noteToCouple'] as String?,
+      noteToCouple: (rawNote == null || rawNote.isEmpty)
+          ? null
+          : WeddingAiService._stripJsonLeak(rawNote),
     );
   }
 }
@@ -148,7 +160,7 @@ class WeddingAiService {
   final Dio _dio = Dio(BaseOptions(
     baseUrl: _baseUrl,
     connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 60),
+    receiveTimeout: const Duration(seconds: 90),
     headers: {'Content-Type': 'application/json'},
   ));
 
@@ -185,13 +197,35 @@ class WeddingAiService {
       final budgetReasoningRaw = (data['budgetReasoning'] as Map<String, dynamic>?) ?? {};
 
       return WeddingPlanResult(
-        planSummary: (data['planSummary'] as String?) ?? '',
+        planSummary: _stripJsonLeak((data['planSummary'] as String?) ?? ''),
         budgetAdvice: budgetRaw.map((k, v) => MapEntry(k, (v as num).toDouble())),
-        budgetReasoning: budgetReasoningRaw.map((k, v) => MapEntry(k, v.toString())),
+        budgetReasoning: budgetReasoningRaw
+            .map((k, v) => MapEntry(k, _stripJsonLeak(v.toString()))),
       );
     } on DioException catch (e) {
       throw WeddingAiException(_friendlyError(e));
     }
+  }
+
+  // Mirror of the backend's stripLeak guard, kept client-side because a
+  // deployed backend may predate it: a free-tier model occasionally spills the
+  // rest of its JSON into a prose field (quoting keys with ASCII, curly, or
+  // CJK corner quotes — '「budgetAdvice": {'). Prose fields are single
+  // paragraphs, so a blank line, an embedded '"Key": {' pattern, or a bare
+  // schema key name is always a leak — nothing past it is ever rendered.
+  static final RegExp _leakMarker = RegExp(
+    r'''\n\s*\n|["'“”‘’「」『』][A-Za-z][A-Za-z ]{0,30}["'“”‘’「」『』]\s*:\s*[{\[]|\b(?:planSummary|budgetAdvice|budgetReasoning|reasoningSteps|vendorId|budgetFitSuggestionType|budgetDeltaPercent|fitsBudget|selectionBasis|noteToCouple)\b|\b(?:let me|i'll (?:rewrite|redo|compose|output|produce|correct)|as an ai|as a language model|i am an ai|the json (?:value|output|now)|proper escaping|stray characters|note:)\b''',
+    caseSensitive: false,
+  );
+
+  static String _stripJsonLeak(String text) {
+    final match = _leakMarker.firstMatch(text);
+    if (match == null) return text.trim();
+    return text
+        .substring(0, match.start)
+        .trim()
+        .replaceFirst(RegExp(r'''["'“”‘’「」『』{,:]+$'''), '')
+        .trim();
   }
 
   /// Asks the AI to pick and justify one top vendor per category.
@@ -231,20 +265,20 @@ class WeddingAiService {
     }
   }
 
-  /// Turns a raw Dio/backend failure into a message that tells the couple
-  /// what's actually going on instead of always blaming their API key —
-  /// the backend's OpenRouter free-tier rate limit is a common,
-  /// self-resolving cause that looks nothing like a broken key.
+  /// Shows the AI service's own words verbatim whenever the backend forwarded
+  /// one (see `askAI`'s upstreamMessage extraction in `backend/server.js`) —
+  /// the couple sees exactly what OpenRouter said (e.g. its real rate-limit
+  /// wording), not a paraphrase written here. Only falls back to a generic
+  /// message when there's genuinely no error text to show at all, i.e. the
+  /// backend itself couldn't be reached (connection refused/timeout — the
+  /// request never even reached OpenRouter, so there are no "AI's words" to
+  /// surface).
   String _friendlyError(DioException e) {
     final data = e.response?.data;
-    final raw = (data is Map && data['error'] is String) ? data['error'] as String : '';
-    final isRateLimited = e.response?.statusCode == 429 ||
-        raw.toLowerCase().contains('quota') ||
-        raw.toLowerCase().contains('rate limit');
-    if (isRateLimited) {
-      return "WedPilot AI has hit its request limit for now — this resets automatically, "
-          'please try again in a few minutes.';
-    }
+    final raw = (data is Map && data['error'] is String)
+        ? (data['error'] as String).trim()
+        : '';
+    if (raw.isNotEmpty) return raw;
     return "Couldn't reach WedPilot AI right now. Please try again.";
   }
 }

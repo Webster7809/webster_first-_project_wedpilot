@@ -10,6 +10,7 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../providers/admin_provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/typeahead_field.dart';
 import '../../../widgets/wed_snack_bar.dart';
@@ -23,6 +24,16 @@ List<AdminVendor> filterAdminVendors(List<AdminVendor> vendors, String query) {
           v.category.toLowerCase().contains(q) ||
           (v.location ?? '').toLowerCase().contains(q))
       .toList();
+}
+
+/// Initials for the logged-in admin's avatar chip — first letter of their
+/// first two name words (e.g. "Jane Banda" → "JB"), falling back to "A"
+/// when no name is available.
+String _adminInitials(String? name) {
+  final words = (name ?? '').trim().split(RegExp(r'\s+'))
+    ..removeWhere((w) => w.isEmpty);
+  if (words.isEmpty) return 'A';
+  return words.take(2).map((w) => w[0].toUpperCase()).join();
 }
 
 // ── Category helpers ──────────────────────────────────────────────────────────
@@ -132,6 +143,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,
+        leading: const HamburgerMenuButton(color: AppColors.forestGreen),
         toolbarHeight: 68,
         titleSpacing: 24,
         title: Text(
@@ -182,9 +194,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: const Text(
-                'AD',
-                style: TextStyle(
+              child: Text(
+                _adminInitials(ref.watch(currentUserProvider)?.name),
+                style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
                   fontSize: 11,

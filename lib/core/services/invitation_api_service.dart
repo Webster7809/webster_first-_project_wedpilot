@@ -248,6 +248,14 @@ class InvitationApiService {
     }
   }
 
+  Future<void> deleteInvitation(String accessToken, String invitationId) async {
+    try {
+      await _dio.delete('/api/invitations/$invitationId', options: _auth(accessToken));
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
   Future<Invitation> uploadInvitationPhoto(
     String accessToken,
     String invitationId, {

@@ -8,6 +8,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/share_helper.dart';
 import '../../../models/invitation.dart';
 import '../../../providers/invitation_provider.dart';
+import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 class InvitationGalleryScreen extends ConsumerWidget {
@@ -38,6 +39,41 @@ class InvitationGalleryScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _confirmDelete(
+      BuildContext context, WidgetRef ref, Invitation invitation) async {
+    // Capture before the dialog — same disposed-ref hazard as confirmLogout.
+    final notifier = ref.read(invitationsProvider.notifier);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Invitation'),
+        content: Text(
+            'Delete "${invitation.title}"? Guests will no longer be able to '
+            'open its link, and its RSVP responses will be removed. This '
+            'cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final error = await notifier.delete(invitation.id);
+    if (!context.mounted) return;
+    if (error != null) {
+      showWedSnackBar(context, error, type: SnackType.error);
+    } else {
+      showWedSnackBar(context, 'Invitation deleted.', type: SnackType.success);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final invitations = ref.watch(invitationsProvider);
@@ -55,6 +91,7 @@ class InvitationGalleryScreen extends ConsumerWidget {
             backgroundColor: AppColors.forestGreen,
             elevation: 0,
             automaticallyImplyLeading: false,
+            leading: const HamburgerMenuButton(color: Colors.white),
             expandedHeight: 120,
             flexibleSpace: FlexibleSpaceBar(
               background: SafeArea(
@@ -128,6 +165,8 @@ class InvitationGalleryScreen extends ConsumerWidget {
                     onEdit: () => context.push(
                         '/couple/invitations/editor?id=${invitations[i].id}'),
                     onShare: () => _share(context, invitations[i]),
+                    onDelete: () =>
+                        _confirmDelete(context, ref, invitations[i]),
                   ),
                   childCount: invitations.length,
                 ),
@@ -210,11 +249,13 @@ class _InvitationCard extends StatelessWidget {
   final Invitation invitation;
   final VoidCallback onEdit;
   final VoidCallback onShare;
+  final VoidCallback onDelete;
 
   const _InvitationCard({
     required this.invitation,
     required this.onEdit,
     required this.onShare,
+    required this.onDelete,
   });
 
   @override
@@ -369,7 +410,7 @@ class _InvitationCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: onShare,
@@ -384,6 +425,22 @@ class _InvitationCard extends StatelessWidget {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20)),
                           padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline, size: 15),
+                        label: const Text('Delete'),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                              color: AppColors.error.withAlpha(90)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          foregroundColor: AppColors.error,
                         ),
                       ),
                     ),

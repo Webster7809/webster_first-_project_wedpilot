@@ -9,6 +9,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../models/messaging.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/vendor_own_provider.dart';
+import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_button.dart';
 
 class VendorDashboardScreen extends ConsumerWidget {
@@ -80,6 +81,7 @@ class _VendorDashboardBody extends StatelessWidget {
             expandedHeight: 140,
             elevation: 0,
             automaticallyImplyLeading: false,
+            leading: const HamburgerMenuButton(color: Colors.white),
             actions: [
               IconButton(
                 tooltip: 'Notifications',
@@ -188,8 +190,13 @@ class _VendorDashboardBody extends StatelessWidget {
                     style: AppTextStyles.headlineSmall
                         .copyWith(color: AppColors.forestGreen)),
                 const SizedBox(height: 14),
-                GridView.count(
-                  crossAxisCount: 3,
+                // Tiles cap at a fixed size instead of splitting the full
+                // width into 3 — a fixed crossAxisCount made each tile a
+                // third of the screen, which on desktop/tablet widths blew
+                // up into huge cards. Phones still get 3 per row; wider
+                // screens just fit more small tiles per row.
+                GridView.extent(
+                  maxCrossAxisExtent: 170,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   mainAxisSpacing: 10,

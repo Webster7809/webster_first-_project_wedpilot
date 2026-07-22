@@ -1,22 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../core/inherited/shell_scaffold.dart';
 import '../core/router/app_routes.dart';
 import '../core/theme/app_colors.dart';
-import '../widgets/shell_nav_item.dart';
-import '../providers/auth_provider.dart';
+import '../core/utils/logout_dialog.dart';
+import '../widgets/admin_drawer.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class AdminShell extends ConsumerWidget {
+class AdminShell extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
   const AdminShell({super.key, required this.navigationShell});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminShell> createState() => _AdminShellState();
+}
+
+class _AdminShellState extends ConsumerState<AdminShell> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  Widget build(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width;
     if (w >= 800) {
-      return _DesktopLayout(navigationShell: navigationShell, ref: ref);
+      return _DesktopLayout(navigationShell: widget.navigationShell, ref: ref);
     }
-    return _MobileLayout(navigationShell: navigationShell, ref: ref);
+    return _MobileLayout(
+      navigationShell: widget.navigationShell,
+      ref: ref,
+      scaffoldKey: _scaffoldKey,
+    );
   }
 }
 
@@ -48,108 +60,26 @@ class _DesktopLayout extends StatelessWidget {
   }
 }
 
-// ── Mobile: bottom nav ─────────────────────────────────────────────────────────
+// ── Mobile: drawer nav ─────────────────────────────────────────────────────────
 
 class _MobileLayout extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
   final WidgetRef ref;
-  const _MobileLayout({required this.navigationShell, required this.ref});
+  final GlobalKey<ScaffoldState> scaffoldKey;
+  const _MobileLayout({
+    required this.navigationShell,
+    required this.ref,
+    required this.scaffoldKey,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          // Persistent logout access — mobile admin has no drawer/sidebar,
-          // so without this there is no way to sign out at all on mobile.
-          SafeArea(
-            bottom: false,
-            child: Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(0, 4, 4, 0),
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.logout_rounded,
-                    color: AppColors.forestGreen,
-                    size: 22,
-                  ),
-                  tooltip: 'Log out',
-                  onPressed: () => _confirmLogout(context, ref),
-                ),
-              ),
-            ),
-          ),
-          Expanded(child: navigationShell),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.forestGreen,
-          border: Border(top: BorderSide(color: AppColors.vendorIndigo)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 60,
-            child: Row(
-              children: [
-                ShellNavItem(
-                  icon: Icons.dashboard_outlined,
-                  activeIcon: Icons.dashboard_rounded,
-                  label: 'Dashboard',
-                  index: 0,
-                  currentIndex: navigationShell.currentIndex,
-                  onTap: (i) => navigationShell.goBranch(
-                    i,
-                    initialLocation: i == navigationShell.currentIndex,
-                  ),
-                  inactiveColor: Colors.white60,
-                  labelFontSize: 10,
-                ),
-                ShellNavItem(
-                  icon: Icons.people_outline,
-                  activeIcon: Icons.people_rounded,
-                  label: 'Users',
-                  index: 1,
-                  currentIndex: navigationShell.currentIndex,
-                  onTap: (i) => navigationShell.goBranch(
-                    i,
-                    initialLocation: i == navigationShell.currentIndex,
-                  ),
-                  inactiveColor: Colors.white60,
-                  labelFontSize: 10,
-                ),
-                ShellNavItem(
-                  icon: Icons.verified_outlined,
-                  activeIcon: Icons.verified_rounded,
-                  label: 'Vendors',
-                  index: 2,
-                  currentIndex: navigationShell.currentIndex,
-                  onTap: (i) => navigationShell.goBranch(
-                    i,
-                    initialLocation: i == navigationShell.currentIndex,
-                  ),
-                  inactiveColor: Colors.white60,
-                  labelFontSize: 10,
-                ),
-                ShellNavItem(
-                  icon: Icons.bar_chart_outlined,
-                  activeIcon: Icons.bar_chart_rounded,
-                  label: 'Analytics',
-                  index: 3,
-                  currentIndex: navigationShell.currentIndex,
-                  onTap: (i) => navigationShell.goBranch(
-                    i,
-                    initialLocation: i == navigationShell.currentIndex,
-                  ),
-                  inactiveColor: Colors.white60,
-                  labelFontSize: 10,
-                ),
-              ],
-            ),
-          ),
-        ),
+    return ShellScaffold(
+      scaffoldKey: scaffoldKey,
+      child: Scaffold(
+        key: scaffoldKey,
+        drawer: const AdminDrawer(),
+        body: navigationShell,
       ),
     );
   }
@@ -283,7 +213,7 @@ class _AdminSidebar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
             child: TextButton.icon(
-              onPressed: () => _confirmLogout(context, ref),
+              onPressed: () => confirmLogout(context, ref),
               icon: const Icon(Icons.logout, color: Colors.white54, size: 18),
               label: const Text(
                 'Log out',
@@ -295,30 +225,6 @@ class _AdminSidebar extends StatelessWidget {
       ),
     );
   }
-}
-
-void _confirmLogout(BuildContext context, WidgetRef ref) {
-  showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Log Out'),
-      content: const Text('Are you sure you want to log out?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.of(ctx).pop();
-            ref.read(authProvider.notifier).logout();
-          },
-          style: TextButton.styleFrom(foregroundColor: AppColors.error),
-          child: const Text('Log Out'),
-        ),
-      ],
-    ),
-  );
 }
 
 class _LogoIcon extends StatelessWidget {

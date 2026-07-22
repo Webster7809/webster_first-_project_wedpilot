@@ -88,16 +88,20 @@ sign-off, no markdown fences, no second attempt.`;
 // field here is meant to be single-paragraph planner prose, so a blank line,
 // a self-referential phrase, or an embedded '"Key": {' pattern is always a
 // leak, never legitimate content, and everything from that point on is
-// discarded.
+// discarded. The quote class covers curly/CJK quote pairs (“” ‘’ 「」 『』) as
+// well as ASCII ones — models drifting into a second attempt have been seen
+// quoting keys with corner brackets ('「budgetAdvice": {') — and any bare
+// camelCase schema key name is itself a marker, since none of those tokens
+// can occur in legitimate planner prose regardless of how it's quoted.
 const LEAK_MARKERS =
-  /\n\s*\n|["'][A-Za-z][A-Za-z ]{0,30}["']\s*:\s*[{[]|\b(?:let me|i'll (?:rewrite|redo|compose|output|produce|correct)|as an ai|as a language model|i am an ai|the json (?:value|output|now)|proper escaping|stray characters|note:)\b/i;
+  /\n\s*\n|["'“”‘’「」『』][A-Za-z][A-Za-z ]{0,30}["'“”‘’「」『』]\s*:\s*[{[]|\b(?:planSummary|budgetAdvice|budgetReasoning|reasoningSteps|vendorId|budgetFitSuggestionType|budgetDeltaPercent|fitsBudget|selectionBasis|noteToCouple)\b|\b(?:let me|i'll (?:rewrite|redo|compose|output|produce|correct)|as an ai|as a language model|i am an ai|the json (?:value|output|now)|proper escaping|stray characters|note:)\b/i;
 
 function stripLeak(value, state) {
   if (typeof value === 'string') {
     const match = LEAK_MARKERS.exec(value);
     if (!match) return value;
     state.leaked = true;
-    return match.index === 0 ? '' : value.slice(0, match.index).trim().replace(/["'{,:]+$/, '').trim();
+    return match.index === 0 ? '' : value.slice(0, match.index).trim().replace(/["'“”‘’「」『』{,:]+$/, '').trim();
   }
   if (Array.isArray(value)) return value.map((v) => stripLeak(v, state));
   if (value && typeof value === 'object') {
@@ -106,18 +110,23 @@ function stripLeak(value, state) {
   return value;
 }
 
-// A retry here means a second full call to the free-tier OpenRouter model —
-// on a tight free-tier quota, that silently doubles how fast a couple burns
-// through it. It's also no longer load-bearing for correctness: every fact
-// that actually reaches the couple (rating, review count, booked status,
-// budget numbers) is rewritten deterministically from real data after the
-// call returns (see groundedStepText/groundedBudgetFitText/groundVendorMatch
-// below), regardless of whether this attempt validated, and the Flutter-side
-// guard already discards a result with a fabricated vendorId for free. So a
-// response that fails validate() (e.g. a missing reasoning label) still ships
-// safely — it's just less complete, not fabricated — making a second
-// OpenRouter call not worth its cost in quota.
-const MAX_AI_ATTEMPTS = 1;
+// A single attempt meant any transient failure — the free-tier model's
+// shared 429 rate limit being the most common cause — produced no plan/match
+// at all, forcing the Flutter client's local fallback every time OpenRouter
+// so much as hiccups. Retrying a bounded number of times with backoff trades
+// a little latency for landing the real AI path far more often, while still
+// failing fast on anything a retry can't fix (bad key, malformed request).
+const MAX_AI_ATTEMPTS = 3;
+
+// Worth retrying: 429 (rate limit) and any 5xx (transient upstream fault).
+// Everything else (400/401/402/403/404...) is a property of the request or
+// credentials themselves — retrying with the same body and key can't change
+// the outcome, so those fail fast instead of burning the attempt budget.
+function isRetryableStatus(status) {
+  return status === 429 || status >= 500;
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Both endpoints ask for JSON in the prompt itself and extract the first
 // {...} span from the response text (response_format is a hint, not a
@@ -130,27 +139,58 @@ const MAX_AI_ATTEMPTS = 1;
 // gets attempted instead of silently shipping an incomplete plan.
 async function askAI(prompt, validate = () => true) {
   let lastResult = null;
+  let lastError = null;
+
   for (let attempt = 0; attempt < MAX_AI_ATTEMPTS; attempt++) {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: OPENROUTER_MODEL,
-        messages: [
-          { role: 'system', content: PLANNER_PERSONA },
-          { role: 'user', content: prompt },
-        ],
-        response_format: { type: 'json_object' },
-        reasoning: { exclude: true },
-      }),
-    });
+    if (attempt > 0) {
+      console.warn(`OpenRouter retry ${attempt + 1}/${MAX_AI_ATTEMPTS} after: ${lastError?.message}`);
+      await sleep(400 * attempt);
+    }
+
+    let res;
+    try {
+      res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: OPENROUTER_MODEL,
+          messages: [
+            { role: 'system', content: PLANNER_PERSONA },
+            { role: 'user', content: prompt },
+          ],
+          response_format: { type: 'json_object' },
+          reasoning: { exclude: true },
+        }),
+      });
+    } catch (networkErr) {
+      // fetch() rejects on a true network-level failure (DNS/TLS/reset) —
+      // just as transient as a 429/5xx, so it gets the same retry treatment.
+      lastError = networkErr;
+      continue;
+    }
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`OpenRouter error ${res.status}: ${errText}`);
+      // Surface OpenRouter's own message verbatim rather than our own
+      // wrapper text — the couple should see exactly what the AI service
+      // said (e.g. its real rate-limit wording), not a paraphrase. Most
+      // providers return {"error": {"message": "...", ...}} or
+      // {"message": "..."}; fall back to the raw body only when it isn't
+      // JSON at all (never fabricate a message that didn't come from them).
+      let upstreamMessage = errText;
+      try {
+        const parsedErr = JSON.parse(errText);
+        upstreamMessage = parsedErr?.error?.message || parsedErr?.message || errText;
+      } catch {
+        // Not JSON — errText itself is already the best available message.
+      }
+      lastError = new Error(upstreamMessage);
+      lastError.status = res.status;
+      if (!isRetryableStatus(res.status)) throw lastError;
+      continue;
     }
 
     const data = await res.json();
@@ -162,7 +202,8 @@ async function askAI(prompt, validate = () => true) {
     try {
       parsed = JSON.parse(text.substring(start, end + 1));
     } catch {
-      continue; // malformed JSON entirely — worth one retry before giving up
+      lastError = new Error('AI returned a response that could not be understood.');
+      continue; // malformed JSON entirely — worth a retry before giving up
     }
 
     const sanitized = stripLeak(parsed, { leaked: false });
@@ -171,9 +212,12 @@ async function askAI(prompt, validate = () => true) {
   }
 
   if (lastResult === null) {
-    // Never forward the raw model text to the client — it may contain
-    // leaked meta-commentary instead of valid JSON.
-    throw new Error('AI returned a response that could not be understood. Please try again.');
+    // Surface the real cause when every attempt failed at the HTTP/network
+    // level (lets the client tell "rate limited" from "unreachable" apart);
+    // only fall back to the generic message when attempts got JSON back but
+    // it was never parseable/valid. Never forward raw model text to the
+    // client either way — it may contain leaked meta-commentary.
+    throw lastError ?? new Error('AI returned a response that could not be understood. Please try again.');
   }
   // Every attempt was sanitized (never raw leaked text) but never fully
   // validated — return the last one anyway rather than hard-failing the
@@ -219,16 +263,30 @@ Respond ONLY with valid JSON:
 {
   "planSummary": "A warm, confident 2-3 sentence personalised summary written like a planner opening a client consultation. Mention location, budget and date if set. Be specific to their choices, not generic.",
   "budgetAdvice": { "CategoryName": percentage_number },
-  "budgetReasoning": { "CategoryName": "2-3 sentences of real planner reasoning for this exact percentage — reference guest-count math, industry-standard allocation ranges for this wedding class, or location cost factors. No filler." }
+  "budgetReasoning": { "CategoryName": "2-3 sentences of real planner reasoning for this exact percentage — grounded ONLY in the couple's own inputs above: their guest count, wedding class, location, and total budget. No filler." }
 }
 
 Rules:
 - budgetAdvice must cover every category in [${categoriesStr}] and sum to exactly 100.
 - Use plain numbers for percentages (e.g. 30, not "30%").
 - budgetReasoning must cover every category in [${categoriesStr}] and justify that category's specific percentage — explain why it's higher or lower than an even split in concrete terms.
+- The ONLY percentage a category's budgetReasoning may mention is that category's own budgetAdvice number. Never cite "industry standard" ranges, market statistics, survey figures, or any other percentage — you have no source for them, so stating one is fabrication.
+- The only monetary amounts you may mention anywhere are computed directly from the couple's stated total budget (e.g. that category's share of it). Never quote typical vendor prices or market rates.
 - Confident, expert, professional tone suited to a Zambian wedding market. Never hedge or say "it depends" — give a definitive recommendation.
 - Never invent facts not given above — no couple names (none were provided), no vendor details of any kind (none were given), no fabricated menu items or prices. Ground every claim only in the data given.
 `;
+
+  // Every percentage figure written into prose must be one the plan itself
+  // recommends (any budgetAdvice value, ±1 for rounding) — a reasoning line
+  // citing "industry standard 30–35%" or any other outside statistic is a
+  // fabrication with no source, and rejecting it here means the couple
+  // never sees it (the app falls back to its grounded standard split).
+  const percentagesAreGrounded = (text, allowedNumbers) => {
+    const matches = String(text).match(/\d+(?:\.\d+)?(?=\s*%)/g) || [];
+    return matches.every((m) =>
+      allowedNumbers.some((allowed) => Math.abs(Number(m) - allowed) <= 1),
+    );
+  };
 
   // Beyond structural presence, catch the model silently dropping a category
   // or reporting percentages that don't add up — a plan whose numbers don't
@@ -246,7 +304,13 @@ Rules:
     );
     if (!coversAllCategories) return false;
     const sum = categories.reduce((s, cat) => s + r.budgetAdvice[cat], 0);
-    return Math.abs(sum - 100) <= 2;
+    if (Math.abs(sum - 100) > 2) return false;
+
+    const advisedNumbers = categories.map((cat) => r.budgetAdvice[cat]);
+    if (!percentagesAreGrounded(r.planSummary, advisedNumbers)) return false;
+    return categories.every((cat) =>
+      percentagesAreGrounded(r.budgetReasoning[cat], [r.budgetAdvice[cat]]),
+    );
   };
 
   try {
@@ -254,7 +318,7 @@ Rules:
     res.json(json);
   } catch (err) {
     console.error('OpenRouter AI error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status ?? 500).json({ error: err.message });
   }
 });
 
@@ -481,6 +545,15 @@ Rules:
   // MAX_AI_ATTEMPTS = 1 means a failed check no longer buys a retry (see
   // that constant's comment) — an invented vendorId still gets caught for
   // free by the Flutter-side guard, which discards it to the local fallback.
+  // The prompt forbids the model from stating any figure — the app inserts
+  // every real number itself. "Reputation"/"Availability" get rewritten from
+  // the candidate record regardless (see groundedStepText), but "Style match"
+  // and "Verdict" ship as the model wrote them, so a fabricated "95% match"
+  // or "4.8★" or a price-sized number there fails the whole response and the
+  // app's deterministic local matcher takes over instead.
+  const FABRICATED_FIGURE = /\d+(?:\.\d+)?\s*(?:%|★)|\b\d{3,}\b/;
+  const MODEL_AUTHORED_LABELS = ['Style match', 'Verdict'];
+
   const validate = (r) =>
     r.categories &&
     typeof r.categories === 'object' &&
@@ -490,8 +563,12 @@ Rules:
       const candidateIds = (categories[cat] || []).map((c) => c.vendorId);
       if (!candidateIds.includes(entry.vendorId)) return false;
       if (!BUDGET_FIT_SUGGESTION_TYPES.includes(entry.budgetFitSuggestionType)) return false;
-      const labels = new Set((Array.isArray(entry.reasoningSteps) ? entry.reasoningSteps : []).map((s) => s.label));
-      return REQUIRED_REASONING_LABELS.every((label) => labels.has(label));
+      const steps = Array.isArray(entry.reasoningSteps) ? entry.reasoningSteps : [];
+      const labels = new Set(steps.map((s) => s.label));
+      if (!REQUIRED_REASONING_LABELS.every((label) => labels.has(label))) return false;
+      return steps.every(
+        (s) => !MODEL_AUTHORED_LABELS.includes(s.label) || !FABRICATED_FIGURE.test(String(s.text)),
+      );
     });
 
   try {
@@ -500,7 +577,7 @@ Rules:
     res.json(json);
   } catch (err) {
     console.error('OpenRouter AI error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status ?? 500).json({ error: err.message });
   }
 });
 

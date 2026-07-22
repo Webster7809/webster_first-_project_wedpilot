@@ -93,6 +93,80 @@ final _pricedVendors = [
   ),
 ];
 
+/// Fixtures for the swap/rescue test below — Venue has *two* real vendors
+/// (unlike every other fixture set here, which has exactly one per category,
+/// so there's never anything to swap to) so the budget allocator's rescue
+/// pass has an actual cheaper alternative to downgrade to when Catering
+/// would otherwise run out of room.
+final _rescueVendors = [
+  const VendorProfile(
+    id: 'venue-expensive',
+    userId: 'vendor-1a',
+    businessName: 'Prestige Manor Estates',
+    category: 'Venue',
+    location: 'Ndola, Copperbelt',
+    tier: VendorTier.premium,
+    verificationStatus: VerificationStatus.verified,
+    rating: 4.9,
+    feedbackCount: 80,
+    compositeScore: 95,
+    services: [
+      VendorService(
+        id: 'venue-expensive-svc',
+        vendorId: 'venue-expensive',
+        title: 'Full venue package',
+        priceMin: 60000,
+        priceMax: 60000,
+        unit: 'package',
+      ),
+    ],
+  ),
+  const VendorProfile(
+    id: 'venue-cheap',
+    userId: 'vendor-1b',
+    businessName: 'Budget Hall Ndola',
+    category: 'Venue',
+    location: 'Ndola, Copperbelt',
+    tier: VendorTier.free,
+    verificationStatus: VerificationStatus.verified,
+    rating: 3.0,
+    feedbackCount: 5,
+    compositeScore: 40,
+    services: [
+      VendorService(
+        id: 'venue-cheap-svc',
+        vendorId: 'venue-cheap',
+        title: 'Full venue package',
+        priceMin: 50000,
+        priceMax: 50000,
+        unit: 'package',
+      ),
+    ],
+  ),
+  const VendorProfile(
+    id: 'catering-1',
+    userId: 'vendor-2',
+    businessName: 'Zambezi Catering Co.',
+    category: 'Catering',
+    location: 'Ndola, Copperbelt',
+    tier: VendorTier.free,
+    verificationStatus: VerificationStatus.verified,
+    rating: 4.2,
+    feedbackCount: 27,
+    compositeScore: 75,
+    services: [
+      VendorService(
+        id: 'catering-1-svc',
+        vendorId: 'catering-1',
+        title: 'Full catering package',
+        priceMin: 20000,
+        priceMax: 20000,
+        unit: 'package',
+      ),
+    ],
+  ),
+];
+
 /// Stand-in for [BudgetNotifier] that skips the real backend call
 /// [BudgetNotifier.loadBudget] would otherwise make, and instead resolves
 /// straight to a ready [Budget] — mirroring what the wizard expects once the
@@ -223,6 +297,15 @@ Future<void> _pumpWizardToReviewStep(
     await tester.pump();
   }
 
+  // The vendor-category checklist is collapsed by default (see
+  // _CategoryChecklist) — its items don't exist in the tree at all until
+  // the header is tapped to expand it.
+  await tester.ensureVisible(find.text('Select the services you need'));
+  await tester.tap(find.text('Select the services you need'));
+  // Let the checklist's 200ms AnimatedSize expansion finish before tapping
+  // anything inside it — mid-animation, the item area's hit-test geometry
+  // doesn't yet match where the tester computes the tap offset.
+  await tester.pump(const Duration(milliseconds: 250));
   await tester.ensureVisible(find.text('Venue'));
   await tester.tap(find.text('Venue'));
   await tester.tap(find.text('Catering'));
@@ -258,9 +341,15 @@ Future<void> _pumpWizardToReviewStep(
   }
 }
 
-/// Drives the full 4-step wedding planning wizard: budget (incl. a couple-added
-/// custom vendor type), date, then style (which creates the plan directly —
-/// there's no separate details step), then the AI-curated review step.
+/// Drives the full 4-step wedding planning wizard: budget, date, then style
+/// (which creates the plan directly — there's no separate details step),
+/// then the AI-curated review step.
+///
+/// Adding a couple-defined custom vendor category used to be part of this
+/// flow (an inline text field + add button in Step 0), but that control has
+/// since been removed from the UI entirely — category selection is now only
+/// the checklist of built-in/vendor-registered categories (see
+/// `_CategoryChecklist`). Nothing here exercises that anymore.
 Future<void> _runWizardFlow(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -279,30 +368,19 @@ Future<void> _runWizardFlow(WidgetTester tester) async {
   await tester.enterText(find.byType(TextField).at(2), 'Ndola, Copperbelt'); // location
   await tester.pump();
 
+  // The vendor-category checklist is collapsed by default (see
+  // _CategoryChecklist) — its items don't exist in the tree at all until
+  // the header is tapped to expand it.
+  await tester.ensureVisible(find.text('Select the services you need'));
+  await tester.tap(find.text('Select the services you need'));
+  // Let the checklist's 200ms AnimatedSize expansion finish before tapping
+  // anything inside it — mid-animation, the item area's hit-test geometry
+  // doesn't yet match where the tester computes the tap offset.
+  await tester.pump(const Duration(milliseconds: 250));
   await tester.ensureVisible(find.text('Venue'));
   await tester.tap(find.text('Venue'));
   await tester.tap(find.text('Catering'));
   await tester.pump();
-
-  // Add a custom vendor type the fixtures have no match for, then verify
-  // it can be removed and re-added.
-  await tester.ensureVisible(find.byType(TextField).at(3));
-  await tester.enterText(find.byType(TextField).at(3), 'Hair & Makeup');
-  await tester.ensureVisible(find.byIcon(Icons.add_rounded));
-  await tester.tap(find.byIcon(Icons.add_rounded));
-  await tester.pump();
-  expect(find.text('Hair & Makeup'), findsOneWidget);
-
-  await tester.ensureVisible(find.byIcon(Icons.close_rounded));
-  await tester.tap(find.byIcon(Icons.close_rounded));
-  await tester.pump();
-  expect(find.text('Hair & Makeup'), findsNothing);
-
-  await tester.enterText(find.byType(TextField).at(3), 'Hair & Makeup');
-  await tester.ensureVisible(find.byIcon(Icons.add_rounded));
-  await tester.tap(find.byIcon(Icons.add_rounded));
-  await tester.pump();
-  expect(find.text('Hair & Makeup'), findsOneWidget);
 
   await tester.ensureVisible(find.text('Continue'));
   await tester.tap(find.text('Continue'));
@@ -326,14 +404,8 @@ Future<void> _runWizardFlow(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 1200));
   await tester.pump();
 
-  // AI matched Venue/Catering from fixtures; Hair & Makeup has no fixture
-  // vendors in the couple's location, so it should fall back to the specific
-  // per-category "no vendor here" message and the "add your own" prompt —
-  // Venue/Catering keep matching normally (a missing category is a soft,
-  // single-category exclusion, not a whole-plan validation failure).
-  expect(find.text('AI top pick'), findsWidgets);
-  expect(find.textContaining('No Hair & Makeup vendors are currently available'), findsOneWidget);
-  expect(find.text('Add your own vendor'), findsWidgets);
+  // AI matched both Venue and Catering from the fixtures.
+  expect(find.text('AI top pick'), findsNWidgets(2));
   expect(find.text('Download PDF'), findsOneWidget);
   expect(find.text('Go to Dashboard'), findsOneWidget);
 
@@ -360,6 +432,15 @@ Future<void> _reachStyleStep(WidgetTester tester) async {
   await tester.enterText(find.byType(TextField).at(1), '120'); // guests
   await tester.enterText(find.byType(TextField).at(2), 'Ndola, Copperbelt'); // location
   await tester.pump();
+  // The vendor-category checklist is collapsed by default (see
+  // _CategoryChecklist) — its items don't exist in the tree at all until
+  // the header is tapped to expand it.
+  await tester.ensureVisible(find.text('Select the services you need'));
+  await tester.tap(find.text('Select the services you need'));
+  // Let the checklist's 200ms AnimatedSize expansion finish before tapping
+  // anything inside it — mid-animation, the item area's hit-test geometry
+  // doesn't yet match where the tester computes the tap offset.
+  await tester.pump(const Duration(milliseconds: 250));
   await tester.ensureVisible(find.text('Venue'));
   await tester.tap(find.text('Venue'));
   await tester.pump();
@@ -541,17 +622,47 @@ void main() {
       find.textContaining('Cannot proceed — your money ends here'),
       findsOneWidget,
     );
-    // Real spend vs. the entered total must be spelled out twice: once in
-    // the wedding-details recap up top, and again in the "Budget summary"
-    // block at the end of the matched vendors — only Venue's 60,000 was
-    // actually spent against a 70,000 budget, leaving 10,000.
+    // Real spend vs. the entered total is spelled out in the wedding-details
+    // recap up top (the standalone "Budget summary" block below the matched
+    // vendors was removed) — only Venue's 60,000 was actually spent against
+    // a 70,000 budget, leaving 10,000.
     expect(find.text('Budget used'), findsOneWidget);
-    expect(find.text('Allocated amount'), findsOneWidget);
-    expect(find.text('Entered amount'), findsOneWidget);
-    expect(find.text('ZMW 70,000'), findsNWidgets(2));
-    expect(find.text('ZMW 60,000'), findsNWidgets(2));
-    expect(find.text('Remaining'), findsNWidgets(2));
-    expect(find.text('ZMW 10,000'), findsNWidgets(2));
+    expect(find.text('Entered amount'), findsNothing);
+    expect(find.text('Allocated amount'), findsNothing);
+    expect(find.text('ZMW 70,000'), findsOneWidget);
+    expect(find.text('ZMW 60,000'), findsOneWidget);
+    expect(find.text('Remaining'), findsOneWidget);
+    expect(find.text('ZMW 10,000'), findsOneWidget);
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'Validation — swaps an expensive pick for a cheaper alternative to rescue a later category',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    // 75,000 total. Venue's best-reviewed option (Prestige Manor, 60,000)
+    // wins on quality alone and would leave only 15,000 — not enough for
+    // Catering's 20,000. But Venue also has a cheaper real alternative
+    // (Budget Hall, 50,000): downgrading to it frees 10,000, which is enough
+    // to fund Catering too. Both categories must end up with a real pick,
+    // and the swapped-down Budget Hall — not Prestige Manor — must be the
+    // one shown, proving the downgrade actually happened rather than the
+    // couple just getting told "no".
+    await _pumpWizardToReviewStep(
+      tester,
+      vendors: _rescueVendors,
+      budget: '75000',
+      location: 'Ndola, Copperbelt',
+    );
+
+    expect(find.text("We couldn't build your plan yet"), findsNothing);
+    expect(find.text('AI top pick'), findsNWidgets(2));
+    expect(find.textContaining('Cannot proceed'), findsNothing);
+    expect(find.text('Budget Hall Ndola'), findsOneWidget);
+    expect(find.text('Prestige Manor Estates'), findsNothing);
 
     expect(tester.takeException(), isNull);
   });

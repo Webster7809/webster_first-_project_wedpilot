@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/vendor_profile.dart';
+import '../core/constants/app_constants.dart';
 import '../core/services/vendor_api_service.dart';
 import '../core/state/resource.dart';
 import '../core/utils/geo_utils.dart';
@@ -21,7 +22,11 @@ final vendorListProvider = FutureProvider.family<List<VendorProfile>, String>(
     if (token == null) return [];
 
     final coupleProfile = ref.watch(coupleProfileProvider);
-    final vendors = await VendorApiService.instance.fetchVendors(
+    // fetchAllVendors, not fetchVendors — the plain call silently caps at the
+    // backend's default page size (see its doc comment), so browsing 'All'
+    // or a category with more vendors than one page would quietly drop
+    // everything past page 1 instead of showing the full directory.
+    final vendors = await VendorApiService.instance.fetchAllVendors(
       token,
       category: category == kAllVendorCategories ? null : category,
     );
@@ -72,15 +77,52 @@ final recommendedVendorsProvider = FutureProvider<List<VendorProfile>>((ref) asy
   final token = ref.watch(authProvider.notifier).accessToken;
   if (token == null) return [];
   final selectedServices = ref.watch(selectedServiceCategoriesProvider);
-  final allVendors = await VendorApiService.instance.fetchVendors(token);
+  // fetchAllVendors — this filters by selectedServices client-side below, so
+  // a plain fetchVendors() call (capped at the backend's default page size)
+  // would silently miss every vendor outside whatever page happened to come
+  // back, making entire categories look empty even though they aren't.
+  final allVendors = await VendorApiService.instance.fetchAllVendors(token);
   if (selectedServices.isEmpty) return allVendors.take(4).toList();
   return allVendors.where((v) => selectedServices.contains(v.category)).toList();
 });
 
+// WedPilot's curated vendor catalog (genuine High-Class/Flexible earners for
+// every category, so the AI matcher always has real premium/mid-tier options
+// to find) used to be appended here as frontend-only mock data. It's now
+// seeded as real rows in the backend (see backend/scripts/seedCuratedVendors.js)
+// so those vendors also work everywhere else — discovery, dashboard, detail
+// view, wishlist, booking, feedback — not just AI matching. This provider is
+// now just the real backend vendor list, nothing appended client-side.
 final allVendorsProvider = FutureProvider<List<VendorProfile>>((ref) async {
   final token = ref.watch(authProvider.notifier).accessToken;
   if (token == null) return [];
   return VendorApiService.instance.fetchAllVendors(token);
+});
+
+/// Union of WedPilot's built-in vendor categories and every category real
+/// vendors have registered under — so a vendor signing up in a brand-new
+/// category makes it selectable for couples automatically, without an app
+/// release. Built-ins keep their curated order; vendor-registered extras
+/// follow alphabetically. Falls back to just the built-ins if the vendor
+/// directory can't be reached, so category selection never blocks on it.
+final availableVendorCategoriesProvider =
+    FutureProvider<List<String>>((ref) async {
+  List<VendorProfile> vendors;
+  try {
+    vendors = await ref.watch(allVendorsProvider.future);
+  } catch (_) {
+    vendors = const [];
+  }
+  final seen = {
+    for (final c in AppConstants.vendorCategories) c.toLowerCase(),
+  };
+  final extras = <String>[];
+  for (final v in vendors) {
+    final c = v.category.trim();
+    if (c.isNotEmpty && seen.add(c.toLowerCase())) extras.add(c);
+  }
+  extras.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  return [...AppConstants.vendorCategories, ...extras];
 });
 
 // Resolves the couple's saved vendor IDs into full VendorProfile objects by

@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/couple_profile.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 class CoupleProfileScreen extends ConsumerWidget {
@@ -33,6 +34,7 @@ class CoupleProfileScreen extends ConsumerWidget {
             expandedHeight: 210,
             pinned: true,
             automaticallyImplyLeading: false,
+            leading: const HamburgerMenuButton(color: Colors.white),
             backgroundColor: AppColors.forestGreen,
             actions: [
               IconButton(
@@ -480,8 +482,10 @@ class _ToolGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 4,
+    // Capped tile size rather than a fixed 4-way split, so tiles stay
+    // compact on tablet/desktop widths instead of growing with the screen.
+    return GridView.extent(
+      maxCrossAxisExtent: 110,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 10,

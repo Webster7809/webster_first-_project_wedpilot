@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_own_provider.dart';
+import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 class VendorProfileManagementScreen extends ConsumerStatefulWidget {
@@ -70,6 +71,7 @@ class _VendorProfileManagementScreenState
             expandedHeight: 120,
             elevation: 0,
             automaticallyImplyLeading: false,
+            leading: const HamburgerMenuButton(color: Colors.white),
             actions: [
               IconButton(
                 tooltip: 'Notifications',

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../../models/budget.dart';
 import '../../models/couple_profile.dart';
 import '../../models/vendor_profile.dart';
@@ -12,13 +13,49 @@ class VendorPdfService {
   static const _amber = PdfColor.fromInt(0xFFD4A24C);
   static const _grey = PdfColor.fromInt(0xFF6B7280);
 
+  // The pdf package's built-in Helvetica only covers Latin-1, so glyphs like
+  // '★', '·', em-dashes, or emoji trigger "Unable to find a font to draw"
+  // warnings and render as empty boxes. Every string that can carry
+  // model-authored or user-authored text goes through here: known symbols are
+  // rewritten to WinAnsi-safe equivalents, anything else outside Latin-1 is
+  // dropped.
+  static String _pdfSafe(String text) => text
+      .replaceAll('★', ' stars')
+      .replaceAll('—', '-')
+      .replaceAll('–', '-')
+      .replaceAll('·', '-')
+      .replaceAll('’', "'")
+      .replaceAll('‘', "'")
+      .replaceAll('“', '"')
+      .replaceAll('”', '"')
+      .replaceAll('…', '...')
+      .replaceAll(RegExp(r'[^\x00-\xFF]'), '')
+      .trim();
+
+  // The pdf package's built-in Helvetica is a Type1 font with no Unicode
+  // support (it prints "Helvetica has no Unicode support" for anything beyond
+  // WinAnsi). Embedding a real TTF is the proper fix — Open Sans is fetched
+  // once by the printing package and cached. If it can't be fetched (offline),
+  // we fall back to Helvetica, where the _pdfSafe sanitizing below keeps
+  // every string within what Helvetica can draw.
+  static Future<pw.ThemeData?> _unicodeTheme() async {
+    try {
+      return pw.ThemeData.withFont(
+        base: await PdfGoogleFonts.openSansRegular(),
+        bold: await PdfGoogleFonts.openSansBold(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<Uint8List> buildWeddingPlanPdf({
     CoupleProfile? couple,
     Budget? budget,
     required List<VendorProfile> vendors,
     Map<String, String> reasoningByVendorId = const {},
   }) async {
-    final doc = pw.Document();
+    final doc = pw.Document(theme: await _unicodeTheme());
     final byCategory = <String, List<VendorProfile>>{};
     for (final v in vendors) {
       byCategory.putIfAbsent(v.category, () => []).add(v);
@@ -90,12 +127,12 @@ class VendorPdfService {
               ]),
               for (final c in budget.categories.where((c) => c.allocatedAmount > 0))
                 pw.TableRow(children: [
-                  _tableCell('${c.categoryIcon}  ${c.categoryName}'),
+                  _tableCell(_pdfSafe(c.categoryName)),
                   _tableCell(
                       '${budget.currency} ${c.allocatedAmount.toStringAsFixed(0)}'),
                   _tableCell(budget.totalAmount > 0
                       ? '${(c.allocatedAmount / budget.totalAmount * 100).toStringAsFixed(0)}%'
-                      : '—'),
+                      : '-'),
                 ]),
             ],
           ),
@@ -130,7 +167,7 @@ class VendorPdfService {
                   fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.Text(
-            'Prepared by WedPilot — AI-matched $vendorCount vendor${vendorCount == 1 ? '' : 's'} across $categoryCount '
+            'Prepared by WedPilot - AI-matched $vendorCount vendor${vendorCount == 1 ? '' : 's'} across $categoryCount '
             'categor${categoryCount == 1 ? 'y' : 'ies'}, with full budget breakdown',
             style: const pw.TextStyle(color: PdfColors.white, fontSize: 11),
           ),
@@ -141,7 +178,7 @@ class VendorPdfService {
                 _coverFact('Wedding date',
                     _formatDate(couple.weddingDate!)),
               if (couple.location != null && couple.location!.isNotEmpty)
-                _coverFact('Location', couple.location!),
+                _coverFact('Location', _pdfSafe(couple.location!)),
               if (couple.guestCount != null)
                 _coverFact('Guests', '${couple.guestCount}'),
               if (couple.totalBudget != null)
@@ -178,7 +215,7 @@ class VendorPdfService {
         border: pw.Border(bottom: pw.BorderSide(color: _amber, width: 1.5)),
       ),
       child: pw.Text(
-        category,
+        _pdfSafe(category),
         style: pw.TextStyle(
             fontSize: 14, fontWeight: pw.FontWeight.bold, color: _green),
       ),
@@ -202,7 +239,7 @@ class VendorPdfService {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text(v.businessName,
+              pw.Text(_pdfSafe(v.businessName),
                   style: pw.TextStyle(
                       fontSize: 13, fontWeight: pw.FontWeight.bold)),
               if (v.isCustomEntry)
@@ -224,7 +261,7 @@ class VendorPdfService {
           ),
           pw.SizedBox(height: 4),
           if (v.location != null && v.location!.isNotEmpty)
-            pw.Text('Location: ${v.location}',
+            pw.Text('Location: ${_pdfSafe(v.location!)}',
                 style: const pw.TextStyle(fontSize: 10)),
           if (mapsUrl != null)
             pw.UrlLink(
@@ -236,9 +273,11 @@ class VendorPdfService {
                       decoration: pw.TextDecoration.underline)),
             ),
           if (v.phone != null && v.phone!.isNotEmpty)
-            pw.Text('Phone: ${v.phone}', style: const pw.TextStyle(fontSize: 10)),
+            pw.Text('Phone: ${_pdfSafe(v.phone!)}',
+                style: const pw.TextStyle(fontSize: 10)),
           if (v.website != null && v.website!.isNotEmpty)
-            pw.Text('Website: ${v.website}', style: const pw.TextStyle(fontSize: 10)),
+            pw.Text('Website: ${_pdfSafe(v.website!)}',
+                style: const pw.TextStyle(fontSize: 10)),
           if (v.priceMax > 0)
             pw.Text(
               'Price range: ${v.priceMin.toStringAsFixed(0)} - ${v.priceMax.toStringAsFixed(0)}',
@@ -247,7 +286,7 @@ class VendorPdfService {
           if (v.description != null && v.description!.isNotEmpty)
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 4),
-              child: pw.Text(v.description!,
+              child: pw.Text(_pdfSafe(v.description!),
                   style: const pw.TextStyle(fontSize: 9, color: _grey)),
             ),
           if (reasoning != null) ...[
@@ -257,7 +296,7 @@ class VendorPdfService {
                     fontSize: 9,
                     fontWeight: pw.FontWeight.bold,
                     color: _green)),
-            pw.Text(reasoning, style: const pw.TextStyle(fontSize: 9)),
+            pw.Text(_pdfSafe(reasoning), style: const pw.TextStyle(fontSize: 9)),
           ],
         ],
       ),
