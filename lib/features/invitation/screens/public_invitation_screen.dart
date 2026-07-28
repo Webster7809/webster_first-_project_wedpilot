@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -299,10 +300,20 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
     return Stack(
       children: [
         Positioned.fill(
-          child: Image.network(
-            resolveInvitationMediaUrl(backgroundImageUrl),
+          child: CachedNetworkImage(
+            imageUrl: resolveInvitationMediaUrl(backgroundImageUrl),
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => Container(color: AppColors.forestGreen),
+            memCacheWidth: 800,
+            placeholder: (context, url) => Container(
+              color: AppColors.forestGreen,
+              child: const Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            errorWidget: (context, url, error) => Container(color: AppColors.forestGreen),
           ),
         ),
         Positioned.fill(

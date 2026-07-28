@@ -1,10 +1,15 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/budget_class.dart';
 import '../models/vendor_profile.dart';
 import '../models/vendor_validation.dart';
 import '../core/services/budget_validation_service.dart';
 import '../core/services/couple_profile_service.dart';
+import '../core/services/guest_capacity_validation_service.dart';
 import '../core/services/location_validation_service.dart';
+import '../core/services/vendor_api_service.dart';
 import '../core/services/vendor_filtering_service.dart';
 import '../core/services/wedding_ai_service.dart';
 import '../core/utils/format_utils.dart';
@@ -15,6 +20,32 @@ import 'vendor_provider.dart';
 
 export '../models/budget_class.dart';
 export '../models/vendor_validation.dart';
+export '../core/services/wedding_ai_service.dart' show VendorMatchSuggestion;
+
+/// Stage-by-stage wall-clock timing for one matching run, printed as a
+/// single aligned block once the run finishes (debug builds only — see
+/// [_StageTimer.report]). Exists so a real slowdown can be *pinpointed*
+/// (network fetch vs. local filtering vs. the AI call itself) instead of
+/// guessed at — "matching feels slow" alone doesn't say which of those it is.
+class _StageTimer {
+  final _stopwatch = Stopwatch()..start();
+  final List<(String, int)> _laps = [];
+
+  void lap(String label) {
+    _laps.add((label, _stopwatch.elapsedMilliseconds));
+    _stopwatch.reset();
+  }
+
+  void report(String title) {
+    if (!kDebugMode) return;
+    final total = _laps.fold<int>(0, (sum, l) => sum + l.$2);
+    final buf = StringBuffer('[timing] $title — ${total}ms total\n');
+    for (final (label, ms) in _laps) {
+      buf.writeln('  ${label.padRight(24, '.')} ${ms}ms');
+    }
+    debugPrint(buf.toString().trimRight());
+  }
+}
 
 final budgetClassProvider =
     StateProvider<BudgetClass>((ref) => BudgetClass.flexible);
@@ -40,8 +71,24 @@ final wizardLocationProvider = StateProvider<String?>((ref) => null);
 /// still in flight, rather than the amount the couple just typed.
 final wizardBudgetProvider = StateProvider<double?>((ref) => null);
 
+/// Guest count entered by the couple in wizard Step 0 — takes priority over
+/// the saved profile's guestCount, same rationale as [wizardBudgetProvider]:
+/// the profile save is a fire-and-forget call that may still be in flight.
+final wizardGuestCountProvider = StateProvider<int?>((ref) => null);
+
 /// Style preferences chosen by the couple in wizard Step 2 — feeds the AI vendor matcher.
 final wizardStylesProvider = StateProvider<List<String>>((ref) => const []);
+
+/// AI-authored reasoning for the current top picks, keyed by category —
+/// starts empty and is filled in the background by [_backfillAiExplanations]
+/// well after [aiRecommendedVendorsProvider] has already returned its
+/// deterministic picks to the couple. The vendor-match cards in
+/// couple_planning_screen.dart merge an entry in here over the matching
+/// [VendorMatch]'s own deterministic reasoning once it arrives (see
+/// `_applyAiExplanation`) — a slow or failed AI call simply means a card
+/// keeps the reasoning it already shipped with, never a blocked result.
+final vendorMatchExplanationsProvider =
+    StateProvider<Map<String, VendorMatchSuggestion>>((ref) => const {});
 
 /// Gathers the couple's real budget/location/category context and runs the
 /// pre-AI validation pipeline: hard-stops when there's no real vendor data to
@@ -50,17 +97,17 @@ final wizardStylesProvider = StateProvider<List<String>>((ref) => const []);
 /// otherwise spends the budget down sequentially, category by category in
 /// the order requested, funding each from whatever's left until the money
 /// runs out (see Step 6 below). A non-null [VendorValidationResult.blockingFailure]
-/// means neither the vendor-matching AI nor the wedding-plan/budget-advice AI
-/// may run — both [aiRecommendedVendorsProvider] and the wizard's
-/// `_loadWeddingAiPlan` gate on this same result so a couple never sees one
-/// AI-generated allocation blocked and another one silently produced anyway.
+/// means the vendor-matching AI must never run — [aiRecommendedVendorsProvider]
+/// gates on this result before calling it.
 final vendorMatchValidationProvider =
     FutureProvider<VendorValidationResult>((ref) async {
+  final timer = _StageTimer();
   final budgetClass = ref.watch(budgetClassProvider);
   final categories = ref.watch(selectedServiceCategoriesProvider);
   final coupleProfile = ref.watch(coupleProfileProvider);
   final wizardLocation = ref.watch(wizardLocationProvider);
   final wizardBudget = ref.watch(wizardBudgetProvider);
+  final wizardGuestCount = ref.watch(wizardGuestCountProvider);
   final savedBudget = ref.watch(budgetProvider).data;
 
   final enteredBudget = (wizardBudget != null && wizardBudget > 0)
@@ -73,12 +120,33 @@ final vendorMatchValidationProvider =
   final locationString = (wizardLocation != null && wizardLocation.isNotEmpty)
       ? wizardLocation
       : coupleProfile?.location;
+  final guestCount = (wizardGuestCount != null && wizardGuestCount > 0)
+      ? wizardGuestCount
+      : coupleProfile?.guestCount;
+  timer.lap('Input validation');
 
-  final allVendors = await ref.watch(allVendorsProvider.future);
+  // Fetches only the couple's requested categories, filtered at the DB query
+  // level (see routes/vendors.js's category_in) — not [allVendorsProvider],
+  // which pages through *every* vendor in *every* category. That full-table
+  // fetch is what made matching visibly slower as the vendor pool grew: a
+  // couple who picked 5 categories was still paying for every page of every
+  // other category too, only to discard them a moment later in
+  // VendorFilteringService.filterEligible. Scoping the fetch itself keeps
+  // both the DB scan and the network payload proportional to what this
+  // couple actually asked for.
+  final token = ref.watch(authProvider.notifier).accessToken;
+  final allVendors = token == null
+      ? const <VendorProfile>[]
+      : await VendorApiService.instance.fetchAllVendors(
+          token,
+          categories: categories.isEmpty ? null : categories,
+        );
+  timer.lap('Database fetch (${allVendors.length} vendors)');
 
   // Step 1 — filter by category, then hard-restrict to the couple's location.
   final eligible = VendorFilteringService.filterEligible(allVendors, categories);
   final locationPool = VendorFilteringService.restrictToLocation(eligible.pool, locationString);
+  timer.lap('Category + location filtering');
 
   // Step 2 — a location with literally nobody in it, across every requested
   // category, is a whole-plan stop: there's nothing real to build a plan from.
@@ -87,6 +155,7 @@ final vendorMatchValidationProvider =
     location: locationString,
   );
   if (locationFailure != null) {
+    timer.report('Vendor validation pipeline (blocked: no vendors in location)');
     return VendorValidationResult(blockingFailure: locationFailure);
   }
 
@@ -100,12 +169,43 @@ final vendorMatchValidationProvider =
     location: locationString,
   );
 
+  // Step 3b — per-category guest-capacity coverage. Runs before budget
+  // funding so a caterer too small for the party is invisible to it from
+  // the start — see GuestCapacityValidationService for why this stays a
+  // separate, price-blind stage rather than folding into budget messaging.
+  final capacityChecked = GuestCapacityValidationService.validate(
+    byCategory: coverage.covered,
+    guestCount: guestCount,
+    location: locationString,
+  );
+  timer.lap('Coverage + guest-capacity filtering');
+
+  // Step 3c — whole-plan stop: every category that had real vendors in the
+  // couple's location lost every single one of them to the capacity check
+  // above, so there's nothing left anywhere to build a plan from. Distinct
+  // from Step 2's location check (there were vendors here, just none big
+  // enough) and never raised when coverage.covered was already empty for
+  // location reasons — that's Step 2's failure to report, not this one's.
+  if (coverage.covered.isNotEmpty && capacityChecked.covered.isEmpty) {
+    timer.report('Vendor validation pipeline (blocked: no vendor meets guest capacity)');
+    return VendorValidationResult(
+      blockingFailure: const VendorValidationFailure(
+        type: VendorValidationFailureType.noVendorCapacityForGuestCount,
+        message:
+            'No vendors in your selected location can currently accommodate your wedding size. '
+            'Please reduce the number of guests, choose another location, or wait for more '
+            'vendors to become available.',
+      ),
+    );
+  }
+
   // Step 4 — prefer the couple's wedding-class rating band within each
   // category (High class → 4.5★+, Budget-friendly → under 4.5★ or unrated,
   // Flexible → either), falling back to the full category when nobody
   // matches so a class preference never empties out a category.
   final ratedByCategory =
-      VendorFilteringService.preferredByWeddingClass(coverage.covered, budgetClass);
+      VendorFilteringService.preferredByWeddingClass(capacityChecked.covered, budgetClass);
+  timer.lap('Wedding-class filtering');
 
   // Every affordability figure below uses the class-adjusted price: High
   // Class budgets against the premium end of each vendor (their luxury
@@ -123,6 +223,7 @@ final vendorMatchValidationProvider =
     final cheapestOverall =
         pricedPool.map(priceOf).reduce((a, b) => a < b ? a : b);
     if (enteredBudget < cheapestOverall) {
+      timer.report('Vendor validation pipeline (blocked: budget too low)');
       return VendorValidationResult(
         blockingFailure: VendorValidationFailure(
           type: VendorValidationFailureType.budgetTooLowForAnyVendor,
@@ -162,8 +263,11 @@ final vendorMatchValidationProvider =
       ? coupleProfile!.weddingDate!.toIso8601String().split('T').first
       : null;
 
-  final fundableCategories =
-      categories.where((c) => !coverage.excludedMessages.containsKey(c)).toList();
+  final fundableCategories = categories
+      .where((c) =>
+          !coverage.excludedMessages.containsKey(c) &&
+          !capacityChecked.excludedMessages.containsKey(c))
+      .toList();
 
   // The cheapest real, priced vendor on file in each category — the floor
   // both the initial funding check and every later rescue/downgrade measure
@@ -306,6 +410,8 @@ final vendorMatchValidationProvider =
           .where((v) => priceOf(v) <= 0 || priceOf(v) <= ceilings[cat]!)
           .toList(),
   };
+  timer.lap('Budget funding (sequential + rescue + polish)');
+  timer.report('Vendor validation pipeline');
 
   return VendorValidationResult(
     byCategory: fundedByCategory,
@@ -313,18 +419,20 @@ final vendorMatchValidationProvider =
     categoryBudgets: ceilings,
     excludedCategoryMessages: coverage.excludedMessages,
     budgetExhaustedMessages: exhaustedMessages,
-    enteredBudget: enteredBudget,
+    guestCapacityExcludedMessages: capacityChecked.excludedMessages,
   );
 });
 
 final aiRecommendedVendorsProvider =
     FutureProvider<List<VendorMatch>>((ref) async {
+  final timer = _StageTimer();
   final budgetClass = ref.watch(budgetClassProvider);
   final coupleProfile = ref.watch(coupleProfileProvider);
   final wizardLocation = ref.watch(wizardLocationProvider);
   final wizardStyles = ref.watch(wizardStylesProvider);
 
   final validation = await ref.watch(vendorMatchValidationProvider.future);
+  timer.lap('Validation pipeline (breakdown logged separately above)');
   if (validation.isBlocked) {
     throw VendorValidationException(validation.blockingFailure!);
   }
@@ -344,34 +452,18 @@ final aiRecommendedVendorsProvider =
 
   final scored = _AiEngine.scoreAll(pool, budgetClass, coords?[0], coords?[1],
       weddingDateStr, categoryBudgets, tiers);
-  final localFallback = _AiEngine.recommend(
+  // This deterministic ranking is now the sole decision-maker for which
+  // vendor wins each category — see `_AiEngine._finalScore`. It's already
+  // scored against the exact same per-category ledger the sequential
+  // funding pass used to decide how much each category could spend, so its
+  // picks can never sum past what the couple entered; no AI-divergence
+  // safety net is needed the way one was when the AI could still pick.
+  final matches = _AiEngine.recommend(
       pool: pool,
       scored: scored,
       budgetClass: budgetClass,
       styles: wizardStyles);
-
-  final List<VendorMatch> rawMatches;
-  if (scored.isEmpty) {
-    rawMatches = localFallback;
-  } else {
-    rawMatches = await _matchWithAi(scored, localFallback, budgetClass,
-        locationString, wizardStyles, categoryBudgets);
-  }
-
-  // The sequential per-category ledger (categoryBudgets, built above in
-  // vendorMatchValidationProvider) deducts each category's *local* scoring
-  // pick before the real AI is ever consulted — the AI is only ever shown
-  // candidates already within its own category's ledger amount, so any
-  // single pick it makes is individually safe. But if the AI's actual
-  // choice for a category legitimately differs from what the ledger
-  // assumed would be spent there, the next category's "remaining" can end
-  // up more generous than the couple's true remaining money, and the real
-  // total (summed across the AI's actual picks) can creep past what they
-  // entered. Re-verify that here and fall back entirely to the local
-  // ranking — built from that exact same ledger, so its picks can never
-  // diverge from it — if the AI's real total would exceed the budget.
-  final matches = _AiEngine.enforceTotalBudgetCeiling(
-      rawMatches, localFallback, budgetClass, validation.enteredBudget);
+  timer.lap('Local scoring + ranking (${scored.length} vendors)');
 
   // Neither the local ranking nor the LLM ever refuses to name a "best" pick
   // — but a pick that's merely the closest available option isn't the same
@@ -391,73 +483,86 @@ final aiRecommendedVendorsProvider =
       realisticMatches, scored, budgetClass, wizardStyles);
 
   // Only ever one card per category, in every budget class — no "Alternative
-  // #2/#3" comparison. The AI-match path already returns just the winner,
-  // but the local-fallback ranking (used when scored is empty, the AI call
-  // fails, or enforceTotalBudgetCeiling rejects the AI's total) hands back a
-  // FULL per-category ranking, so this is the one place that guarantees only
-  // rankInCategory == 1 ever reaches the couple regardless of which path
-  // produced the match.
+  // #2/#3" comparison. `finalMatches` is a FULL per-category ranking, so
+  // this is the one place that guarantees only rankInCategory == 1 ever
+  // reaches the couple.
   final topPicksOnly =
       finalMatches.where((m) => m.rankInCategory == 1).toList();
+  timer.lap('Post-processing (budget/realism/allocation passes)');
+  timer.report('Vendor matches (${topPicksOnly.length} picks — AI reasoning loads in background)');
 
-  await _syncTopMatches(ref, topPicksOnly);
+  // Both calls below are fire-and-forget: the couple already has their
+  // matches by the time either one resolves, and neither is allowed to add
+  // a network round-trip to the critical path. _syncTopMatches is a
+  // best-effort backend sync (see its own doc comment). The explanation
+  // backfill asks the AI to write human-readable justification for the
+  // picks already decided above — a slow or failed response just means a
+  // card keeps the deterministic reasoning it already shipped with.
+  unawaited(_syncTopMatches(ref, topPicksOnly));
+  unawaited(_backfillAiExplanations(
+      ref, topPicksOnly, scored, budgetClass, locationString, wizardStyles, categoryBudgets));
   return topPicksOnly;
 });
 
-Future<List<VendorMatch>> _matchWithAi(
+/// Background-only: asks the AI to write reasoning for the categories whose
+/// top pick actually changed since the last successful explanation (skips
+/// the rest — no reason to spend a call on the shared, rate-limited free-tier
+/// key re-explaining a vendor it already wrote about). Never awaited by
+/// [aiRecommendedVendorsProvider] — see that provider's return statement.
+Future<void> _backfillAiExplanations(
+  Ref ref,
+  List<VendorMatch> topPicksOnly,
   List<_ScoredVendor> scored,
-  List<VendorMatch> localFallback,
   BudgetClass budgetClass,
   String? locationString,
   List<String> wizardStyles,
   Map<String, double> categoryBudgets,
 ) async {
+  final alreadyExplained = ref.read(vendorMatchExplanationsProvider);
+  final scoredByVendorId = {for (final s in scored) s.vendor.id: s};
+
+  final picks = <String, VendorMatchCandidate>{};
+  for (final m in topPicksOnly) {
+    if (alreadyExplained[m.vendor.category]?.vendorId == m.vendorId) continue;
+    final s = scoredByVendorId[m.vendorId];
+    if (s == null) continue;
+    picks[m.vendor.category] = VendorMatchCandidate(
+      vendorId: s.vendor.id,
+      businessName: s.vendor.businessName,
+      location: s.vendor.location,
+      styleTags: s.vendor.styleTags,
+      rating: s.vendor.rating,
+      feedbackCount: s.vendor.feedbackCount,
+      priceTier: s.priceTier.name,
+      priceMin: s.effectivePrice,
+      priceMax: s.vendor.priceMax > s.effectivePrice ? s.vendor.priceMax : s.effectivePrice,
+      reputationScore: s.reputation,
+      locationScore: s.location,
+      valueScore: s.value,
+      isBookedOnWeddingDate: s.isBookedOnWeddingDate,
+    );
+  }
+  if (picks.isEmpty) return;
+
+  final sw = Stopwatch()..start();
   try {
-    final suggestions = await WeddingAiService.instance.matchVendors(
+    final suggestions = await WeddingAiService.instance.explainVendorMatches(
       budgetClass: budgetClass.name,
       location: locationString,
       styles: wizardStyles,
-      categorized: _AiEngine.buildCandidates(scored),
+      picks: picks,
       categoryBudgets: categoryBudgets,
     );
-
-    final requestedCategories = scored.map((s) => s.vendor.category).toSet();
-    final valid = requestedCategories.every((cat) {
-      final sug = suggestions[cat];
-      return sug != null &&
-          scored.any((s) => s.vendor.category == cat && s.vendor.id == sug.vendorId);
-    });
-    if (!valid) return localFallback;
-
-    final catCounts = <String, int>{
-      for (final cat in requestedCategories)
-        cat: scored.where((s) => s.vendor.category == cat).length,
+    ref.read(vendorMatchExplanationsProvider.notifier).state = {
+      ...ref.read(vendorMatchExplanationsProvider),
+      ...suggestions,
     };
-
-    final results = <VendorMatch>[];
-    for (final entry in suggestions.entries) {
-      final match = scored.firstWhere((s) => s.vendor.id == entry.value.vendorId);
-      results.add(VendorMatch(
-        vendorId: match.vendor.id,
-        vendor: match.vendor,
-        finalScore: entry.value.confidence,
-        reputationScore: match.reputation,
-        budgetScore: match.value,
-        locationScore: match.location,
-        availabilityScore: 1.0,
-        reasoning: entry.value.reasoning,
-        reasoningSteps: entry.value.reasoningSteps,
-        rankInCategory: 1,
-        totalInCategory: catCounts[entry.key] ?? 1,
-        fitsBudget: entry.value.fitsBudget,
-        budgetDeltaPercent: entry.value.budgetDeltaPercent,
-        selectionBasis: entry.value.selectionBasis,
-        noteToCouple: entry.value.noteToCouple,
-      ));
+    if (kDebugMode) {
+      debugPrint(
+          '[timing] AI explanation backfill (${picks.length}/${topPicksOnly.length} categories) — ${sw.elapsedMilliseconds}ms');
     }
-    return results;
   } catch (_) {
-    return localFallback;
+    // Best-effort — cards keep the deterministic reasoning they already have.
   }
 }
 
@@ -540,38 +645,12 @@ class _AiEngine {
     }).toList();
   }
 
-  /// Groups scored vendors by category into request DTOs for the AI matcher.
-  static Map<String, List<VendorMatchCandidate>> buildCandidates(
-    List<_ScoredVendor> scored,
-  ) {
-    final byCategory = <String, List<VendorMatchCandidate>>{};
-    for (final s in scored) {
-      final v = s.vendor;
-      byCategory.putIfAbsent(v.category, () => []).add(
-            VendorMatchCandidate(
-              vendorId: v.id,
-              businessName: v.businessName,
-              location: v.location,
-              styleTags: v.styleTags,
-              rating: v.rating,
-              feedbackCount: v.feedbackCount,
-              priceTier: s.priceTier.name,
-              // The class-adjusted price (premium end for High Class) — the
-              // backend computes its budget-fit wording from priceMin, so it
-              // must see the same figure the local pipeline budgets with.
-              priceMin: s.effectivePrice,
-              priceMax: v.priceMax > s.effectivePrice ? v.priceMax : s.effectivePrice,
-              reputationScore: s.reputation,
-              locationScore: s.location,
-              valueScore: s.value,
-              isBookedOnWeddingDate: s.isBookedOnWeddingDate,
-            ),
-          );
-    }
-    return byCategory;
-  }
-
-  /// Local, deterministic ranking — cannot throw. Used as the LLM fallback.
+  /// Local, deterministic ranking — cannot throw, and is now the sole
+  /// decision-maker for which vendor wins each category (see
+  /// `aiRecommendedVendorsProvider`). The AI is never asked to choose
+  /// between candidates anymore, only to explain a pick already made here —
+  /// see `_backfillAiExplanations`, which builds a single [VendorMatchCandidate]
+  /// per category directly from this ranking's winner.
   static List<VendorMatch> recommend({
     required List<VendorProfile> pool,
     required List<_ScoredVendor> scored,
@@ -638,38 +717,10 @@ class _AiEngine {
     );
   }
 
-  /// Final cross-category safety net: verifies the officially-chosen (rank
-  /// 1) picks, summed in category order using each vendor's own
-  /// class-adjusted price, never add up to more than [enteredBudget] —
-  /// see the call site in `aiRecommendedVendorsProvider` for why an
-  /// AI-sourced pick, though always individually within its own category's
-  /// ledger amount, can still cause the *true total* to creep past budget.
-  /// [localFallback] is guaranteed safe by construction (it's scored with
-  /// the exact same per-category ledger the sequential funding pass itself
-  /// used to decide how much each category could spend), so that's the
-  /// fallback the couple sees instead — never a plan that spends more than
-  /// they have.
-  static List<VendorMatch> enforceTotalBudgetCeiling(
-    List<VendorMatch> matches,
-    List<VendorMatch> localFallback,
-    BudgetClass budgetClass,
-    double enteredBudget,
-  ) {
-    if (enteredBudget <= 0) return matches;
-    final totalSpend = matches
-        .where((m) => m.rankInCategory == 1)
-        .fold<double>(0, (sum, m) => sum + m.vendor.priceForClass(budgetClass));
-    // A small epsilon guards against floating-point rounding flagging a
-    // plan that, in real terms, spends exactly what was entered.
-    if (totalSpend <= enteredBudget + 0.01) return matches;
-    return localFallback;
-  }
-
-  /// Re-grounds every category's top pick in what's actually affordable,
-  /// regardless of whether it came from the LLM (one entry per category) or
-  /// the local fallback (a fully ranked list) — both paths only ever hand
-  /// back "the best of what's there", so this is the one place that checks
-  /// whether "what's there" was ever realistic for the money entered.
+  /// Re-grounds every category's top pick in what's actually affordable.
+  /// [matches] only ever hands back "the best of what's there" among the
+  /// pool it was scored from, so this is the one place that checks whether
+  /// "what's there" was ever realistic for the money entered.
   ///
   /// Only [rankInCategory] == 1 is ever read by the UI (see
   /// [couple_planning_screen.dart]'s `bestByCategory`), so lower ranks are

@@ -69,4 +69,14 @@ class AppConstants {
   static const int maxPortfolioVideos = 5;
   static const int maxFileUploadMB = 10;
   static const int rsvpReminderCooldownSeconds = 60;
+
+  /// Sanity ceiling for any guest count entered anywhere in the app — a
+  /// couple's wedding size (couple_planning_screen.dart) and a vendor's
+  /// stated service capacity (vendor_listings_screen.dart) alike. No real
+  /// Wedpilot vendor states anywhere near this many guests, so this exists
+  /// purely to reject fat-finger entries (an extra zero, a pasted phone
+  /// number) before they ever reach vendor-capacity matching. Mirrored
+  /// server-side in backend/routes/vendors.js and coupleProfile.js — keep
+  /// both in sync if this changes.
+  static const int maxRealisticGuestCount = 20000;
 }

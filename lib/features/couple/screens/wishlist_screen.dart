@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/vendor_provider.dart';
+import '../../../widgets/vendor_hero_image.dart';
 import '../../../widgets/wed_button.dart';
 
 class WishlistScreen extends ConsumerWidget {
@@ -74,12 +74,16 @@ class _WishlistItem extends ConsumerWidget {
           contentPadding: const EdgeInsets.all(12),
           leading: ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: Container(
-              width: 56, height: 56,
-              color: AppColors.primary.withAlpha(77),
-              child: vendor.logoUrl != null
-                  ? Image.network(resolveMediaUrl(vendor.logoUrl!), fit: BoxFit.cover)
-                  : const Center(child: Text('📷', style: TextStyle(fontSize: 24))),
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: VendorHeroImage(
+                vendor: vendor,
+                height: 56,
+                memCacheWidth: 112,
+                single: true,
+                showBadge: false,
+              ),
             ),
           ),
           title: Text(vendor.businessName, style: AppTextStyles.titleMedium),

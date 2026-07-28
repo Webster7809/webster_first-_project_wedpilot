@@ -1,6 +1,7 @@
 ﻿import 'dart:async' show unawaited;
 import 'dart:math' show min;
 import 'dart:typed_data';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -288,7 +289,7 @@ class _InvitationEditorScreenState
 
   Future<void> _pickImageFromFiles() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'bmp', 'gif'],
         withData: true,
@@ -1643,10 +1644,24 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
                               fit: BoxFit.fitWidth,
                               alignment: Alignment.center,
                             )
-                          : Image.network(
-                              resolveInvitationMediaUrl(widget.backgroundImageUrl!),
+                          : CachedNetworkImage(
+                              imageUrl: resolveInvitationMediaUrl(widget.backgroundImageUrl!),
                               fit: BoxFit.fitWidth,
                               alignment: Alignment.center,
+                              memCacheWidth: 800,
+                              placeholder: (context, url) => Container(
+                                color: AppColors.creamDark,
+                                child: const Center(
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: AppColors.creamDark,
+                                child: const Icon(
+                                  Icons.broken_image_outlined,
+                                  color: AppColors.textHint,
+                                ),
+                              ),
                             ),
                     ),
                   ),

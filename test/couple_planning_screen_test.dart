@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:wed_plan_pilot/core/services/wedding_ai_service.dart';
 import 'package:wed_plan_pilot/core/state/resource.dart';
 import 'package:wed_plan_pilot/features/auth/screens/couple_planning_screen.dart';
 import 'package:wed_plan_pilot/models/budget.dart';
@@ -272,6 +273,11 @@ Future<void> _pumpWizardToReviewStep(
   String? weddingClass,
   BudgetNotifier Function(Ref ref)? budgetNotifierBuilder,
 }) async {
+  // See resetQueueForTests' doc comment: WeddingAiService.instance's call
+  // queue is a real singleton Future chain that must be reset from inside
+  // *this* test's own zone (not from setUp, which runs in a different one)
+  // or every AI-reaching test after the first in this file starves forever.
+  WeddingAiService.instance.resetQueueForTests();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -351,6 +357,11 @@ Future<void> _pumpWizardToReviewStep(
 /// the checklist of built-in/vendor-registered categories (see
 /// `_CategoryChecklist`). Nothing here exercises that anymore.
 Future<void> _runWizardFlow(WidgetTester tester) async {
+  // See resetQueueForTests' doc comment: WeddingAiService.instance's call
+  // queue is a real singleton Future chain that must be reset from inside
+  // *this* test's own zone (not from setUp, which runs in a different one)
+  // or every AI-reaching test after the first in this file starves forever.
+  WeddingAiService.instance.resetQueueForTests();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [

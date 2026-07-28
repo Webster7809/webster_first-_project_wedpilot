@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class WedTextField extends StatefulWidget {
   final String label;
@@ -21,6 +22,7 @@ class WedTextField extends StatefulWidget {
   final bool autofocus;
   final FocusNode? focusNode;
   final void Function(String)? onFieldSubmitted;
+  final List<TextInputFormatter>? inputFormatters;
 
   const WedTextField({
     super.key,
@@ -44,6 +46,7 @@ class WedTextField extends StatefulWidget {
     this.autofocus = false,
     this.focusNode,
     this.onFieldSubmitted,
+    this.inputFormatters,
   });
 
   @override
@@ -60,6 +63,7 @@ class _WedTextFieldState extends State<WedTextField> {
       focusNode: widget.focusNode,
       obscureText: widget.isPassword && _obscure,
       keyboardType: widget.keyboardType,
+      inputFormatters: widget.inputFormatters,
       validator: widget.validator,
       onChanged: widget.onChanged,
       onFieldSubmitted: widget.onFieldSubmitted,

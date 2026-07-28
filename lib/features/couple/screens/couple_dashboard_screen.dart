@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_dimensions.dart';
+import '../../../models/vendor_profile.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/budget_provider.dart';
 import '../../../providers/invitation_provider.dart';
@@ -16,6 +15,7 @@ import '../../../providers/notification_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../widgets/hamburger_menu_button.dart';
+import '../../../widgets/vendor_hero_image.dart';
 
 class CoupleDashboardScreen extends ConsumerWidget {
   const CoupleDashboardScreen({super.key});
@@ -211,11 +211,6 @@ class CoupleDashboardScreen extends ConsumerWidget {
       ),
     );
   }
-}
-
-String _categoryEmoji(String category) {
-  final i = AppConstants.vendorCategories.indexOf(category);
-  return i >= 0 ? AppConstants.vendorCategoryIcons[i] : '💍';
 }
 
 String _coupleDisplayName(String? name1, String? name2) {
@@ -1069,28 +1064,16 @@ class _ShortlistCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
+              SizedBox(
                 height: 92,
                 width: double.infinity,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.creamDark, AppColors.cream],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                child: VendorHeroImage(
+                  vendor: vendor as VendorProfile,
+                  height: 92,
+                  memCacheWidth: 300,
+                  single: true,
+                  showBadge: false,
                 ),
-                child: vendor.logoUrl != null
-                    ? Image.network(
-                        resolveMediaUrl(vendor.logoUrl as String),
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      )
-                    : Center(
-                        child: Text(
-                          _categoryEmoji(vendor.category as String),
-                          style: const TextStyle(fontSize: 30),
-                        ),
-                      ),
               ),
               Expanded(
                 child: Padding(

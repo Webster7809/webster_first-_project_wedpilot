@@ -9,6 +9,12 @@ const { makeUploader, relativeUploadUrl } = require('../middleware/upload');
 const router = express.Router();
 const photoUploader = makeUploader('couples', { allowedMimePrefixes: ['image/'], maxSizeMb: 10 });
 
+// Sanity ceiling for a couple's stated guest count — mirrors
+// AppConstants.maxRealisticGuestCount on the Flutter side. Rejects
+// fat-finger entries (an extra zero, a pasted phone number) server-side too,
+// independent of whatever client validation ran.
+const MAX_REALISTIC_GUEST_COUNT = 20000;
+
 function requireCoupleRole(req, res, next) {
   if (req.user.role !== 'couple') {
     return res.status(403).json({ error: 'Only couple accounts can access this resource.' });
@@ -62,8 +68,11 @@ router.put('/profile', verifyJwt, requireCoupleRole, async (req, res) => {
     photo_url,
   } = req.body;
 
-  if (guest_count != null && (!Number.isInteger(guest_count) || guest_count < 0)) {
-    return res.status(400).json({ error: 'guest_count must be a non-negative integer.' });
+  if (guest_count != null && (!Number.isInteger(guest_count) || guest_count < 0 ||
+      guest_count > MAX_REALISTIC_GUEST_COUNT)) {
+    return res.status(400).json({
+      error: `guest_count must be a non-negative integer no greater than ${MAX_REALISTIC_GUEST_COUNT}.`,
+    });
   }
   if (total_budget != null && (typeof total_budget !== 'number' || total_budget < 0)) {
     return res.status(400).json({ error: 'total_budget must be a non-negative number.' });

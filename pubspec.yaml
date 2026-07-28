@@ -61,9 +61,6 @@ dependencies:
   # Notifications
   flutter_local_notifications: ^18.0.1
 
-  # Responsive layout
-  flutter_screenutil: ^5.9.3
-
   # Calendar
   table_calendar: ^3.1.2
 
@@ -72,7 +69,7 @@ dependencies:
   printing: ^5.13.2
 
   # File picker
-  file_picker: ^8.1.4
+  file_picker: ^11.0.2
 
   # Shimmer loading effect
   shimmer: ^3.0.0
@@ -93,11 +90,32 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.6
 
 flutter:
   uses-material-design: true
 
-  assets:
-    - assets/images/
-    - assets/icons/
-    - assets/animations/
+# Placeholder branding generated from AppColors — swap assets/icon/*.png for real
+# artwork later and rerun: dart run flutter_launcher_icons && dart run flutter_native_splash:create
+flutter_launcher_icons:
+  android: true
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#1B3A2D"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    background_color: "#1B3A2D"
+    theme_color: "#1B3A2D"
+
+flutter_native_splash:
+  color: "#F5EFE6"
+  image: assets/icon/splash_logo_light.png
+  color_dark: "#111318"
+  image_dark: assets/icon/icon_foreground.png
+  android_12:
+    image: assets/icon/splash_logo_light.png
+    icon_background_color: "#F5EFE6"
+    image_dark: assets/icon/icon_foreground.png
+    icon_background_color_dark: "#111318"

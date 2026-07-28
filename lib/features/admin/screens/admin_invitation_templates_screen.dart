@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
@@ -13,12 +14,25 @@ class AdminInvitationTemplatesScreen extends ConsumerWidget {
     if (template.previewUrl.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: Image.network(
-          template.previewUrl,
+        child: CachedNetworkImage(
+          imageUrl: template.previewUrl,
           width: 80,
           height: 80,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => Container(
+          memCacheWidth: 160,
+          placeholder: (context, url) => Container(
+            width: 80,
+            height: 80,
+            color: AppColors.adminNeutralBg,
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ),
+          errorWidget: (context, url, error) => Container(
             width: 80,
             height: 80,
             color: AppColors.adminNeutralBg,

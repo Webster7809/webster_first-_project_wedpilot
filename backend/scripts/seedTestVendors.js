@@ -1,3 +1,8 @@
+// DEV-ONLY — NEVER RUN AGAINST A PRODUCTION DB_NAME.
+// Creates ~40 fictional vendors (`.test` email domains) and fabricated
+// reviews/ratings purely to exercise AI matching locally. See
+// backend/README.md for the full dev-vs-real-data distinction.
+//
 // One-off dev seeding script — creates 7 test vendors per category with
 // deliberately spread price ranges (budget/mid/luxury) so budget-based AI
 // matching can be exercised manually. A subset per category (goodReputation:
@@ -69,6 +74,7 @@ const VENDORS = [
     price_min: 5000,
     price_max: 9000,
     unit: 'per event',
+    max_guests: 200,
   },
   {
     email: 'info@signaturefeastcatering.test',
@@ -137,6 +143,7 @@ const VENDORS = [
     price_min: 3500,
     price_max: 7000,
     unit: 'per event',
+    max_guests: 150,
   },
   {
     email: 'book@kitwegardenhall.test',
@@ -180,6 +187,7 @@ const VENDORS = [
     price_min: 4000,
     price_max: 8000,
     unit: 'per event',
+    max_guests: 250,
   },
   {
     email: 'info@ndolaelegantEats.test',
@@ -804,6 +812,42 @@ const VENDORS = [
   },
 ];
 
+// [minCapacity, maxCapacity] per category, mirroring backfillGuestCapacity.js.
+// A flat per-category number would make every vendor in a category tie on
+// guest capacity, which defeats the point of testing it as a matching
+// signal — scaling by price within the category (cheaper package → lower
+// end, pricier → higher end) gives each vendor a genuinely different value,
+// the same way price already varies per vendor above.
+const CATEGORY_GUEST_RANGES = {
+  Catering: [80, 500],
+  'Tent Hire': [100, 800],
+  Photography: [50, 400],
+  Decoration: [80, 600],
+  Venue: [100, 800],
+};
+const DEFAULT_GUEST_RANGE = [50, 300];
+const roundToStep = (n, step = 25) => Math.round(n / step) * step;
+
+// Only vendors above without an explicit max_guests get a computed one —
+// precomputed once per category so scaling is relative to the other
+// vendors actually in that category, not just this one vendor in isolation.
+const computedGuestCapacity = new Map();
+{
+  const byCategory = {};
+  for (const v of VENDORS) {
+    if (v.max_guests != null) continue;
+    (byCategory[v.category] ??= []).push(v);
+  }
+  for (const [category, vendors] of Object.entries(byCategory)) {
+    const [minCapacity, maxCapacity] = CATEGORY_GUEST_RANGES[category] ?? DEFAULT_GUEST_RANGE;
+    const ranked = [...vendors].sort((a, b) => (a.price_min + a.price_max) - (b.price_min + b.price_max));
+    ranked.forEach((v, i) => {
+      const position = ranked.length === 1 ? 0.5 : i / (ranked.length - 1);
+      computedGuestCapacity.set(v, roundToStep(minCapacity + position * (maxCapacity - minCapacity)));
+    });
+  }
+}
+
 // Reusable pool of couple accounts that "book" every goodReputation vendor —
 // small and shared across vendors since VendorFeedback's uniqueness is per
 // (couple, vendor) pair, not global.
@@ -928,6 +972,7 @@ async function main() {
       price_min: v.price_min,
       price_max: v.price_max,
       unit: v.unit,
+      max_guests: v.max_guests ?? computedGuestCapacity.get(v) ?? 150,
     });
 
     console.log(`Created ${v.business_name} (${v.category}, ${v.price_min}-${v.price_max} ZMW) — login: ${v.email} / ${TEST_PASSWORD}`);

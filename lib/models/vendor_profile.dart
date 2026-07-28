@@ -1,4 +1,5 @@
 import '../core/utils/enum_utils.dart';
+import '../core/utils/json_utils.dart';
 import 'budget_class.dart';
 
 enum VerificationStatus { pending, verified, rejected }
@@ -195,12 +196,30 @@ class VendorProfile {
     return priceMin;
   }
 
+  /// Whether this vendor has a registered service that can seat [guestCount].
+  /// A vendor with no services yet, or whose services never stated a
+  /// capacity (only possible for legacy pre-migration rows — see
+  /// [VendorService.maxGuests]), is never excluded by this: unknown capacity
+  /// is treated as neutral, the same way an unpriced vendor is neither
+  /// "cheap" nor "expensive" elsewhere in matching (see _valueScore).
+  bool canServeGuestCount(int guestCount) =>
+      services.isEmpty ||
+      services.any((s) => s.maxGuests == null || s.maxGuests! >= guestCount);
+
+  /// The largest stated guest capacity across this vendor's listings, for
+  /// display only (e.g. "Can serve up to: N guests"). Null when the vendor
+  /// has no services yet, or none of them have stated a capacity.
+  int? get maxGuestCapacity {
+    final stated = services.map((s) => s.maxGuests).whereType<int>();
+    return stated.isEmpty ? null : stated.reduce((a, b) => a > b ? a : b);
+  }
+
   factory VendorProfile.fromJson(Map<String, dynamic> json) => VendorProfile(
-        id: json['vendor_id'] as String,
-        userId: json['user_id'] as String,
-        businessName: json['business_name'] as String,
+        id: requireString(json, 'vendor_id'),
+        userId: requireString(json, 'user_id'),
+        businessName: requireString(json, 'business_name'),
         description: json['description'] as String?,
-        category: json['category'] as String,
+        category: requireString(json, 'category'),
         location: json['location'] as String?,
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
@@ -336,6 +355,14 @@ class VendorService {
   final String unit;
   final bool isActive;
 
+  /// Maximum guests this package can serve — mandatory on every listing
+  /// across every category (see _ServiceFormSheet). Nullable purely to model
+  /// legacy rows created before this field was required (see
+  /// backend/scripts/backfillGuestCapacity.js); matching treats a null here
+  /// as neutral, not a rejection, so an un-migrated row is never wrongly
+  /// excluded.
+  final int? maxGuests;
+
   const VendorService({
     required this.id,
     required this.vendorId,
@@ -345,6 +372,7 @@ class VendorService {
     required this.priceMax,
     required this.unit,
     this.isActive = true,
+    this.maxGuests,
   });
 
   VendorService copyWith({
@@ -354,6 +382,7 @@ class VendorService {
     double? priceMax,
     String? unit,
     bool? isActive,
+    int? maxGuests,
   }) => VendorService(
         id: id,
         vendorId: vendorId,
@@ -363,17 +392,19 @@ class VendorService {
         priceMax: priceMax ?? this.priceMax,
         unit: unit ?? this.unit,
         isActive: isActive ?? this.isActive,
+        maxGuests: maxGuests ?? this.maxGuests,
       );
 
   factory VendorService.fromJson(Map<String, dynamic> json) => VendorService(
-        id: json['service_id'] as String,
-        vendorId: json['vendor_id'] as String,
-        title: json['title'] as String,
+        id: requireString(json, 'service_id'),
+        vendorId: requireString(json, 'vendor_id'),
+        title: requireString(json, 'title'),
         description: json['description'] as String?,
-        priceMin: (json['price_min'] as num).toDouble(),
-        priceMax: (json['price_max'] as num).toDouble(),
+        priceMin: requireNum(json, 'price_min').toDouble(),
+        priceMax: requireNum(json, 'price_max').toDouble(),
         unit: json['unit'] as String? ?? 'package',
         isActive: json['is_active'] as bool? ?? true,
+        maxGuests: (json['max_guests'] as num?)?.toInt(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -385,6 +416,7 @@ class VendorService {
         'price_max': priceMax,
         'unit': unit,
         'is_active': isActive,
+        'max_guests': maxGuests,
       };
 }
 
@@ -426,10 +458,10 @@ class VendorMedia {
   bool get isVideo => type == 'video';
 
   factory VendorMedia.fromJson(Map<String, dynamic> json) => VendorMedia(
-        id: json['media_id'] as String,
-        vendorId: json['vendor_id'] as String,
-        type: json['type'] as String,
-        url: json['url'] as String,
+        id: requireString(json, 'media_id'),
+        vendorId: requireString(json, 'vendor_id'),
+        type: requireString(json, 'type'),
+        url: requireString(json, 'url'),
         thumbnailUrl: json['thumbnail_url'] as String?,
         sortOrder: json['sort_order'] as int? ?? 0,
         isFeatured: json['is_featured'] as bool? ?? false,
@@ -527,6 +559,7 @@ class VendorMatch {
     SelectionBasis? selectionBasis,
     String? noteToCouple,
     bool? isBudgetUnrealistic,
+    List<ReasoningStep>? reasoningSteps,
   }) =>
       VendorMatch(
         vendorId: vendorId,
@@ -537,7 +570,7 @@ class VendorMatch {
         locationScore: locationScore,
         availabilityScore: availabilityScore,
         reasoning: reasoning,
-        reasoningSteps: reasoningSteps,
+        reasoningSteps: reasoningSteps ?? this.reasoningSteps,
         rankInCategory: rankInCategory ?? this.rankInCategory,
         totalInCategory: totalInCategory,
         fitsBudget: fitsBudget ?? this.fitsBudget,

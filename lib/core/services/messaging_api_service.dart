@@ -1,19 +1,7 @@
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:dio/dio.dart';
 
+import '../config/api_config.dart';
 import '../../models/messaging.dart';
-
-const int _backendPort = 3000;
-const String? _lanHost = null;
-
-String get _baseUrl {
-  if (_lanHost != null) return 'http://$_lanHost:$_backendPort';
-  if (kIsWeb) return 'http://localhost:$_backendPort';
-  if (Platform.isAndroid) return 'http://10.0.2.2:$_backendPort';
-  return 'http://localhost:$_backendPort';
-}
 
 class MessagingApiException implements Exception {
   final String message;
@@ -25,7 +13,7 @@ class MessagingApiService {
   static final MessagingApiService instance = MessagingApiService._();
 
   final Dio _dio = Dio(BaseOptions(
-    baseUrl: _baseUrl,
+    baseUrl: ApiConfig.baseUrl,
     connectTimeout: const Duration(seconds: 30),
     receiveTimeout: const Duration(seconds: 60),
     headers: {'Content-Type': 'application/json'},

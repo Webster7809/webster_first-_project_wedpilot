@@ -90,11 +90,11 @@ sign-off, no markdown fences, no second attempt.`;
 // leak, never legitimate content, and everything from that point on is
 // discarded. The quote class covers curly/CJK quote pairs (“” ‘’ 「」 『』) as
 // well as ASCII ones — models drifting into a second attempt have been seen
-// quoting keys with corner brackets ('「budgetAdvice": {') — and any bare
+// quoting keys with corner brackets ('「vendorId": {') — and any bare
 // camelCase schema key name is itself a marker, since none of those tokens
 // can occur in legitimate planner prose regardless of how it's quoted.
 const LEAK_MARKERS =
-  /\n\s*\n|["'“”‘’「」『』][A-Za-z][A-Za-z ]{0,30}["'“”‘’「」『』]\s*:\s*[{[]|\b(?:planSummary|budgetAdvice|budgetReasoning|reasoningSteps|vendorId|budgetFitSuggestionType|budgetDeltaPercent|fitsBudget|selectionBasis|noteToCouple)\b|\b(?:let me|i'll (?:rewrite|redo|compose|output|produce|correct)|as an ai|as a language model|i am an ai|the json (?:value|output|now)|proper escaping|stray characters|note:)\b/i;
+  /\n\s*\n|["'“”‘’「」『』][A-Za-z][A-Za-z ]{0,30}["'“”‘’「」『』]\s*:\s*[{[]|\b(?:reasoningSteps|vendorId|budgetFitSuggestionType|budgetDeltaPercent|fitsBudget|selectionBasis|noteToCouple)\b|\b(?:let me|i'll (?:rewrite|redo|compose|output|produce|correct)|as an ai|as a language model|i am an ai|the json (?:value|output|now)|proper escaping|stray characters|note:)\b/i;
 
 function stripLeak(value, state) {
   if (typeof value === 'string') {
@@ -225,103 +225,6 @@ async function askAI(prompt, validate = () => true) {
   return lastResult;
 }
 
-// ── POST /api/wedding-plan ────────────────────────────────────────────────────
-app.post('/api/wedding-plan', async (req, res) => {
-  const {
-    totalBudget = 0,
-    currency = 'ZMW',
-    weddingType = 'White wedding',
-    weddingClass = 'Flexible',
-    guestCount = 0,
-    location = 'Zambia',
-    weddingDate,
-    styles = [],
-    categories = [],
-  } = req.body;
-
-  const dateStr = weddingDate ? new Date(weddingDate).toLocaleDateString('en-GB') : 'Not set yet';
-  const styleStr = styles.length ? styles.join(', ') : 'Not specified';
-  const categoriesStr = categories.join(', ');
-
-  const prompt = `
-A couple has come to you for a full wedding plan:
-- Total budget: ${currency} ${Number(totalBudget).toFixed(0)}
-- Wedding type: ${weddingType}
-- Wedding class: ${weddingClass}
-- Guest count: ${guestCount} guests
-- Location: ${location}
-- Wedding date: ${dateStr}
-- Style preferences: ${styleStr}
-- Vendor categories needed: ${categoriesStr}
-
-Think it through like you would in a real client consultation: weigh how guest count scales
-per-head costs (catering, venue capacity), how the wedding class shifts spend toward premium
-categories, how location affects vendor pricing and availability, and where this couple's
-budget is tight or has room to flex. Then commit to a specific plan.
-
-Respond ONLY with valid JSON:
-{
-  "planSummary": "A warm, confident 2-3 sentence personalised summary written like a planner opening a client consultation. Mention location, budget and date if set. Be specific to their choices, not generic.",
-  "budgetAdvice": { "CategoryName": percentage_number },
-  "budgetReasoning": { "CategoryName": "2-3 sentences of real planner reasoning for this exact percentage — grounded ONLY in the couple's own inputs above: their guest count, wedding class, location, and total budget. No filler." }
-}
-
-Rules:
-- budgetAdvice must cover every category in [${categoriesStr}] and sum to exactly 100.
-- Use plain numbers for percentages (e.g. 30, not "30%").
-- budgetReasoning must cover every category in [${categoriesStr}] and justify that category's specific percentage — explain why it's higher or lower than an even split in concrete terms.
-- The ONLY percentage a category's budgetReasoning may mention is that category's own budgetAdvice number. Never cite "industry standard" ranges, market statistics, survey figures, or any other percentage — you have no source for them, so stating one is fabrication.
-- The only monetary amounts you may mention anywhere are computed directly from the couple's stated total budget (e.g. that category's share of it). Never quote typical vendor prices or market rates.
-- Confident, expert, professional tone suited to a Zambian wedding market. Never hedge or say "it depends" — give a definitive recommendation.
-- Never invent facts not given above — no couple names (none were provided), no vendor details of any kind (none were given), no fabricated menu items or prices. Ground every claim only in the data given.
-`;
-
-  // Every percentage figure written into prose must be one the plan itself
-  // recommends (any budgetAdvice value, ±1 for rounding) — a reasoning line
-  // citing "industry standard 30–35%" or any other outside statistic is a
-  // fabrication with no source, and rejecting it here means the couple
-  // never sees it (the app falls back to its grounded standard split).
-  const percentagesAreGrounded = (text, allowedNumbers) => {
-    const matches = String(text).match(/\d+(?:\.\d+)?(?=\s*%)/g) || [];
-    return matches.every((m) =>
-      allowedNumbers.some((allowed) => Math.abs(Number(m) - allowed) <= 1),
-    );
-  };
-
-  // Beyond structural presence, catch the model silently dropping a category
-  // or reporting percentages that don't add up — a plan whose numbers don't
-  // add to 100 is just as much a fabrication as an invented fact, even
-  // though every individual field looks well-formed.
-  const validate = (r) => {
-    if (typeof r.planSummary !== 'string' || !r.planSummary.trim()) return false;
-    if (!r.budgetAdvice || typeof r.budgetAdvice !== 'object') return false;
-    if (!r.budgetReasoning || typeof r.budgetReasoning !== 'object') return false;
-    const coversAllCategories = categories.every(
-      (cat) =>
-        typeof r.budgetAdvice[cat] === 'number' &&
-        typeof r.budgetReasoning[cat] === 'string' &&
-        r.budgetReasoning[cat].trim().length > 0,
-    );
-    if (!coversAllCategories) return false;
-    const sum = categories.reduce((s, cat) => s + r.budgetAdvice[cat], 0);
-    if (Math.abs(sum - 100) > 2) return false;
-
-    const advisedNumbers = categories.map((cat) => r.budgetAdvice[cat]);
-    if (!percentagesAreGrounded(r.planSummary, advisedNumbers)) return false;
-    return categories.every((cat) =>
-      percentagesAreGrounded(r.budgetReasoning[cat], [r.budgetAdvice[cat]]),
-    );
-  };
-
-  try {
-    const json = await askAI(prompt, validate);
-    res.json(json);
-  } catch (err) {
-    console.error('OpenRouter AI error:', err.message);
-    res.status(err.status ?? 500).json({ error: err.message });
-  }
-});
-
 // The 4 reasoning steps every vendor-match category must always carry (see the
 // prompt below). "Budget fit" isn't in this list because the app writes that
 // step entirely itself (see groundedBudgetFitText) — the model only
@@ -390,10 +293,10 @@ function groundedNoteToCouple(cat, budgetClass, fitsBudget, budgetDeltaPercent) 
   return `No ${tierName} pick fit your budget for ${cat} exactly, so this is the closest match for that tier${deltaClause}.`;
 }
 
-function groundVendorMatch(json, categories, categoryBudgets, budgetClass) {
+function groundVendorMatch(json, picks, categoryBudgets, budgetClass) {
   for (const [cat, entry] of Object.entries(json.categories || {})) {
-    const candidate = (categories[cat] || []).find((c) => c.vendorId === entry.vendorId);
-    if (!candidate) continue; // invalid vendorId — the Flutter-side guard discards the whole result for this
+    const candidate = picks[cat];
+    if (!candidate) continue; // no matching pick was sent for this category
 
     const budget = categoryBudgets[cat];
     const priceMin = candidate.priceMin ?? 0;
@@ -420,81 +323,54 @@ function groundVendorMatch(json, categories, categoryBudgets, budgetClass) {
 }
 
 // ── POST /api/vendor-match ────────────────────────────────────────────────────
+// The winning vendor per category is already decided before this endpoint is
+// ever called — see _AiEngine.recommend in vendor_ai_provider.dart, which
+// scores and ranks the whole pool deterministically, in-process, in single-
+// digit milliseconds. The AI's only remaining job is writing warm,
+// human-readable justification for a pick it can no longer change — it never
+// searches, filters, scores, or chooses between candidates. Flutter calls
+// this in the background, after the couple already sees their matches, so a
+// slow or failed AI response never blocks or delays a result.
 app.post('/api/vendor-match', async (req, res) => {
+  const t0 = Date.now();
   const {
-    budgetClass = 'flexible', location = null, styles = [], categories = {}, categoryBudgets = {},
+    budgetClass = 'flexible', location = null, styles = [], picks = {}, categoryBudgets = {},
   } = req.body;
+  const requestedCategories = Object.keys(picks);
 
   const prompt = `
-You're vetting vendors for a client. Couple context:
+You're writing warm, professional justification notes for a wedding planner. The planner has
+ALREADY chosen the best vendor in each category below — your only job is to explain, in your own
+words, why each pick is a strong choice for this couple. Never second-guess the pick, never suggest
+a different vendor, never imply another option was considered.
+
+Couple context:
 - Budget class: ${budgetClass}
 - Location: ${location ?? 'Not specified'}
 - Style preferences: ${styles.length ? styles.join(', ') : 'Not specified'}
 - Allocated budget per category (their money, in local currency; a category absent here has no known cap):
-${JSON.stringify(categoryBudgets, null, 2)}
+${JSON.stringify(categoryBudgets)}
 
-For each category below, you are given a pre-filtered candidate list. Each candidate already
-passed eligibility rules and has three precomputed 0-1 signal scores: reputationScore (rating/
-reviews/track record), locationScore (proximity to the couple), valueScore (price fit against the
-couple's allocated budget for that category). Treat these scores as inputs, not the final word —
-weigh them against style tag overlap and each vendor's profile the way a seasoned planner would,
-including trade-offs. Which signal should decide your pick depends on the couple's budget class:
-- 'highClass': reputationScore is the deciding factor, full stop — the couple chose premium/luxury
-  above all else, so the best-reviewed candidate should win. Only let locationScore or valueScore
-  break your pick when two or more candidates are close to tied on reputationScore.
-- 'budgetFriendly': valueScore is the deciding factor — the couple explicitly wants to spend less,
-  so the candidate priced lowest against their allocation should win. Only let reputationScore or
-  locationScore break your pick when two or more candidates are close to tied on valueScore.
-- 'flexible': weigh reputationScore, locationScore, and valueScore roughly evenly — every
-  reputation tier is welcome here, so don't let reputation alone eliminate a candidate.
-Only pick a candidate with a low locationScore as your primary recommendation when no comparable
-alternative exists in that category on whichever signal decides this budget class. Then commit to
-the single best vendor per category.
+CHOSEN_VENDORS — one already-decided vendor per category, grouped by category (JSON). Each carries
+three precomputed 0-1 signal scores: reputationScore (rating/reviews/track record), locationScore
+(proximity to the couple), valueScore (price fit against the couple's allocated budget), plus
+priceMin/priceMax/priceTier and an isBookedOnWeddingDate flag (true = a confirmed booking already
+sits on the couple's wedding date):
+${JSON.stringify(picks)}
 
-Each candidate also has an isBookedOnWeddingDate flag: true means that vendor already has a
-confirmed booking on the couple's wedding date (they blocked that date on their calendar) and is
-very likely unavailable. Do not silently ignore this — strongly prefer an available (false)
-candidate of comparable quality over a booked one. Only recommend a booked candidate if there is
-no comparable available alternative in that category.
-
-Each candidate carries priceMin/priceMax (the vendor's actual price range) and priceTier ('low',
-'mid', or 'high', relative to other candidates in its own category). BUDGET FIT AND FALLBACK
-SELECTION — apply this exactly, per category:
-1. A candidate "fits exactly within budget" when that category has an entry in the allocated-budget
-   map above and the candidate's priceMin does not exceed it. If a category has no entry in that map,
-   treat every candidate in it as fitting (no known cap to check against).
-2. If one or more candidates fit exactly within budget: pick your recommendation only from among
-   them, ranked normally by reputationScore, locationScore, style fit, and availability as described
-   elsewhere in this prompt. Do not mention a budget shortfall anywhere in that category's reasoning.
-3. If NO candidate fits exactly within budget: never invent or substitute a vendor outside
-   CANDIDATE_VENDORS to force a fit. Instead, select the candidate whose priceTier best matches the
-   couple's chosen budget class (${budgetClass}: 'highClass' prefers 'high' tier, 'budgetFriendly'
-   prefers 'low' tier, 'flexible' accepts any tier), breaking ties by reputationScore. If the only
-   viable candidate's priceTier differs from what that budget class would normally call for, say so
-   explicitly and plainly in the reasoning (e.g. "No high-tier caterer fits this budget; closest
-   match is mid-tier instead") — never silently substitute an off-class vendor without flagging it.
-   Still pick the closest/best-fitting candidate rather than returning nothing.
-
-CANDIDATE_VENDORS — the only real, verified vendors you may recommend or discuss, grouped by
-category (JSON):
-${JSON.stringify(categories, null, 2)}
-
-You may only recommend a vendor whose vendorId appears in CANDIDATE_VENDORS for that exact
-category. Every vendorId, businessName, price, rating, review count, style tag, and availability
-flag you reference must be copied exactly, character-for-character, from this data — never invent,
-alter, round, guess, or "helpfully" improve any of these values, and never reference a vendor that
-isn't in this list. If you are ever unsure whether a value came from CANDIDATE_VENDORS, do not
-state it.
+Every businessName, style tag, and fact you reference must be copied exactly, character-for-character,
+from this data — never invent, alter, guess, or reference a vendor that isn't listed here. If you are
+ever unsure whether a value came from CHOSEN_VENDORS, do not state it.
 
 The app — not you — computes and displays the exact price, percentage-over-budget, rating, review
 count, and availability figures, because those must always match the database exactly. So: set
 budgetFitSuggestionType to exactly one of "negotiate" (price is close enough that a trimmed custom
 package is realistic), "trim_scope" (better to reduce what this category covers), "reallocate_budget"
-(better to shift budget from a lower-priority category), or "none_needed" (the pick already fits, or
-no allocated budget was given for this category) — reflecting the budget-fit decision from the rules
-above. Never state a specific price, percentage, rating, review count, or booked/available status
-anywhere in your reasoning text for any step below — describe situations qualitatively only; the app
-fills in every figure itself.
+(better to shift budget from a lower-priority category), or "none_needed" (the pick already fits
+within its allocated budget, or no allocated budget was given for this category) — judge this from
+priceMin against the allocated budget above. Never state a specific price, percentage, rating,
+review count, or booked/available status anywhere in your reasoning text for any step below —
+describe situations qualitatively only; the app fills in every figure itself.
 
 Instead of one run-on explanation, break your justification for each pick into named, ordered steps
 (like a planner walking through their checklist one line at a time). Always include these four:
@@ -513,7 +389,6 @@ Respond ONLY with valid JSON in this exact shape:
 {
   "categories": {
     "<CategoryName>": {
-      "vendorId": "...",
       "confidence": 0.0-1.0,
       "budgetFitSuggestionType": "negotiate" | "trim_scope" | "reallocate_budget" | "none_needed",
       "reasoningSteps": [
@@ -527,30 +402,23 @@ Respond ONLY with valid JSON in this exact shape:
 }
 
 Rules:
-- Return exactly one entry per category key given above. vendorId MUST be copied verbatim from that
-  exact category's list in CANDIDATE_VENDORS — never a vendorId from a different category, never a
-  vendorId you constructed or modified, never a placeholder.
-- confidence reflects how strongly you recommend this vendor to this couple specifically.
+- Return exactly one entry per category key given above — no vendorId field, the app already knows it.
+- confidence reflects how strongly you'd back this pick to this couple specifically.
 - reasoningSteps must always include all 4 required labels in order, each one short, specific sentence — no generic filler.
 - Never invent facts — no prices, ratings, review counts, styles, or availability beyond what's given
-  in CANDIDATE_VENDORS. Ground every claim only in that data. This is your single source of truth —
-  treat anything not present in it as unknown, not as something you can estimate or fill in.
+  in CHOSEN_VENDORS. Ground every claim only in that data.
 `;
 
-  const requestedCategories = Object.keys(categories);
-
-  // Checking vendorId against the real candidate list (not just truthiness)
-  // and requiring the 4 reasoning labels plus a valid budgetFitSuggestionType
-  // still documents what a "good" response looks like even though
-  // MAX_AI_ATTEMPTS = 1 means a failed check no longer buys a retry (see
-  // that constant's comment) — an invented vendorId still gets caught for
-  // free by the Flutter-side guard, which discards it to the local fallback.
+  // Requiring the 4 reasoning labels plus a valid budgetFitSuggestionType
+  // documents what a "good" response looks like — a failed check here spends
+  // one of MAX_AI_ATTEMPTS retries, and if every attempt still fails it, the
+  // Flutter side simply keeps the deterministic reasoning it already shipped
+  // with (see _backfillAiExplanations's catch block).
   // The prompt forbids the model from stating any figure — the app inserts
   // every real number itself. "Reputation"/"Availability" get rewritten from
   // the candidate record regardless (see groundedStepText), but "Style match"
   // and "Verdict" ship as the model wrote them, so a fabricated "95% match"
-  // or "4.8★" or a price-sized number there fails the whole response and the
-  // app's deterministic local matcher takes over instead.
+  // or "4.8★" or a price-sized number there fails the whole response.
   const FABRICATED_FIGURE = /\d+(?:\.\d+)?\s*(?:%|★)|\b\d{3,}\b/;
   const MODEL_AUTHORED_LABELS = ['Style match', 'Verdict'];
 
@@ -559,9 +427,7 @@ Rules:
     typeof r.categories === 'object' &&
     requestedCategories.every((cat) => {
       const entry = r.categories[cat];
-      if (!entry?.vendorId) return false;
-      const candidateIds = (categories[cat] || []).map((c) => c.vendorId);
-      if (!candidateIds.includes(entry.vendorId)) return false;
+      if (!entry) return false;
       if (!BUDGET_FIT_SUGGESTION_TYPES.includes(entry.budgetFitSuggestionType)) return false;
       const steps = Array.isArray(entry.reasoningSteps) ? entry.reasoningSteps : [];
       const labels = new Set(steps.map((s) => s.label));
@@ -571,12 +437,25 @@ Rules:
       );
     });
 
+  const tPromptBuilt = Date.now();
   try {
     const json = await askAI(prompt, validate);
-    groundVendorMatch(json, categories, categoryBudgets, budgetClass);
+    const tAiDone = Date.now();
+    // The model was never given a vendorId to echo back — inject the real one
+    // ourselves so groundVendorMatch (and the Flutter response parser, which
+    // requires it) never depends on the model getting an identifier right.
+    for (const [cat, entry] of Object.entries(json.categories || {})) {
+      if (picks[cat]) entry.vendorId = picks[cat].vendorId;
+    }
+    groundVendorMatch(json, picks, categoryBudgets, budgetClass);
+    console.log(
+      `[timing] /api/vendor-match — explanations for ${requestedCategories.length} categories — `
+      + `prompt build ${tPromptBuilt - t0}ms, AI request ${tAiDone - tPromptBuilt}ms, grounding ${Date.now() - tAiDone}ms, `
+      + `total ${Date.now() - t0}ms`,
+    );
     res.json(json);
   } catch (err) {
-    console.error('OpenRouter AI error:', err.message);
+    console.error(`OpenRouter AI error after ${Date.now() - t0}ms:`, err.message);
     res.status(err.status ?? 500).json({ error: err.message });
   }
 });

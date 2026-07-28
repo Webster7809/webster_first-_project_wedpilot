@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -58,11 +59,36 @@ class VendorDrawer extends ConsumerWidget {
                       ),
                       child: vendorProfile?.logoUrl != null
                           ? ClipOval(
-                              child: Image.network(
-                                resolveMediaUrl(vendorProfile!.logoUrl!),
+                              child: CachedNetworkImage(
+                                imageUrl: resolveMediaUrl(vendorProfile!.logoUrl!),
                                 width: 60,
                                 height: 60,
                                 fit: BoxFit.cover,
+                                memCacheWidth: 120,
+                                placeholder: (context, url) => Container(
+                                  width: 60,
+                                  height: 60,
+                                  color: Colors.white.withAlpha(64),
+                                  child: const Center(
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  width: 60,
+                                  height: 60,
+                                  color: AppColors.creamDark,
+                                  child: const Icon(
+                                    Icons.broken_image_outlined,
+                                    color: AppColors.textHint,
+                                  ),
+                                ),
                               ),
                             )
                           : Center(

@@ -26,7 +26,7 @@ flutter build web          # Web
 
 ## Architecture
 
-**Wedpilot** is a cross-platform (Android + Web) wedding planning app with three distinct user roles: **Couple**, **Vendor**, and **Admin**. Role is determined at login time from the email pattern (demo mode — `vendor@…` → vendor, `admin@…` → admin, anything else → couple).
+**Wedpilot** is a cross-platform (Android + Web) wedding planning app with three distinct user roles: **Couple**, **Vendor**, and **Admin**. Role is assigned server-side at signup/login (backend `role` column, returned in the JWT-authenticated user payload — see `backend/routes/auth.js` and `lib/providers/auth_provider.dart`), not inferred from the email address.
 
 ### State management — Riverpod
 

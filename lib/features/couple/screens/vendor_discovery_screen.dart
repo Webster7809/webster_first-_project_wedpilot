@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -11,6 +10,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/loading_shimmer.dart';
 import '../../../widgets/typeahead_field.dart';
+import '../../../widgets/vendor_hero_image.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../core/constants/app_constants.dart';
 
@@ -20,10 +20,11 @@ import '../../../core/constants/app_constants.dart';
 const _kCategoryTabs = [kAllVendorCategories, ...AppConstants.vendorCategories];
 
 // 'Under 30k' and 'Verified' map to real fields (price, verification_status).
-// A capacity filter isn't offered — vendor capacity isn't tracked anywhere
-// in the schema, and a filter chip that silently does nothing is worse than
-// not having it.
-const _kFilters = ['All', 'Under 30k', 'Verified'];
+// 'Fits my guests' maps to VendorService.maxGuests via
+// VendorProfile.canServeGuestCount, checked against the couple's saved
+// guestCount — see _applyFilter, which only offers this chip when a guest
+// count is actually on file.
+const _kFilters = ['All', 'Under 30k', 'Verified', 'Fits my guests'];
 
 class VendorDiscoveryScreen extends ConsumerStatefulWidget {
   const VendorDiscoveryScreen({super.key});
@@ -46,6 +47,16 @@ class _VendorDiscoveryScreenState
     }
     final coupleProfile = ref.watch(coupleProfileProvider);
     final city = coupleProfile?.location?.split(',').first.trim() ?? 'your city';
+    // 'Fits my guests' is only meaningful once the couple has a guest count
+    // on file — a chip that silently does nothing (or filters against a
+    // number that doesn't exist) is worse than not offering it.
+    final guestCount = coupleProfile?.guestCount;
+    final activeFilters = guestCount != null && guestCount > 0
+        ? _kFilters
+        : _kFilters.sublist(0, _kFilters.length - 1);
+    if (_filterIndex >= activeFilters.length) {
+      _filterIndex = 0;
+    }
     final vendorAsync = _committedSearch.isEmpty
         ? ref.watch(vendorListProvider(_selectedCategory))
         : ref.watch(vendorSearchResultsProvider(
@@ -252,7 +263,7 @@ class _VendorDiscoveryScreenState
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: List.generate(_kFilters.length, (i) {
+                  children: List.generate(activeFilters.length, (i) {
                     final active = _filterIndex == i;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -276,7 +287,7 @@ class _VendorDiscoveryScreenState
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 8),
                             child: Text(
-                              _filterLabel(i),
+                              _filterLabel(i, guestCount),
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: active
@@ -396,7 +407,7 @@ class _VendorDiscoveryScreenState
   String get _categoryNoun =>
       _selectedCategory == kAllVendorCategories ? '' : '${_selectedCategory.toLowerCase()} ';
 
-  String _filterLabel(int i) {
+  String _filterLabel(int i, int? guestCount) {
     if (i == 0) {
       return _selectedCategory == kAllVendorCategories
           ? 'All vendors'
@@ -405,14 +416,18 @@ class _VendorDiscoveryScreenState
     return switch (i) {
       1 => 'Under 30k',
       2 => 'Verified',
+      3 => guestCount != null ? 'Fits $guestCount guests' : 'Fits my guests',
       _ => _kFilters[i],
     };
   }
 
   List<VendorProfile> _applyFilter(List<VendorProfile> vendors) {
+    final guestCount = ref.read(coupleProfileProvider)?.guestCount;
     return switch (_filterIndex) {
       1 => vendors.where((v) => v.priceMin > 0 && v.priceMin < 30000).toList(),
       2 => vendors.where((v) => v.isVerified).toList(),
+      3 when guestCount != null && guestCount > 0 =>
+        vendors.where((v) => v.canServeGuestCount(guestCount)).toList(),
       _ => vendors,
     };
   }
@@ -454,19 +469,15 @@ class _VendorMatchCard extends ConsumerWidget {
             children: [
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                child: Container(
+                child: SizedBox(
                   height: 180,
                   width: double.infinity,
-                  color: AppColors.amber.withAlpha(20),
-                  child: vendor.logoUrl != null
-                      ? Image.network(
-                          resolveMediaUrl(vendor.logoUrl!),
-                          fit: BoxFit.cover,
-                        )
-                      : const Center(
-                          child: Icon(Icons.camera_alt_outlined,
-                              size: 44, color: AppColors.amber),
-                        ),
+                  child: VendorHeroImage(
+                    vendor: vendor,
+                    height: 180,
+                    memCacheWidth: 720,
+                    single: true,
+                  ),
                 ),
               ),
               if (vendor.isVerified)
@@ -580,6 +591,21 @@ class _VendorMatchCard extends ConsumerWidget {
                       color: AppColors.amber,
                       fontSize: 16,
                     ),
+                  ),
+                ],
+                if (vendor.maxGuestCapacity != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.groups_outlined,
+                          size: 14, color: AppColors.textSecondary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Can serve up to: ${vendor.maxGuestCapacity} guests',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textSecondary),
+                      ),
+                    ],
                   ),
                 ],
 

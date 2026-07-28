@@ -18,6 +18,13 @@ const { recalculateVendorStats, statsForVendorIds } = require('../services/vendo
 const router = express.Router();
 const mediaUploader = makeUploader('vendors', { allowedMimePrefixes: ['image/', 'video/'], maxSizeMb: 25 });
 
+// Sanity ceiling for a stated service capacity — mirrors
+// AppConstants.maxRealisticGuestCount on the Flutter side (couple wizard and
+// vendor listing form). Keeps a joke/fat-finger max_guests value (an extra
+// zero, a pasted phone number) from silently poisoning the couple-side
+// system-wide capacity gate, which trusts the largest max_guests on file.
+const MAX_REALISTIC_GUEST_COUNT = 20000;
+
 // ── Serialization ────────────────────────────────────────────────────────────────
 
 function serializeService(service) {
@@ -30,6 +37,7 @@ function serializeService(service) {
     price_max: Number(service.price_max),
     unit: service.unit,
     is_active: service.is_active,
+    max_guests: service.max_guests == null ? null : Number(service.max_guests),
   };
 }
 
@@ -115,6 +123,16 @@ async function serializeVendor(vendor, { includeDetail = false, statsInfo = null
     base.services = ownServices.map(serializeService);
   }
 
+  // Vendor-level rollup of the per-service max_guests values, for any caller
+  // that just wants "can this vendor handle my headcount at all" without
+  // walking the services array itself — mirrors VendorProfile.maxGuestCapacity
+  // on the Flutter side exactly (largest stated capacity across every
+  // service, null when none have stated one).
+  const statedCapacities = base.services
+    .map((s) => s.max_guests)
+    .filter((n) => n != null);
+  base.guest_capacity = statedCapacities.length ? Math.max(...statedCapacities) : null;
+
   if (includeDetail) {
     const media = await VendorMedia.findAll({ where: { vendor_id: vendor.vendor_id }, order: [['sort_order', 'ASC']] });
     base.media = media.map(serializeMedia);
@@ -126,29 +144,65 @@ async function serializeVendor(vendor, { includeDetail = false, statsInfo = null
 // ── GET /api/vendors ────────────────────────────────────────────────────────────
 // Any authenticated user (couple, vendor, or admin) can browse the directory.
 router.get('/', verifyJwt, async (req, res) => {
+  const t0 = Date.now();
   try {
-    const { category, location, search, price_min, price_max, verified } = req.query;
+    const { category, category_in, location, search, price_min, price_max, min_guests, verified } = req.query;
     const limit = Math.min(Number(req.query.limit) || 20, 100);
     const offset = Number(req.query.offset) || 0;
 
     const where = { verification_status: { [Op.ne]: 'rejected' } };
-    if (category) where.category = category;
+    if (category) {
+      where.category = category;
+    } else if (category_in) {
+      // Lets a single request narrow to exactly the couple's requested
+      // categories (e.g. AI matching) instead of paging through the whole
+      // vendor table across every category and filtering client-side —
+      // see vendor_ai_provider.dart's vendorMatchValidationProvider.
+      const list = String(category_in).split(',').map((c) => c.trim()).filter(Boolean);
+      if (list.length) where.category = { [Op.in]: list };
+    }
     if (location) where.location = { [Op.like]: `%${location}%` };
     if (search) where.business_name = { [Op.like]: `%${search}%` };
     if (verified === 'true') where.verification_status = 'verified';
 
+    // Guest-capacity filtering happens here, at the DB query level, before
+    // any vendor row is even fetched — cheaper than pulling every vendor and
+    // discarding the ones that can't seat the party after the fact. A
+    // service that never stated a capacity (max_guests IS NULL) is treated
+    // as neutral, not excluded — matching VendorProfile.canServeGuestCount
+    // on the Flutter side exactly (see its doc comment): an unstated
+    // capacity is neither "big enough" nor "too small", so a hard >=
+    // comparison here would silently drop every vendor who hasn't gotten
+    // around to setting one, which the app-wide rule never does.
     let vendorIds = null;
-    if (price_min || price_max) {
+    if (price_min || price_max || min_guests) {
       const svcWhere = {};
       if (price_max) svcWhere.price_min = { [Op.lte]: Number(price_max) };
       if (price_min) svcWhere.price_max = { [Op.gte]: Number(price_min) };
+      if (min_guests) {
+        svcWhere[Op.or] = [
+          { max_guests: null },
+          { max_guests: { [Op.gte]: Number(min_guests) } },
+        ];
+      }
       const matchingServices = await VendorService.findAll({ where: svcWhere, attributes: ['vendor_id'] });
       vendorIds = [...new Set(matchingServices.map((s) => s.vendor_id))];
       if (vendorIds.length === 0) return res.json({ vendors: [], total: 0 });
       where.vendor_id = { [Op.in]: vendorIds };
     }
 
-    const { rows, count } = await Vendor.findAndCountAll({ where, limit, offset, order: [['created_at', 'DESC']] });
+    const tFiltersResolved = Date.now();
+    // verification_note is admin-only moderation text — serializeVendor never
+    // reads it for a list response, so it's excluded here rather than pulled
+    // off disk on every browse/match query for nothing.
+    const { rows, count } = await Vendor.findAndCountAll({
+      where,
+      limit,
+      offset,
+      order: [['created_at', 'DESC']],
+      attributes: { exclude: ['verification_note'] },
+    });
+    const tVendorsFetched = Date.now();
     const rowVendorIds = rows.map((v) => v.vendor_id);
     const [statsMap, allServices] = await Promise.all([
       statsForVendorIds(rowVendorIds),
@@ -166,6 +220,16 @@ router.get('/', verifyJwt, async (req, res) => {
         services: servicesByVendor[v.vendor_id] ?? [],
       })),
     );
+    if (category_in) {
+      // Only log for the AI-matching call pattern (category_in), not every
+      // plain directory-browse GET, so this doesn't spam the log for normal
+      // couple browsing — see vendor_ai_provider.dart's Database fetch stage.
+      console.log(
+        `[timing] GET /api/vendors (category_in=${category_in}) — ${vendors.length}/${count} vendors — `
+        + `filters ${tFiltersResolved - t0}ms, vendor query ${tVendorsFetched - tFiltersResolved}ms, `
+        + `stats+services+serialize ${Date.now() - tVendorsFetched}ms, total ${Date.now() - t0}ms`,
+      );
+    }
     res.json({ vendors, total: count });
   } catch (err) {
     console.error('List vendors error:', err.message);
@@ -256,12 +320,22 @@ router.post('/me/services', verifyJwt, requireVendor, async (req, res) => {
   try {
     const vendor = await ownVendorOr404(req, res);
     if (!vendor) return;
-    const { title, description, price_min, price_max, unit } = req.body;
+    const { title, description, price_min, price_max, unit, max_guests } = req.body;
     if (!title || price_min == null || price_max == null) {
       return res.status(400).json({ error: 'title, price_min, and price_max are required.' });
     }
+    // Guest capacity is mandatory on every new listing, in every category —
+    // it feeds the AI matching pipeline's hard capacity filter, so a listing
+    // without one would silently look like it can serve any party size.
+    if (max_guests == null || !Number.isInteger(max_guests) || max_guests <= 0 ||
+        max_guests > MAX_REALISTIC_GUEST_COUNT) {
+      return res.status(400).json({
+        error: `max_guests is required and must be a whole number between 1 and ${MAX_REALISTIC_GUEST_COUNT}.`,
+      });
+    }
     const service = await VendorService.create({
       vendor_id: vendor.vendor_id, title, description, price_min, price_max, unit: unit || 'package',
+      max_guests,
     });
     res.status(201).json({ service: serializeService(service) });
   } catch (err) {
@@ -276,6 +350,17 @@ router.put('/me/services/:id', verifyJwt, requireVendor, async (req, res) => {
     if (!vendor) return;
     const service = await VendorService.findOne({ where: { service_id: req.params.id, vendor_id: vendor.vendor_id } });
     if (!service) return res.status(404).json({ error: 'Service not found.' });
+
+    // Mandatory field: a PUT that includes the key at all must set a real
+    // value — unlike other optional fields, it can never be explicitly
+    // cleared back to null once a listing exists.
+    if ('max_guests' in req.body &&
+        (req.body.max_guests == null || !Number.isInteger(req.body.max_guests) ||
+         req.body.max_guests <= 0 || req.body.max_guests > MAX_REALISTIC_GUEST_COUNT)) {
+      return res.status(400).json({
+        error: `max_guests is required and must be a whole number between 1 and ${MAX_REALISTIC_GUEST_COUNT}.`,
+      });
+    }
 
     const allFields = { ...req.body };
     delete allFields.service_id;

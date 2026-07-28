@@ -99,6 +99,23 @@ final allVendorsProvider = FutureProvider<List<VendorProfile>>((ref) async {
   return VendorApiService.instance.fetchAllVendors(token);
 });
 
+/// Largest guest capacity any vendor anywhere in the system has stated,
+/// across every category and location. This is a deliberately coarse,
+/// system-wide gate — not a substitute for the precise, category/location
+/// -scoped capacity check that already runs in vendorMatchValidationProvider
+/// (Step 3b/3c) — used only so couple_planning_screen.dart can reject a
+/// guest count nobody in the whole system could ever serve immediately on
+/// entry, instead of three wizard steps later. Null when no vendor has
+/// stated a capacity yet, in which case the gate must be skipped entirely:
+/// unstated capacity is neutral, never a reason to block (same rule as
+/// VendorProfile.canServeGuestCount).
+final systemMaxGuestCapacityProvider = FutureProvider<int?>((ref) async {
+  final vendors = await ref.watch(allVendorsProvider.future);
+  final stated = vendors.map((v) => v.maxGuestCapacity).whereType<int>();
+  if (stated.isEmpty) return null;
+  return stated.reduce((a, b) => a > b ? a : b);
+});
+
 /// Union of WedPilot's built-in vendor categories and every category real
 /// vendors have registered under — so a vendor signing up in a brand-new
 /// category makes it selectable for couples automatically, without an app

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,9 +12,11 @@ import '../../../models/vendor_profile.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../widgets/loading_shimmer.dart';
+import '../../../widgets/vendor_hero_image.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
+import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/utils/format_utils.dart';
 
 class VendorProfileScreen extends ConsumerWidget {
@@ -120,6 +123,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
     final priceStr = vendor.priceMin > 0
         ? '${fmtCurrency(vendor.priceMin.round())} – ${fmtAmount(vendor.priceMax.round())}'
         : null;
+    final maxGuestCapacity = vendor.maxGuestCapacity;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -136,39 +140,9 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Photo placeholder
-                  Container(
-                    color: AppColors.amber.withAlpha(20),
-                    child: vendor.logoUrl != null
-                        ? Image.network(
-                            resolveMediaUrl(vendor.logoUrl!),
-                            fit: BoxFit.cover,
-                          )
-                        : const Center(
-                            child: Icon(Icons.villa_outlined,
-                                size: 56, color: AppColors.amber),
-                          ),
-                  ),
-                  // Carousel dots
-                  Positioned(
-                    bottom: 16,
-                    left: 0,
-                    right: 0,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(5, (i) => Container(
-                        width: i == 0 ? 20 : 6,
-                        height: 6,
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        decoration: BoxDecoration(
-                          color: i == 0
-                              ? Colors.white
-                              : Colors.white.withAlpha(120),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      )),
-                    ),
-                  ),
+                  // Real photo carousel when the vendor has uploads, else a
+                  // labeled category-relevant sample (see VendorHeroImage).
+                  VendorHeroImage(vendor: vendor, height: 260, memCacheWidth: 800),
                   // Back button
                   Positioned(
                     top: MediaQuery.of(context).padding.top + 8,
@@ -382,6 +356,47 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                       const SizedBox(height: 16),
                     ],
 
+                    // Guest capacity card
+                    if (maxGuestCapacity != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.creamDark,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'GUEST CAPACITY',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.amber,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 1.2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Can serve up to: $maxGuestCapacity guests',
+                                    style: AppTextStyles.priceTag.copyWith(
+                                      color: AppColors.forestGreen,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.groups_outlined,
+                                color: AppColors.textSecondary, size: 24),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
                     // Contact details
                     if (vendor.phone != null || vendor.website != null) ...[
                       Text('Contact',
@@ -482,12 +497,40 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    if (vendor.media.isEmpty)
+                    if (vendor.media.isEmpty) ...[
                       Text(
-                        'No photos yet.',
+                        "${vendor.businessName} hasn't uploaded photos yet — showing sample "
+                        '${vendor.category} photos below.',
                         style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                      )
-                    else
+                      ),
+                      const SizedBox(height: 10),
+                      GridView.count(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 1,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: VendorCategoryImages.galleryFor(vendor.category, width: 300)
+                            .map((url) => ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: CachedNetworkImage(
+                                    imageUrl: url,
+                                    fit: BoxFit.cover,
+                                    memCacheWidth: 300,
+                                    placeholder: (context, url) => Container(
+                                      color: AppColors.amber.withAlpha(20),
+                                    ),
+                                    errorWidget: (context, url, error) => Container(
+                                      color: AppColors.amber.withAlpha(20),
+                                      child: const Icon(Icons.broken_image_outlined,
+                                          color: AppColors.amber, size: 24),
+                                    ),
+                                  ),
+                                ))
+                            .toList(),
+                      ),
+                    ] else
                       GridView.count(
                         crossAxisCount: 3,
                         crossAxisSpacing: 8,
@@ -500,10 +543,21 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                               child: Stack(
                                 fit: StackFit.expand,
                                 children: [
-                                  Image.network(
-                                    resolveMediaUrl(m.url),
+                                  CachedNetworkImage(
+                                    imageUrl: resolveMediaUrl(m.url),
                                     fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) => Container(
+                                    memCacheWidth: 300,
+                                    placeholder: (context, url) => Container(
+                                      color: AppColors.amber.withAlpha(20),
+                                      child: const Center(
+                                        child: SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        ),
+                                      ),
+                                    ),
+                                    errorWidget: (context, url, error) => Container(
                                       color: AppColors.amber.withAlpha(20),
                                       child: const Icon(Icons.broken_image_outlined,
                                           color: AppColors.amber, size: 24),

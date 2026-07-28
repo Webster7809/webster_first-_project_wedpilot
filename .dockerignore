@@ -1,0 +1,7 @@
+.git
+build
+.dart_tool
+.idea
+android/.gradle
+android/local.properties
+backend/node_modules

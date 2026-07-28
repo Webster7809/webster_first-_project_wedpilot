@@ -26,6 +26,10 @@ const CoupleProfile = sequelize.define('CoupleProfile', {
   guest_count: {
     type: DataTypes.INTEGER,
     allowNull: true,
+    // Upper bound mirrors MAX_REALISTIC_GUEST_COUNT in routes/coupleProfile.js
+    // — kept here too as a last line of defense against any write path that
+    // bypasses the route handler's own check.
+    validate: { min: 0, max: 20000 },
   },
   style_tags: {
     type: DataTypes.JSON,

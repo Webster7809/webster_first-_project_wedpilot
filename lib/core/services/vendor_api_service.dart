@@ -1,33 +1,17 @@
-import 'dart:io' show Platform;
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:dio/dio.dart';
 
+import '../config/api_config.dart';
+import '../utils/json_utils.dart';
 import '../../models/vendor_profile.dart';
 import '../../models/vendor_feedback.dart';
 import '../../models/messaging.dart' show Inquiry;
 
-// Flutter never touches the database directly.
-// All calls go through the Node/Express backend at [_baseUrl].
-// Change [_backendPort] or [_lanHost] when deploying to production.
-const int _backendPort = 3000;
-
-// Set this to your machine's LAN IP (e.g. '192.168.1.20') when testing on a
-// physical device, since 'localhost' on the device refers to the device itself.
-const String? _lanHost = null;
-
-String get _baseUrl {
-  if (_lanHost != null) return 'http://$_lanHost:$_backendPort';
-  if (kIsWeb) return 'http://localhost:$_backendPort';
-  if (Platform.isAndroid) return 'http://10.0.2.2:$_backendPort'; // Android emulator → host localhost
-  return 'http://localhost:$_backendPort'; // iOS simulator, desktop
-}
-
 /// Resolves a stored relative upload path (e.g. '/uploads/vendors/x.jpg') to
 /// an absolute URL. Already-absolute URLs are returned unchanged.
 String resolveMediaUrl(String urlOrPath) =>
-    urlOrPath.startsWith('http') ? urlOrPath : '$_baseUrl$urlOrPath';
+    urlOrPath.startsWith('http') ? urlOrPath : '${ApiConfig.baseUrl}$urlOrPath';
 
 class VendorApiException implements Exception {
   final String message;
@@ -46,7 +30,7 @@ class VendorApiService {
   static final VendorApiService instance = VendorApiService._();
 
   final Dio _dio = Dio(BaseOptions(
-    baseUrl: _baseUrl,
+    baseUrl: ApiConfig.baseUrl,
     connectTimeout: const Duration(seconds: 30),
     receiveTimeout: const Duration(seconds: 60),
     headers: {'Content-Type': 'application/json'},
@@ -60,10 +44,16 @@ class VendorApiService {
   Future<List<VendorProfile>> fetchVendors(
     String accessToken, {
     String? category,
+    // Narrows to exactly this set of categories in one request — e.g. the
+    // couple's selected categories during AI matching — instead of fetching
+    // every category and filtering client-side. Ignored when [category] is
+    // also set (single-category takes priority, matching backend behavior).
+    List<String>? categories,
     String? location,
     String? search,
     double? priceMin,
     double? priceMax,
+    int? minGuests,
     bool? verifiedOnly,
     int? limit,
     int? offset,
@@ -73,10 +63,14 @@ class VendorApiService {
         '/api/vendors',
         queryParameters: {
           'category': ?category,
+          'category_in': ?(categories != null && categories.isNotEmpty
+              ? categories.join(',')
+              : null),
           'location': ?location,
           'search': ?search,
           'price_min': ?priceMin,
           'price_max': ?priceMax,
+          'min_guests': ?minGuests,
           if (verifiedOnly == true) 'verified': 'true',
           'limit': ?limit,
           'offset': ?offset,
@@ -95,12 +89,13 @@ class VendorApiService {
   /// Pages through the *entire* directory instead of just the first 20
   /// results — [fetchVendors] alone silently caps at the backend's default
   /// page size (see routes/vendors.js), so any caller that needs to reason
-  /// about the whole vendor pool (e.g. the wedding-plan AI matcher, which
-  /// must see every category's vendors to score them) has to go through this
+  /// about the whole vendor pool (e.g. the vendor-matching AI, which must
+  /// see every category's vendors to score them) has to go through this
   /// instead, or it silently starves whichever categories fall past page 1.
   Future<List<VendorProfile>> fetchAllVendors(
     String accessToken, {
     String? category,
+    List<String>? categories,
     String? location,
     bool? verifiedOnly,
   }) async {
@@ -111,6 +106,7 @@ class VendorApiService {
       final page = await fetchVendors(
         accessToken,
         category: category,
+        categories: categories,
         location: location,
         verifiedOnly: verifiedOnly,
         limit: pageSize,
@@ -130,9 +126,13 @@ class VendorApiService {
         options: _auth(accessToken),
       );
       final data = response.data ?? {};
-      return VendorProfile.fromJson(data['vendor'] as Map<String, dynamic>);
+      return VendorProfile.fromJson(requireMap(data, 'vendor'));
     } on DioException catch (e) {
       throw VendorApiException(_extractError(e));
+    } on FormatException catch (_) {
+      throw const VendorApiException('Received an unexpected response from the server.');
+    } on TypeError catch (_) {
+      throw const VendorApiException('Received an unexpected response from the server.');
     }
   }
 
@@ -146,10 +146,14 @@ class VendorApiService {
         options: _auth(accessToken),
       );
       final data = response.data ?? {};
-      return VendorProfile.fromJson(data['vendor'] as Map<String, dynamic>);
+      return VendorProfile.fromJson(requireMap(data, 'vendor'));
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) return null;
       throw VendorApiException(_extractError(e));
+    } on FormatException catch (_) {
+      throw const VendorApiException('Received an unexpected response from the server.');
+    } on TypeError catch (_) {
+      throw const VendorApiException('Received an unexpected response from the server.');
     }
   }
 
@@ -192,9 +196,13 @@ class VendorApiService {
         options: _auth(accessToken),
       );
       final data = response.data ?? {};
-      return VendorProfile.fromJson(data['vendor'] as Map<String, dynamic>);
+      return VendorProfile.fromJson(requireMap(data, 'vendor'));
     } on DioException catch (e) {
       throw VendorApiException(_extractError(e));
+    } on FormatException catch (_) {
+      throw const VendorApiException('Received an unexpected response from the server.');
+    } on TypeError catch (_) {
+      throw const VendorApiException('Received an unexpected response from the server.');
     }
   }
 
@@ -205,9 +213,13 @@ class VendorApiService {
         options: _auth(accessToken),
       );
       final data = response.data ?? {};
-      return VendorProfile.fromJson(data['vendor'] as Map<String, dynamic>);
+      return VendorProfile.fromJson(requireMap(data, 'vendor'));
     } on DioException catch (e) {
       throw VendorApiException(_extractError(e));
+    } on FormatException catch (_) {
+      throw const VendorApiException('Received an unexpected response from the server.');
+    } on TypeError catch (_) {
+      throw const VendorApiException('Received an unexpected response from the server.');
     }
   }
 
@@ -223,6 +235,7 @@ class VendorApiService {
           'price_min': service.priceMin,
           'price_max': service.priceMax,
           'unit': service.unit,
+          'max_guests': service.maxGuests,
         },
         options: _auth(accessToken),
       );
@@ -244,6 +257,7 @@ class VendorApiService {
           'price_max': service.priceMax,
           'unit': service.unit,
           'is_active': service.isActive,
+          'max_guests': service.maxGuests,
         },
         options: _auth(accessToken),
       );

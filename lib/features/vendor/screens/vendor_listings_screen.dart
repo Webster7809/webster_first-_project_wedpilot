@@ -1,7 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/services/vendor_class_service.dart';
 import '../../../core/state/resource.dart';
@@ -514,10 +517,21 @@ class _PortfolioTile extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.network(
-            resolveMediaUrl(item.url),
+          CachedNetworkImage(
+            imageUrl: resolveMediaUrl(item.url),
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => Container(
+            memCacheWidth: 300,
+            placeholder: (context, url) => Container(
+              color: AppColors.creamDark,
+              child: const Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+            errorWidget: (context, url, error) => Container(
               color: AppColors.creamDark,
               child: const Icon(
                 Icons.broken_image_outlined,
@@ -588,6 +602,7 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
   late final TextEditingController _descCtrl;
   late final TextEditingController _priceMinCtrl;
   late final TextEditingController _priceMaxCtrl;
+  late final TextEditingController _maxGuestsCtrl;
   late String _unit;
   String? _priceError;
 
@@ -605,6 +620,7 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
     _priceMaxCtrl = TextEditingController(
       text: s != null ? s.priceMax.toStringAsFixed(0) : '',
     );
+    _maxGuestsCtrl = TextEditingController(text: s?.maxGuests?.toString() ?? '');
     _unit = s?.unit ?? 'event';
   }
 
@@ -614,6 +630,7 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
     _descCtrl.dispose();
     _priceMinCtrl.dispose();
     _priceMaxCtrl.dispose();
+    _maxGuestsCtrl.dispose();
     super.dispose();
   }
 
@@ -629,6 +646,8 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
     }
     setState(() => _priceError = null);
 
+    final maxGuests = int.parse(_maxGuestsCtrl.text.trim());
+
     final vendorId = ref.read(vendorProfileProvider)?.id ?? '';
     final notifier = ref.read(vendorOwnProvider.notifier);
 
@@ -642,6 +661,7 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
               priceMin: min,
               priceMax: max,
               unit: _unit,
+              maxGuests: maxGuests,
             ),
           )
         : await notifier.addService(
@@ -655,6 +675,7 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
               priceMin: min,
               priceMax: max,
               unit: _unit,
+              maxGuests: maxGuests,
             ),
           );
 
@@ -760,6 +781,29 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
                   style: AppTextStyles.caption.copyWith(color: AppColors.error),
                 ),
               ],
+              const SizedBox(height: 14),
+              WedTextField(
+                label: 'Maximum Number of Guests You Can Serve',
+                hint: 'e.g. 300',
+                controller: _maxGuestsCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                helperText:
+                    "Couples entering more guests than this won't see this listing recommended.",
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Guest capacity is required';
+                  }
+                  final n = int.tryParse(v.trim());
+                  if (n == null) return 'Enter a whole number';
+                  if (n <= 0) return 'Must be greater than 0';
+                  if (n > AppConstants.maxRealisticGuestCount) {
+                    return 'Enter a realistic number (max '
+                        '${AppConstants.maxRealisticGuestCount})';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 16),
               Text(
                 'Priced per',

@@ -6,6 +6,7 @@ import 'vendor_profile.dart';
 enum VendorValidationFailureType {
   noVendorsInLocation,
   budgetTooLowForAnyVendor,
+  noVendorCapacityForGuestCount,
 }
 
 class VendorValidationFailure {
@@ -46,12 +47,12 @@ class VendorValidationResult {
   /// whole-plan [blockingFailure]: earlier categories still get real picks.
   final Map<String, String> budgetExhaustedMessages;
 
-  /// The couple's real total budget this whole plan was funded against —
-  /// exposed so [aiRecommendedVendorsProvider] can re-verify the AI's actual
-  /// picks never sum to more than this, without re-deriving the
-  /// wizard-budget/saved-budget/profile-budget fallback chain a second time
-  /// (see `enforceTotalBudgetCeiling`).
-  final double enteredBudget;
+  /// One message per category where vendors exist in the couple's location
+  /// but none of them state enough capacity for the couple's guest count
+  /// (see [VendorProfile.canServeGuestCount]). Also soft/single-category,
+  /// never a whole-plan [blockingFailure] — and never conflated with
+  /// [budgetExhaustedMessages], since money isn't the constraint here.
+  final Map<String, String> guestCapacityExcludedMessages;
 
   const VendorValidationResult({
     this.blockingFailure,
@@ -60,7 +61,7 @@ class VendorValidationResult {
     this.categoryBudgets = const {},
     this.excludedCategoryMessages = const {},
     this.budgetExhaustedMessages = const {},
-    this.enteredBudget = 0,
+    this.guestCapacityExcludedMessages = const {},
   });
 
   bool get isBlocked => blockingFailure != null;

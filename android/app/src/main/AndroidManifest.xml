@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Required for all network calls (REST API backend, AI service, media). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <!-- ── Image / file picker permissions ──────────────────────────────── -->
     <!-- Android 13+ (API 33+): granular media permissions -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
@@ -10,7 +13,7 @@
     <uses-permission android:name="android.permission.CAMERA"/>
 
     <application
-        android:label="wed_plan_pilot"
+        android:label="Wedpilot"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

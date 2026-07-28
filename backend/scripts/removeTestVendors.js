@@ -1,3 +1,4 @@
+// DEV-ONLY — NEVER RUN AGAINST A PRODUCTION DB_NAME.
 // One-off dev cleanup script — the deletion counterpart to seedTestVendors.js.
 // Removes every vendor account that script created (identified by its
 // distinctive `.test` email TLD, which no real vendor signup could ever

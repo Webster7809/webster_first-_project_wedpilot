@@ -9,7 +9,6 @@ import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/class_packages.dart';
-import '../../../core/services/wedding_ai_service.dart';
 import '../../../core/utils/pdf_download.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -62,11 +61,6 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     'Minimalist',
   ];
   final List<String> _selectedStyles = [];
-
-  // AI plan results for step 3
-  WeddingPlanResult? _aiPlanResult;
-  bool _aiPlanLoading = false;
-  String? _aiPlanError;
 
   // Anchors for each category's AI-matched vendor section in the review step,
   // so the "Vendors needed" chips can jump straight to the picked vendor.
@@ -137,11 +131,54 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         );
         return;
       }
+      final guestCount = int.tryParse(_guestsCtrl.text.trim());
+      if (guestCount == null || guestCount <= 0) {
+        showWedSnackBar(
+          context,
+          "You haven't entered your guest count yet — WedPilot AI needs it to check "
+          'which vendors can actually accommodate your wedding size. Please add a '
+          'number greater than zero.',
+          type: SnackType.error,
+        );
+        return;
+      }
+      if (guestCount > AppConstants.maxRealisticGuestCount) {
+        showWedSnackBar(
+          context,
+          'That guest count looks unrealistic — please enter a number no greater '
+          'than ${AppConstants.maxRealisticGuestCount}.',
+          type: SnackType.error,
+        );
+        return;
+      }
+      // Coarse, system-wide sanity gate: if every vendor on file states a
+      // capacity and every single one of them is smaller than this, nobody in
+      // the system could ever serve this wedding regardless of category or
+      // location, so there's no reason to let the couple sink three more
+      // wizard steps into a plan that can only fail. Skipped entirely (null)
+      // until vendor data has loaded or no vendor has stated a capacity —
+      // the precise, category/location-scoped check still runs later in
+      // vendorMatchValidationProvider either way.
+      final systemMaxCapacity =
+          ref.read(systemMaxGuestCapacityProvider).valueOrNull;
+      if (systemMaxCapacity != null && guestCount > systemMaxCapacity) {
+        showWedSnackBar(
+          context,
+          'No vendor in our system currently states a serving capacity that '
+          'large — the largest on file is $systemMaxCapacity guests. Please '
+          'reduce your guest count, or check back once more vendors have '
+          'registered.',
+          type: SnackType.error,
+        );
+        return;
+      }
       ref.read(selectedServiceCategoriesProvider.notifier).state =
           _activeCategories();
       ref.read(wizardLocationProvider.notifier).state = _locationCtrl.text
           .trim();
       ref.read(wizardBudgetProvider.notifier).state = budget;
+      ref.read(wizardGuestCountProvider.notifier).state =
+          int.tryParse(_guestsCtrl.text.trim());
     }
     if (_step < _totalSteps - 1) {
       setState(() => _step++);
@@ -173,11 +210,8 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
 
   void _createPlan() {
     // Guards against a fast double-tap/double-click firing this twice before
-    // the step-3 rebuild removes this button — without this, two overlapping
-    // calls would each hit the AI backend independently (generateWeddingPlan
-    // is a plain async call, not a deduped Riverpod provider), spending two
-    // AI requests for one tap. _step flips to 3 synchronously below, so this
-    // check alone is enough to reject the second call.
+    // the step-3 rebuild removes this button — _step flips to 3 synchronously
+    // below, so this check alone is enough to reject the second call.
     if (_step != 2) return;
     final totalBudget = _parsedBudget() ?? 0;
     if (totalBudget <= 0) {
@@ -191,14 +225,18 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
       return;
     }
     unawaited(_saveProfile());
-    // Re-fetch the vendor pool for every plan run — packages and ratings
-    // vendors registered since the last fetch must reach this couple's
-    // matching, not a session-old cached list.
+    // Matching itself always fetches fresh, category-scoped data (see
+    // vendorMatchValidationProvider), so this invalidate is only for the
+    // other, unscoped consumers of the full vendor pool — recommendedVendorsProvider
+    // and availableVendorCategoriesProvider — so packages/ratings vendors
+    // registered since the last fetch reach those too, not a session-old list.
     ref.invalidate(allVendorsProvider);
     final categories = _activeCategories();
     ref.read(selectedServiceCategoriesProvider.notifier).state = categories;
     ref.read(wizardLocationProvider.notifier).state = _locationCtrl.text.trim();
     ref.read(wizardBudgetProvider.notifier).state = totalBudget;
+    ref.read(wizardGuestCountProvider.notifier).state =
+        int.tryParse(_guestsCtrl.text.trim());
     ref.read(wizardStylesProvider.notifier).state = _selectedStyles.toList();
     ref.read(budgetClassProvider.notifier).state = switch (_weddingClass) {
       'Low class' => BudgetClass.budgetFriendly,
@@ -213,108 +251,6 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           serviceCategories: categories,
         );
     setState(() => _step++);
-    _loadWeddingAiPlan(totalBudget, categories);
-  }
-
-  Future<void> _loadWeddingAiPlan(
-    double totalBudget,
-    List<String> categories,
-  ) async {
-    setState(() {
-      _aiPlanLoading = true;
-      _aiPlanError = null;
-    });
-
-    try {
-      // The narrative plan's budgetAdvice is itself an AI-generated budget
-      // allocation, so it must be gated behind the same pre-AI validation the
-      // vendor matcher runs — a couple must never see one AI allocation
-      // blocked while another is silently produced anyway.
-      final validation = await ref.read(vendorMatchValidationProvider.future);
-      if (validation.isBlocked) {
-        if (mounted) {
-          setState(() {
-            _aiPlanError = validation.blockingFailure!.message;
-            _aiPlanLoading = false;
-          });
-        }
-        return;
-      }
-
-      final result = await WeddingAiService.instance.generateWeddingPlan(
-        totalBudget: totalBudget,
-        currency: 'ZMW',
-        weddingType: _weddingType,
-        weddingClass: _weddingClass,
-        guestCount: int.tryParse(_guestsCtrl.text) ?? 0,
-        location: _locationCtrl.text.trim().isEmpty
-            ? 'Zambia'
-            : _locationCtrl.text.trim(),
-        weddingDate: _weddingDate,
-        styles: _selectedStyles.toList(),
-        categories: categories,
-      );
-      if (mounted) {
-        setState(() {
-          _aiPlanResult = result;
-          _aiPlanLoading = false;
-        });
-      }
-    } on WeddingAiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _aiPlanResult =
-              _localPlanFallback(totalBudget, categories, e.message);
-          _aiPlanLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _aiPlanResult = _localPlanFallback(totalBudget, categories,
-              "Couldn't reach WedPilot AI right now.");
-          _aiPlanLoading = false;
-        });
-      }
-    }
-  }
-
-  /// Grounded stand-in for the AI narrative plan when the AI can't be
-  /// reached (backend offline, rate limit, timeout): WedPilot's standard
-  /// allocation percentages, renormalized over just the categories the
-  /// couple selected. Every figure is deterministic app data — nothing here
-  /// is generated, so nothing here can be fabricated.
-  WeddingPlanResult _localPlanFallback(
-    double totalBudget,
-    List<String> categories,
-    String reason,
-  ) {
-    final weights = {
-      for (final c in categories)
-        // Custom categories the couple added have no standard share — give
-        // them a small planning slice rather than zero.
-        c: AppConstants.defaultBudgetAllocation[c] ?? 0.05,
-    };
-    final sum = weights.values.fold(0.0, (a, b) => a + b);
-    final advice = sum <= 0
-        ? <String, double>{}
-        : {
-            for (final e in weights.entries)
-              e.key: ((e.value / sum) * 100).roundToDouble(),
-          };
-    return WeddingPlanResult(
-      planSummary:
-          '$reason Meanwhile, here is WedPilot\'s standard planner split for '
-          'your ${fmtCurrency(totalBudget)} budget across your '
-          '${categories.length} selected services — and your vendor matches '
-          'below are computed from real vendor data on file, unaffected.',
-      budgetAdvice: advice,
-      budgetReasoning: {
-        for (final c in categories)
-          c: 'WedPilot\'s standard allocation for $c, scaled to the set of '
-              'services you selected.',
-      },
-    );
   }
 
   @override
@@ -370,6 +306,13 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
   // ── Step 0: Budget & basics ─────────────────────────────────────────────────
 
   Widget _buildBudgetStep() {
+    // Watched here (not read lazily in _next()) so the system-wide guest
+    // capacity gate almost always has data by the time the couple taps
+    // Continue, instead of a network round-trip only starting on submit —
+    // and so its value is available below as an upfront clue, not just in
+    // the rejection message once they've already typed an unrealistic number.
+    final systemMaxCapacity =
+        ref.watch(systemMaxGuestCapacityProvider).valueOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -414,6 +357,15 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           inputType: TextInputType.number,
           formatters: [FilteringTextInputFormatter.digitsOnly],
         ),
+        if (systemMaxCapacity != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Vendors on file can currently serve up to $systemMaxCapacity guests.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
         const SizedBox(height: 24),
 
         // Location
@@ -651,6 +603,8 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         validationResult?.excludedCategoryMessages ?? const <String, String>{};
     final budgetExhaustedMessages =
         validationResult?.budgetExhaustedMessages ?? const <String, String>{};
+    final guestCapacityExcludedMessages =
+        validationResult?.guestCapacityExcludedMessages ?? const <String, String>{};
     final pdfAsync = ref.watch(weddingPlanPdfBytesProvider);
     final categories = _activeCategories();
     final budgetClass = ref.watch(budgetClassProvider);
@@ -687,15 +641,6 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── AI Plan Summary ──────────────────────────────────────────────────
-        _AiPlanSummaryCard(
-          loading: _aiPlanLoading,
-          result: _aiPlanResult,
-          error: _aiPlanError,
-          categories: categories,
-        ),
-        const SizedBox(height: 20),
-
         // ── Wedding details recap ───────────────────────────────────────────
         Container(
           padding: const EdgeInsets.all(20),
@@ -766,12 +711,22 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
             );
           },
           data: (matches) {
+            // Every card ships with deterministic, locally-authored reasoning
+            // the instant matches resolve (see aiRecommendedVendorsProvider).
+            // The AI writes richer justification for the same, already-final
+            // pick in the background and never blocks this screen — once it
+            // lands here, swap it in without re-running the match itself.
+            final explanations = ref.watch(vendorMatchExplanationsProvider);
+            final explainedMatches = [
+              for (final m in matches) _applyAiExplanation(m, explanations[m.vendor.category]),
+            ];
+
             // Up to 3 per category (rank 1-3, sorted), not just the winner —
             // seeing the runners-up alongside the top pick is what actually
             // lets a couple sanity-check the ranking instead of trusting a
             // single name on faith (see AiEngine.attachAlternates).
             final rankedByCategory = <String, List<VendorMatch>>{};
-            for (final m in matches) {
+            for (final m in explainedMatches) {
               rankedByCategory.putIfAbsent(m.vendor.category, () => []).add(m);
             }
             for (final list in rankedByCategory.values) {
@@ -814,6 +769,33 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                           Expanded(
                             child: Text(
                               budgetExhaustedMessages[category]!,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (guestCapacityExcludedMessages[category] != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.warningBg,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.people_outline_rounded,
+                            size: 16,
+                            color: AppColors.warning,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              guestCapacityExcludedMessages[category]!,
                               style: AppTextStyles.bodySmall.copyWith(
                                 color: AppColors.textPrimary,
                               ),
@@ -972,8 +954,8 @@ class _AiRankingCardState extends State<_AiRankingCard>
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'WedPilot AI is ranking the best vendors for your plan — checking '
-                  'availability, reputation, and value for each category…',
+                  'Finding your best matching vendors — checking budget, location, '
+                  'guest capacity, and reputation for each category…',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
@@ -1457,6 +1439,21 @@ class _ClassPackageSection extends StatelessWidget {
 // card (and in the budget recap) — the "Budget fit" reasoning step just
 // repeats that same figure, so it's dropped here while every other step
 // (reputation, availability, style match, verdict) still renders as-is.
+/// Overlays AI-authored reasoning onto an already-final [match] once it's
+/// ready — [sug] is null until the background explanation call resolves, and
+/// is discarded if it was written for a different vendor (a stale entry from
+/// before the couple changed budget class/location and the pick moved on).
+VendorMatch _applyAiExplanation(VendorMatch match, VendorMatchSuggestion? sug) {
+  if (sug == null || sug.vendorId != match.vendorId) return match;
+  return match.copyWith(
+    reasoningSteps: sug.reasoningSteps,
+    noteToCouple: sug.noteToCouple,
+    fitsBudget: sug.fitsBudget,
+    budgetDeltaPercent: sug.budgetDeltaPercent,
+    selectionBasis: sug.selectionBasis,
+  );
+}
+
 List<ReasoningStep> _visibleReasoningSteps(VendorMatch match) => match
     .reasoningSteps
     .where((s) => s.label != ReasoningStep.budgetFit)
@@ -2056,101 +2053,6 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
-// ── AI plan summary card ────────────────────────────────────────────────────
-
-class _AiPlanSummaryCard extends StatelessWidget {
-  final bool loading;
-  final WeddingPlanResult? result;
-  final String? error;
-  final List<String> categories;
-
-  const _AiPlanSummaryCard({
-    required this.loading,
-    required this.result,
-    required this.error,
-    required this.categories,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.forestGreen, Color(0xFF2D6A4F)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.auto_awesome_rounded,
-                color: AppColors.amber,
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'WedPilot AI',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.amber,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (loading) ...[
-            const _AiPlanShimmerLines(),
-          ] else if (error != null) ...[
-            Text(
-              error!,
-              style: AppTextStyles.bodySmall.copyWith(color: Colors.white70),
-            ),
-          ] else if (result != null) ...[
-            Text(
-              result!.planSummary,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.white,
-                height: 1.55,
-              ),
-            ),
-            if (result!.budgetAdvice.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                'SUGGESTED BUDGET SPLIT',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.amber,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 10),
-              ...result!.budgetAdvice.entries
-                  .where((e) => categories.contains(e.key))
-                  .map(
-                    (e) => _BudgetAdviceRow(
-                      category: e.key,
-                      percent: e.value,
-                      reasoning: result!.budgetReasoning[e.key],
-                    ),
-                  ),
-            ],
-            const SizedBox(height: 14),
-            const _AiDisclaimer(),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 /// Shown wherever AI-generated reasoning is displayed — a plain reminder
 /// that the couple should double-check specifics before acting on it, since
 /// even a well-grounded model can still get a detail wrong.
@@ -2176,123 +2078,3 @@ class _AiDisclaimer extends StatelessWidget {
   }
 }
 
-class _BudgetAdviceRow extends StatelessWidget {
-  final String category;
-  final double percent;
-  final String? reasoning;
-  const _BudgetAdviceRow({
-    required this.category,
-    required this.percent,
-    this.reasoning,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  category,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: Colors.white70,
-                  ),
-                ),
-              ),
-              Text(
-                '${percent.round()}%',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 80,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: percent / 100,
-                    minHeight: 6,
-                    backgroundColor: Colors.white24,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      AppColors.amber,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (reasoning != null && reasoning!.isNotEmpty) ...[
-            const SizedBox(height: 3),
-            Text(
-              reasoning!,
-              style: AppTextStyles.caption.copyWith(
-                color: Colors.white60,
-                height: 1.35,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _AiPlanShimmerLines extends StatefulWidget {
-  const _AiPlanShimmerLines();
-
-  @override
-  State<_AiPlanShimmerLines> createState() => _AiPlanShimmerLinesState();
-}
-
-class _AiPlanShimmerLinesState extends State<_AiPlanShimmerLines>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  )..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (_, _) {
-        final opacity = 0.3 + _ctrl.value * 0.4;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _shimmerBar(opacity, 1.0),
-            const SizedBox(height: 8),
-            _shimmerBar(opacity, 0.85),
-            const SizedBox(height: 8),
-            _shimmerBar(opacity, 0.6),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _shimmerBar(double opacity, double widthFactor) {
-    return FractionallySizedBox(
-      widthFactor: widthFactor,
-      child: Container(
-        height: 12,
-        decoration: BoxDecoration(
-          color: Colors.white.withAlpha((opacity * 255).round()),
-          borderRadius: BorderRadius.circular(6),
-        ),
-      ),
-    );
-  }
-}

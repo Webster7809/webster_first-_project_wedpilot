@@ -1,28 +1,14 @@
-import 'dart:io' show Platform;
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:dio/dio.dart';
 
+import '../config/api_config.dart';
 import '../../models/invitation.dart';
-
-const int _backendPort = 3000;
-// Set this to your machine's LAN IP (e.g. '192.168.1.20') when testing a
-// shared invitation link on a separate physical device, since 'localhost'
-// on that device would refer to itself, not this computer.
-const String? _lanHost = null;
-
-String get _baseUrl {
-  if (_lanHost != null) return 'http://$_lanHost:$_backendPort';
-  if (kIsWeb) return 'http://localhost:$_backendPort';
-  if (Platform.isAndroid) return 'http://10.0.2.2:$_backendPort';
-  return 'http://localhost:$_backendPort';
-}
 
 /// Resolves a stored relative upload path (e.g. '/uploads/invitations/x.jpg')
 /// to an absolute URL. Already-absolute URLs are returned unchanged.
 String resolveInvitationMediaUrl(String urlOrPath) =>
-    urlOrPath.startsWith('http') ? urlOrPath : '$_baseUrl$urlOrPath';
+    urlOrPath.startsWith('http') ? urlOrPath : '${ApiConfig.baseUrl}$urlOrPath';
 
 class InvitationApiException implements Exception {
   final String message;
@@ -34,7 +20,7 @@ class InvitationApiService {
   static final InvitationApiService instance = InvitationApiService._();
 
   final Dio _dio = Dio(BaseOptions(
-    baseUrl: _baseUrl,
+    baseUrl: ApiConfig.baseUrl,
     connectTimeout: const Duration(seconds: 30),
     receiveTimeout: const Duration(seconds: 60),
     headers: {'Content-Type': 'application/json'},

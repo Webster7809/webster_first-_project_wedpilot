@@ -1,41 +1,18 @@
-import 'dart:io' show Platform;
+import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:dio/dio.dart';
 
+import '../config/api_config.dart';
+import '../utils/json_utils.dart';
 import '../../models/vendor_profile.dart' show ReasoningStep, SelectionBasis;
 
-// All AI calls (OpenRouter-backed) go through the Node/Express backend at [_baseUrl].
+// All AI calls (OpenRouter-backed) go through the Node/Express backend.
 // Flutter never touches the LLM API key.
-// Change [_backendPort] or [_lanHost] when deploying to production.
-const int _backendPort = 3000;
-
-// Set this to your machine's LAN IP (e.g. '192.168.1.20') when testing on a
-// physical device, since 'localhost' on the device refers to the device itself.
-const String? _lanHost = null;
-
-String get _baseUrl {
-  if (_lanHost != null) return 'http://$_lanHost:$_backendPort';
-  if (kIsWeb) return 'http://localhost:$_backendPort';
-  if (Platform.isAndroid) return 'http://10.0.2.2:$_backendPort'; // Android emulator → host localhost
-  return 'http://localhost:$_backendPort'; // iOS simulator, desktop
-}
 
 class WeddingAiException implements Exception {
   final String message;
   const WeddingAiException(this.message);
-}
-
-class WeddingPlanResult {
-  final String planSummary;
-  final Map<String, double> budgetAdvice;
-  final Map<String, String> budgetReasoning;
-
-  const WeddingPlanResult({
-    required this.planSummary,
-    required this.budgetAdvice,
-    required this.budgetReasoning,
-  });
 }
 
 /// A vendor candidate sent to the AI matcher, carrying precomputed 0-1
@@ -113,8 +90,8 @@ class VendorMatchSuggestion {
 
   factory VendorMatchSuggestion.fromJson(Map<String, dynamic> json) {
     final rawSteps = (json['reasoningSteps'] as List<dynamic>?) ?? const [];
-    // Every step's text goes through the same leak guard as planSummary/
-    // budgetReasoning below — this path used to skip it entirely, so a
+    // Every step's text goes through the same leak guard as noteToCouple
+    // below — this path used to skip it entirely, so a
     // model that spilled raw JSON/meta-commentary into a "Style match" or
     // "Verdict" step (the only two the backend leaves as free-form prose;
     // everything else is grounded from real data) would reach the couple
@@ -129,8 +106,8 @@ class VendorMatchSuggestion {
         .toList();
     final rawNote = json['noteToCouple'] as String?;
     return VendorMatchSuggestion(
-      vendorId: json['vendorId'] as String,
-      confidence: (json['confidence'] as num).toDouble(),
+      vendorId: requireString(json, 'vendorId'),
+      confidence: requireNum(json, 'confidence').toDouble(),
       // Falls back to a single legacy-shaped step if the model ever returns
       // the old flat 'reasoning' string instead of 'reasoningSteps'.
       reasoningSteps: steps.isNotEmpty
@@ -158,63 +135,48 @@ class WeddingAiService {
   static final WeddingAiService instance = WeddingAiService._();
 
   final Dio _dio = Dio(BaseOptions(
-    baseUrl: _baseUrl,
+    baseUrl: ApiConfig.baseUrl,
     connectTimeout: const Duration(seconds: 30),
     receiveTimeout: const Duration(seconds: 90),
     headers: {'Content-Type': 'application/json'},
   ));
 
-  Future<WeddingPlanResult> generateWeddingPlan({
-    required double totalBudget,
-    required String currency,
-    required String weddingType,
-    required String weddingClass,
-    required int guestCount,
-    required String location,
-    required DateTime? weddingDate,
-    required List<String> styles,
-    required List<String> categories,
-  }) async {
-    try {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/api/wedding-plan',
-        data: {
-          'totalBudget': totalBudget,
-          'currency': currency,
-          'weddingType': weddingType,
-          'weddingClass': weddingClass,
-          'guestCount': guestCount,
-          'location': location,
-          'weddingDate': weddingDate?.toIso8601String(),
-          'styles': styles,
-          'categories': categories,
-        },
-      );
+  // Every AI call funnels through this queue so two calls fired close
+  // together never hit the backend concurrently — the free-tier model
+  // backing OPENROUTER_MODEL can't serve two requests on the same key at
+  // once: the second one gets its connection killed outright rather than
+  // queued, which surfaces here as a bare "terminated" network error instead
+  // of a real AI response.
+  Future<void> _queue = Future.value();
 
-      final data = response.data ?? {};
+  // `flutter_test` runs every `testWidgets` body in its own zone. A Future
+  // created and completed entirely inside one test's zone stops notifying
+  // `.then()` listeners registered from a *later* test's zone once the
+  // owning test has finished — confirmed by instrumentation: the completer
+  // settles normally, but a fresh listener attached from the next test never
+  // fires, even though a brand-new Future created in that next test's own
+  // zone behaves normally. Since [instance] is a real singleton, [_queue]
+  // otherwise carries a test-1-zoned Future into test 2, permanently
+  // starving every call queued behind it. Not reachable in production (the
+  // app runs in one continuous zone) — test-only escape hatch.
+  @visibleForTesting
+  void resetQueueForTests() => _queue = Future.value();
 
-      final budgetRaw = (data['budgetAdvice'] as Map<String, dynamic>?) ?? {};
-      final budgetReasoningRaw = (data['budgetReasoning'] as Map<String, dynamic>?) ?? {};
-
-      return WeddingPlanResult(
-        planSummary: _stripJsonLeak((data['planSummary'] as String?) ?? ''),
-        budgetAdvice: budgetRaw.map((k, v) => MapEntry(k, (v as num).toDouble())),
-        budgetReasoning: budgetReasoningRaw
-            .map((k, v) => MapEntry(k, _stripJsonLeak(v.toString()))),
-      );
-    } on DioException catch (e) {
-      throw WeddingAiException(_friendlyError(e));
-    }
+  Future<T> _serialized<T>(Future<T> Function() action) {
+    final previous = _queue;
+    final done = Completer<void>();
+    _queue = done.future;
+    return previous.then((_) => action()).whenComplete(done.complete);
   }
 
   // Mirror of the backend's stripLeak guard, kept client-side because a
   // deployed backend may predate it: a free-tier model occasionally spills the
   // rest of its JSON into a prose field (quoting keys with ASCII, curly, or
-  // CJK corner quotes — '「budgetAdvice": {'). Prose fields are single
+  // CJK corner quotes — '「reasoningSteps": {'). Prose fields are single
   // paragraphs, so a blank line, an embedded '"Key": {' pattern, or a bare
   // schema key name is always a leak — nothing past it is ever rendered.
   static final RegExp _leakMarker = RegExp(
-    r'''\n\s*\n|["'“”‘’「」『』][A-Za-z][A-Za-z ]{0,30}["'“”‘’「」『』]\s*:\s*[{\[]|\b(?:planSummary|budgetAdvice|budgetReasoning|reasoningSteps|vendorId|budgetFitSuggestionType|budgetDeltaPercent|fitsBudget|selectionBasis|noteToCouple)\b|\b(?:let me|i'll (?:rewrite|redo|compose|output|produce|correct)|as an ai|as a language model|i am an ai|the json (?:value|output|now)|proper escaping|stray characters|note:)\b''',
+    r'''\n\s*\n|["'“”‘’「」『』][A-Za-z][A-Za-z ]{0,30}["'“”‘’「」『』]\s*:\s*[{\[]|\b(?:reasoningSteps|vendorId|budgetFitSuggestionType|budgetDeltaPercent|fitsBudget|selectionBasis|noteToCouple)\b|\b(?:let me|i'll (?:rewrite|redo|compose|output|produce|correct)|as an ai|as a language model|i am an ai|the json (?:value|output|now)|proper escaping|stray characters|note:)\b''',
     caseSensitive: false,
   );
 
@@ -228,17 +190,20 @@ class WeddingAiService {
         .trim();
   }
 
-  /// Asks the AI to pick and justify one top vendor per category.
-  /// Returns a map of category name -> its top-pick suggestion.
-  Future<Map<String, VendorMatchSuggestion>> matchVendors({
+  /// Asks the AI to write human-friendly justification for a vendor pick
+  /// already decided by the deterministic local scoring engine (see
+  /// `_AiEngine.recommend` in vendor_ai_provider.dart) — the AI never
+  /// chooses between candidates here, only explains the one it's given.
+  /// Returns a map of category name -> its explained pick.
+  Future<Map<String, VendorMatchSuggestion>> explainVendorMatches({
     required String budgetClass,
     String? location,
     List<String> styles = const [],
-    required Map<String, List<VendorMatchCandidate>> categorized,
+    required Map<String, VendorMatchCandidate> picks,
     // The couple's allocated spend per category (e.g. 'Venue': 5000), derived
     // from their total wedding budget. Absent categories mean no known cap.
     Map<String, double> categoryBudgets = const {},
-  }) async {
+  }) => _serialized(() async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         '/api/vendor-match',
@@ -247,9 +212,7 @@ class WeddingAiService {
           'location': location,
           'styles': styles,
           'categoryBudgets': categoryBudgets,
-          'categories': categorized.map(
-            (cat, list) => MapEntry(cat, list.map((c) => c.toJson()).toList()),
-          ),
+          'picks': picks.map((cat, c) => MapEntry(cat, c.toJson())),
         },
       );
 
@@ -262,8 +225,12 @@ class WeddingAiService {
       );
     } on DioException catch (e) {
       throw WeddingAiException(_friendlyError(e));
+    } on FormatException catch (_) {
+      throw const WeddingAiException('WedPilot AI returned an unexpected response. Please try again.');
+    } on TypeError catch (_) {
+      throw const WeddingAiException('WedPilot AI returned an unexpected response. Please try again.');
     }
-  }
+  });
 
   /// Shows the AI service's own words verbatim whenever the backend forwarded
   /// one (see `askAI`'s upstreamMessage extraction in `backend/server.js`) —

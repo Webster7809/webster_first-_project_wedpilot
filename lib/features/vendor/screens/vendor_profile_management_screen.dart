@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -160,11 +161,35 @@ class _VendorProfileManagementScreenState
                             ClipRRect(
                               borderRadius: BorderRadius.circular(16),
                               child: logoUrl != null
-                                  ? Image.network(
-                                      resolveMediaUrl(logoUrl),
+                                  ? CachedNetworkImage(
+                                      imageUrl: resolveMediaUrl(logoUrl),
                                       width: 60,
                                       height: 60,
                                       fit: BoxFit.cover,
+                                      memCacheWidth: 120,
+                                      placeholder: (context, url) => Container(
+                                        width: 60,
+                                        height: 60,
+                                        color: AppColors.creamDark,
+                                        child: const Center(
+                                          child: SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) => Container(
+                                        width: 60,
+                                        height: 60,
+                                        color: AppColors.creamDark,
+                                        child: const Icon(
+                                          Icons.broken_image_outlined,
+                                          color: AppColors.textHint,
+                                        ),
+                                      ),
                                     )
                                   : Container(
                                       width: 60,

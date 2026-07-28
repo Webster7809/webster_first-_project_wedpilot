@@ -109,8 +109,17 @@ const Vendor = sequelize.define('Vendor', {
   createdAt: 'created_at',
   updatedAt: 'updated_at',
   // Named explicitly — see couple_profiles.js for why (avoids Sequelize
-  // piling up duplicate unique indexes on every alter-sync).
-  indexes: [{ unique: true, fields: ['user_id'], name: 'vendors_user_id_unique' }],
+  // piling up duplicate indexes on every alter-sync). category and
+  // verification_status are indexed because GET /api/vendors and the
+  // AI-matching candidate fetch both filter on them directly (see
+  // routes/vendors.js) — every vendor-match run does at least one such
+  // query per requested category, so an unindexed scan there is on the hot
+  // path for every "Create plan" tap, not just occasional admin queries.
+  indexes: [
+    { unique: true, fields: ['user_id'], name: 'vendors_user_id_unique' },
+    { fields: ['category'], name: 'vendors_category_idx' },
+    { fields: ['verification_status'], name: 'vendors_verification_status_idx' },
+  ],
 });
 
 module.exports = Vendor;

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -355,11 +356,36 @@ class _ProfileHero extends ConsumerWidget {
                     ),
                     child: photoUrl != null
                         ? ClipOval(
-                            child: Image.network(
-                              resolveMediaUrl(photoUrl),
+                            child: CachedNetworkImage(
+                              imageUrl: resolveMediaUrl(photoUrl),
                               width: 72,
                               height: 72,
                               fit: BoxFit.cover,
+                              memCacheWidth: 144,
+                              placeholder: (context, url) => Container(
+                                width: 72,
+                                height: 72,
+                                color: Colors.white.withAlpha(51),
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                width: 72,
+                                height: 72,
+                                color: AppColors.creamDark,
+                                child: const Icon(
+                                  Icons.broken_image_outlined,
+                                  color: AppColors.textHint,
+                                ),
+                              ),
                             ),
                           )
                         : const Center(

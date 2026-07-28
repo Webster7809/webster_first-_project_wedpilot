@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/admin_api_service.dart';
@@ -499,22 +500,20 @@ class _ImageModerationList extends StatelessWidget {
                   width: double.infinity,
                   color: AppColors.adminNeutralBg,
                   child: img.url.isNotEmpty
-                      ? Image.network(
-                          img.thumbnailUrl ?? img.url,
+                      ? CachedNetworkImage(
+                          imageUrl: img.thumbnailUrl ?? img.url,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Center(
+                          memCacheWidth: 800,
+                          errorWidget: (context, url, error) => Center(
                             child: Icon(
                               Icons.broken_image_outlined,
                               size: 36,
                               color: AppColors.textHint,
                             ),
                           ),
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return const Center(
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            );
-                          },
+                          placeholder: (context, url) => const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
                         )
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,

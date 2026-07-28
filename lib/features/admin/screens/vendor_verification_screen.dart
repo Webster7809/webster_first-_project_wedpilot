@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/admin_api_service.dart';
@@ -273,7 +274,23 @@ class _VerificationCardState extends State<_VerificationCard> {
                     height: 44,
                     color: AppColors.adminAmberBg,
                     child: v.logoUrl != null
-                        ? Image.network(resolveMediaUrl(v.logoUrl!), fit: BoxFit.cover)
+                        ? CachedNetworkImage(
+                            imageUrl: resolveMediaUrl(v.logoUrl!),
+                            fit: BoxFit.cover,
+                            memCacheWidth: 88,
+                            placeholder: (context, url) => const Center(
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => const Icon(
+                              Icons.broken_image_outlined,
+                              color: AppColors.textHint,
+                              size: 22,
+                            ),
+                          )
                         : const Icon(Icons.storefront_outlined,
                             color: AppColors.adminAmber, size: 22),
                   ),
