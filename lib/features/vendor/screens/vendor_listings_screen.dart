@@ -17,6 +17,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_own_provider.dart';
 import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_chip.dart';
 import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
 
@@ -182,8 +183,8 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
           _ => _pickAndAddImage,
         },
         child: Icon(switch (tabIndex) {
-          0 => Icons.add_rounded,
-          1 => Icons.card_giftcard_rounded,
+          0 => Icons.add,
+          1 => Icons.card_giftcard,
           _ => Icons.add_photo_alternate_outlined,
         }),
       ),
@@ -439,33 +440,76 @@ class _ServiceCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: service.isActive
-                          ? AppColors.success.withAlpha(20)
-                          : AppColors.textHint.withAlpha(40),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      service.isActive ? 'Active' : 'Draft',
-                      style: AppTextStyles.caption.copyWith(
-                        color: service.isActive
-                            ? AppColors.success
-                            : AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: service.isActive
+                              ? AppColors.success.withAlpha(20)
+                              : AppColors.textHint.withAlpha(40),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          service.isActive ? 'Active' : 'Draft',
+                          style: AppTextStyles.caption.copyWith(
+                            color: service.isActive
+                                ? AppColors.success
+                                : AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
+                      // Legacy listing from before guest capacity was
+                      // mandatory (see backend/scripts/backfillGuestCapacity.js)
+                      // — surfaced here so it's never silently invisible to
+                      // the AI matching pipeline's capacity ranking.
+                      if (service.maxGuests == null)
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: onEdit,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.warning.withAlpha(20),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.warning_amber,
+                                      size: 12, color: AppColors.warning),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Add guest capacity',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.warning,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
             ),
             PopupMenuButton<String>(
               icon: const Icon(
-                Icons.more_vert_rounded,
+                Icons.more_vert,
                 color: AppColors.textSecondary,
               ),
               onSelected: (value) {
@@ -553,8 +597,8 @@ class _PortfolioTile extends StatelessWidget {
                   height: 26,
                   child: Icon(
                     item.isFeatured
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
+                        ? Icons.star
+                        : Icons.star_outlined,
                     size: 16,
                     color: Colors.white,
                   ),
@@ -819,21 +863,10 @@ class _ServiceFormSheetState extends ConsumerState<_ServiceFormSheet> {
                     final selected = _unit == unit;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(unit),
-                        selected: selected,
-                        onSelected: (_) => setState(() => _unit = unit),
-                        selectedColor: AppColors.forestGreen,
-                        labelStyle: AppTextStyles.labelMedium.copyWith(
-                          color: selected
-                              ? Colors.white
-                              : AppColors.textPrimary,
-                        ),
-                        side: BorderSide(
-                          color: selected
-                              ? AppColors.forestGreen
-                              : AppColors.divider,
-                        ),
+                      child: WedChip(
+                        label: unit,
+                        isSelected: selected,
+                        onTap: () => setState(() => _unit = unit),
                       ),
                     );
                   }).toList(),
@@ -935,7 +968,7 @@ class _PackagesTab extends ConsumerWidget {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.card_giftcard_rounded,
+                      Icon(Icons.card_giftcard,
                           size: 20, color: AppColors.forestGreen.withAlpha(120)),
                       const SizedBox(width: 10),
                       Expanded(
@@ -1092,7 +1125,7 @@ class _CriteriaChecklist extends StatelessWidget {
               children: [
                 Icon(
                   c.met
-                      ? Icons.check_circle_rounded
+                      ? Icons.check_circle
                       : Icons.radio_button_unchecked,
                   size: 16,
                   color: c.met ? AppColors.budgetGreen : AppColors.textHint,
@@ -1185,7 +1218,7 @@ class _PackageCard extends StatelessWidget {
               IconButton(
                 tooltip: 'Delete',
                 onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline_rounded,
+                icon: const Icon(Icons.delete_outlined,
                     size: 18, color: AppColors.error),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -1201,7 +1234,7 @@ class _PackageCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    isLuxury ? Icons.diamond_outlined : Icons.check_rounded,
+                    isLuxury ? Icons.diamond_outlined : Icons.check,
                     size: 13,
                     color: tierColor,
                   ),
@@ -1355,23 +1388,12 @@ class _PackageFormSheetState extends ConsumerState<_PackageFormSheet> {
                   for (final tier in VendorPackageTier.values)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(tier == VendorPackageTier.luxury
+                      child: WedChip(
+                        label: tier == VendorPackageTier.luxury
                             ? '👑 Luxury'
-                            : '🎁 Starter'),
-                        selected: _tier == tier,
-                        onSelected: (_) => setState(() => _tier = tier),
-                        selectedColor: AppColors.forestGreen,
-                        labelStyle: AppTextStyles.labelMedium.copyWith(
-                          color: _tier == tier
-                              ? Colors.white
-                              : AppColors.textPrimary,
-                        ),
-                        side: BorderSide(
-                          color: _tier == tier
-                              ? AppColors.forestGreen
-                              : AppColors.divider,
-                        ),
+                            : '🎁 Starter',
+                        isSelected: _tier == tier,
+                        onTap: () => setState(() => _tier = tier),
                       ),
                     ),
                 ],

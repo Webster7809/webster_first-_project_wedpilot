@@ -4,13 +4,33 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        
+
         {
             "type": "chrome",
             "request": "launch",
             "name": "Launch Chrome against localhost",
             "url": "http://localhost:8080",
             "webRoot": "${workspaceFolder}"
+        },
+        {
+            // Pick your phone from VS Code's device selector (bottom status
+            // bar), then Run/F5 this configuration. Every file save then hot
+            // reloads straight onto the phone over the same USB cable — no
+            // Wi-Fi involved, so it isn't affected by the laptop's LAN IP
+            // changing on reconnect (it has drifted twice already: first
+            // 192.168.69.30, then .225.30, now .248.30).
+            //
+            // Requires one setup step per USB reconnect — the phone can't
+            // resolve "localhost" as this laptop on its own, so a reverse
+            // port forward has to exist first:
+            //   adb reverse tcp:3000 tcp:3000
+            // (ask Claude to run this any time the phone gets reconnected —
+            // it drops when the cable is unplugged or the phone reboots).
+            "name": "WedPilot — phone via USB",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "toolArgs": ["--dart-define=API_HOST=localhost"]
         }
     ]
 }

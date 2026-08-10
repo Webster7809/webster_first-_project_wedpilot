@@ -50,7 +50,7 @@ class CoupleProfileScreen extends ConsumerWidget {
               IconButton(
                 tooltip: 'Log out',
                 icon: const Icon(
-                  Icons.logout_rounded,
+                  Icons.logout,
                   color: Colors.white,
                   size: 24,
                 ),
@@ -80,19 +80,19 @@ class CoupleProfileScreen extends ConsumerWidget {
                   _ToolGrid(
                     items: [
                       _ToolItem(
-                        icon: Icons.chat_bubble_outline_rounded,
+                        icon: Icons.chat_bubble_outlined,
                         label: 'Messages',
                         color: AppColors.info,
                         onTap: () => context.push('/couple/messages'),
                       ),
                       _ToolItem(
-                        icon: Icons.checklist_rounded,
+                        icon: Icons.checklist,
                         label: 'Checklist',
                         color: AppColors.tertiary,
                         onTap: () => context.push('/couple/checklist'),
                       ),
                       _ToolItem(
-                        icon: Icons.favorite_outline_rounded,
+                        icon: Icons.favorite_outlined,
                         label: 'Wishlist',
                         color: AppColors.secondary,
                         onTap: () => context.push('/couple/wishlist'),
@@ -130,7 +130,7 @@ class CoupleProfileScreen extends ConsumerWidget {
                         onTap: () => context.push('/settings'),
                       ),
                       _SettingItem(
-                        icon: Icons.help_outline_rounded,
+                        icon: Icons.help_outlined,
                         label: 'Help & FAQ',
                         onTap: () => context.push('/help'),
                       ),
@@ -293,7 +293,7 @@ class _ProfileHero extends ConsumerWidget {
                 if (hasPhoto) ...[
                   const Divider(height: 1, thickness: 1),
                   _PhotoOptionTile(
-                    icon: Icons.delete_outline_rounded,
+                    icon: Icons.delete_outlined,
                     iconColor: AppColors.error,
                     label: 'Remove photo',
                     labelColor: AppColors.error,
@@ -321,7 +321,7 @@ class _ProfileHero extends ConsumerWidget {
           end: Alignment.bottomRight,
           colors: [
             AppColors.forestGreen,
-            AppColors.coupleMagenta,
+            AppColors.gradientAccentGreen,
             AppColors.forestGreen,
           ],
           stops: [0.0, 0.55, 1.0],

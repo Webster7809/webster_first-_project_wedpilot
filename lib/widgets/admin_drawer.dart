@@ -54,7 +54,7 @@ class AdminDrawer extends ConsumerWidget {
                         child: Text(
                           initial,
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: AppColors.textOnSecondary,
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
                           ),
@@ -89,7 +89,7 @@ class AdminDrawer extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
                 _DrawerItem(
-                  icon: Icons.dashboard_rounded,
+                  icon: Icons.dashboard,
                   label: 'Dashboard',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -97,7 +97,7 @@ class AdminDrawer extends ConsumerWidget {
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.people_rounded,
+                  icon: Icons.people,
                   label: 'Users',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -105,7 +105,7 @@ class AdminDrawer extends ConsumerWidget {
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.verified_rounded,
+                  icon: Icons.verified,
                   label: 'Vendors',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -113,7 +113,7 @@ class AdminDrawer extends ConsumerWidget {
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.bar_chart_rounded,
+                  icon: Icons.bar_chart,
                   label: 'Analytics',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -127,7 +127,7 @@ class AdminDrawer extends ConsumerWidget {
                 ),
 
                 _DrawerItem(
-                  icon: Icons.settings_rounded,
+                  icon: Icons.settings,
                   label: 'Settings',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -141,7 +141,7 @@ class AdminDrawer extends ConsumerWidget {
                 ),
 
                 _DrawerItem(
-                  icon: Icons.logout_rounded,
+                  icon: Icons.logout,
                   label: 'Logout',
                   iconColor: AppColors.error,
                   labelColor: AppColors.error,

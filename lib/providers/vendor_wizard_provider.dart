@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/vendor_profile.dart';
 import '../core/services/vendor_pdf_service.dart';
 import 'auth_provider.dart';
-import 'budget_provider.dart';
 import 'vendor_ai_provider.dart';
 
 // ── AI-curated plan ──────────────────────────────────────────────────────────
@@ -25,7 +24,6 @@ final weddingPlanPdfBytesProvider = FutureProvider<Uint8List>((ref) async {
   final couple = ref.watch(coupleProfileProvider);
   final vendors = ref.watch(finalChosenVendorsProvider);
   final aiMatches = ref.watch(aiRecommendedVendorsProvider).valueOrNull ?? [];
-  final budget = ref.watch(budgetProvider).data;
 
   final reasoningByVendorId = <String, String>{
     for (final m in aiMatches)
@@ -34,7 +32,6 @@ final weddingPlanPdfBytesProvider = FutureProvider<Uint8List>((ref) async {
 
   return VendorPdfService.buildWeddingPlanPdf(
     couple: couple,
-    budget: budget,
     vendors: vendors,
     reasoningByVendorId: reasoningByVendorId,
   );

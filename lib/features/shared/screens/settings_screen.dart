@@ -16,20 +16,13 @@ class SettingsScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.settings, color: cs.primary),
-            onPressed: null,
-            tooltip: 'Settings',
-          ),
-        ],
+        backgroundColor: AppColors.forestGreen,
+        foregroundColor: Colors.white,
       ),
       body: ListView(
         children: [
@@ -112,7 +105,7 @@ class SettingsScreen extends ConsumerWidget {
             title: 'Account',
           ),
           _SectionCard(children: [
-            _NavTile(icon: Icons.person_outline, title: 'Edit Profile', onTap: () {}),
+            _NavTile(icon: Icons.person_outlined, title: 'Edit Profile', onTap: () {}),
             const Divider(height: 1, indent: 52),
             _NavTile(
               icon: Icons.email_outlined,
@@ -121,9 +114,9 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () {},
             ),
             const Divider(height: 1, indent: 52),
-            _NavTile(icon: Icons.lock_outline, title: 'Change Password', onTap: () {}),
+            _NavTile(icon: Icons.lock_outlined, title: 'Change Password', onTap: () {}),
             const Divider(height: 1, indent: 52),
-            _NavTile(icon: Icons.people_outline, title: 'Partner Access', onTap: () {}),
+            _NavTile(icon: Icons.people_outlined, title: 'Partner Access', onTap: () {}),
           ]),
 
           // ── Privacy & Data ────────────────────────────────────────
@@ -151,24 +144,24 @@ class SettingsScreen extends ConsumerWidget {
 
           // ── Support ───────────────────────────────────────────────
           _SectionHeader(
-            icon: Icons.help_outline,
+            icon: Icons.help_outlined,
             title: 'Support',
           ),
           _SectionCard(children: [
             _NavTile(
-              icon: Icons.help_outline,
+              icon: Icons.help_outlined,
               title: 'Help & FAQ',
               onTap: () => context.push('/help'),
             ),
             const Divider(height: 1, indent: 52),
             _NavTile(
-              icon: Icons.star_outline,
+              icon: Icons.star_outlined,
               title: 'Rate the App',
               onTap: () {},
             ),
             const Divider(height: 1, indent: 52),
             _NavTile(
-              icon: Icons.info_outline,
+              icon: Icons.info_outlined,
               title: 'App Version',
               subtitle: '1.0.0 (build 1)',
               onTap: null,
@@ -177,24 +170,30 @@ class SettingsScreen extends ConsumerWidget {
 
           const SizedBox(height: 20),
 
-          // Sign out
+          // Sign out — colorScheme.error, not AppColors.error: the raw token is
+          // tuned for cream (it only reaches 2.99:1 on the dark scaffold),
+          // while the dark theme already maps this slot to the lighter
+          // AppColors.darkError.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                ref.read(budgetProvider.notifier).clearBudget();
-                await ref.read(authProvider.notifier).logout();
-                if (context.mounted) context.go('/login');
-              },
-              icon: const Icon(Icons.logout, color: AppColors.error),
-              label: const Text('Sign Out'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.error,
-                side: const BorderSide(color: AppColors.error),
-                minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
+            child: Builder(builder: (context) {
+              final error = Theme.of(context).colorScheme.error;
+              return OutlinedButton.icon(
+                onPressed: () async {
+                  ref.read(budgetProvider.notifier).clearBudget();
+                  await ref.read(authProvider.notifier).logout();
+                  if (context.mounted) context.go('/login');
+                },
+                icon: Icon(Icons.logout, color: error),
+                label: const Text('Sign Out'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: error,
+                  side: BorderSide(color: error),
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+            }),
           ),
           const SizedBox(height: 8),
           Center(
@@ -202,7 +201,8 @@ class SettingsScreen extends ConsumerWidget {
               onPressed: () {},
               child: Text(
                 'Delete Account',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: Theme.of(context).colorScheme.error),
               ),
             ),
           ),
@@ -226,12 +226,14 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: AppColors.secondary),
+          Icon(icon, size: 16, color: AppColors.goldDeep),
           const SizedBox(width: 6),
           Text(
             title.toUpperCase(),
             style: AppTextStyles.labelMedium.copyWith(
-              color: AppColors.secondary,
+              // Theme-aware, not AppColors.primary: forest green on the dark
+              // scaffold is all but invisible (both are near-black).
+              color: Theme.of(context).colorScheme.onSurface,
               letterSpacing: 0.8,
               fontWeight: FontWeight.w700,
             ),
@@ -281,7 +283,7 @@ class _ThemeTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.light_mode_outlined, size: 22, color: AppColors.secondary),
+              const Icon(Icons.light_mode_outlined, size: 22, color: AppColors.goldDeep),
               const SizedBox(width: 12),
               Text('Theme', style: AppTextStyles.bodyMedium),
             ],
@@ -344,7 +346,7 @@ class _FontSizeTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.format_size, size: 22, color: AppColors.secondary),
+              const Icon(Icons.format_size, size: 22, color: AppColors.goldDeep),
               const SizedBox(width: 12),
               Text('Text Size', style: AppTextStyles.bodyMedium),
             ],
@@ -354,7 +356,7 @@ class _FontSizeTile extends StatelessWidget {
             'Preview — This is how text looks at the selected size.',
             style: TextStyle(
               fontSize: 13 * current.scale,
-              color: AppColors.textSecondary,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               height: 1.4,
             ),
           ),
@@ -390,7 +392,12 @@ class _FontSizeTile extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 12 + (opt.index * 3.0),
                                 fontWeight: FontWeight.w700,
-                                color: isSelected ? Colors.white : AppColors.textPrimary,
+                                // textOnSecondary on the gold fill (white on
+                                // gold is 2.42:1), theme-aware when unselected
+                                // so it stays readable on the dark card.
+                                color: isSelected
+                                    ? AppColors.textOnSecondary
+                                    : Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -400,7 +407,9 @@ class _FontSizeTile extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                color: isSelected ? Colors.white : AppColors.textSecondary,
+                                color: isSelected
+                                    ? AppColors.textOnSecondary
+                                    : Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -457,7 +466,7 @@ class _ToggleTileState extends State<_ToggleTile> {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(widget.icon, color: AppColors.secondary, size: 22),
+      leading: Icon(widget.icon, color: AppColors.goldDeep, size: 22),
       title: Text(widget.title, style: AppTextStyles.bodyMedium),
       subtitle: Text(
         widget.subtitle,
@@ -493,13 +502,14 @@ class _NavTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: AppColors.secondary, size: 22),
+      leading: Icon(icon, color: AppColors.goldDeep, size: 22),
       title: Text(title, style: AppTextStyles.bodyMedium),
       subtitle: subtitle != null
           ? Text(subtitle!, style: AppTextStyles.caption)
           : null,
       trailing: onTap != null
-          ? const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary)
+          ? Icon(Icons.arrow_forward_ios,
+              size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)
           : null,
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),

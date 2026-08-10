@@ -3,6 +3,7 @@ import '../core/inherited/shell_scaffold.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import 'dash_progress_bar.dart';
+import 'ring_flourish.dart';
 
 /// Green header used at the top of multi-step onboarding wizards.
 class WizardHeader extends StatelessWidget {
@@ -44,7 +45,7 @@ class WizardHeader extends StatelessWidget {
                         child: const SizedBox(
                           width: 36,
                           height: 36,
-                          child: Icon(Icons.chevron_left_rounded,
+                          child: Icon(Icons.chevron_left,
                               color: Colors.white, size: 22),
                         ),
                       ),
@@ -66,7 +67,7 @@ class WizardHeader extends StatelessWidget {
                           child: const SizedBox(
                             width: 36,
                             height: 36,
-                            child: Icon(Icons.menu_rounded, color: Colors.white, size: 22),
+                            child: Icon(Icons.menu, color: Colors.white, size: 22),
                           ),
                         ),
                       );
@@ -88,14 +89,25 @@ class WizardHeader extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              Text(
-                stepLabel,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.amber,
-                  letterSpacing: 1.4,
-                ),
+              Row(
+                children: [
+                  Text(
+                    stepLabel,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      // Gold, not forest: this header fills its own Container
+                      // with forestGreen (4.99:1). Forest on forest is invisible.
+                      color: AppColors.gold,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const Spacer(),
+                  // Rings + flowers pop in fresh on every step change — a
+                  // small celebratory flourish, not something that competes
+                  // with the real step copy for attention.
+                  RingFlourish(step: step),
+                ],
               ),
               const SizedBox(height: 6),
               Text(
@@ -135,7 +147,7 @@ class WizardSectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: AppColors.amber),
+        Icon(icon, size: 18, color: AppColors.goldDeep),
         const SizedBox(width: 8),
         Flexible(
           child: Text(
@@ -158,62 +170,3 @@ class WizardSectionLabel extends StatelessWidget {
   }
 }
 
-/// Full-width continue/submit button for wizard steps.
-/// Set [showArrow] to true to append a forward-arrow icon (vendor flow).
-class WizardContinueButton extends StatelessWidget {
-  final String label;
-  final VoidCallback onPressed;
-  final bool showArrow;
-  final bool isLoading;
-
-  const WizardContinueButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.showArrow = false,
-    this.isLoading = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.forestGreen,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-          elevation: 0,
-        ),
-        child: isLoading
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              )
-            : Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child: Text(
-                label,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-              ),
-            ),
-            if (showArrow) ...[
-              const SizedBox(width: 8),
-              const Icon(Icons.arrow_forward_rounded, size: 16),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}

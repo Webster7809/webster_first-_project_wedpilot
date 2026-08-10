@@ -1,10 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/services/admin_api_service.dart';
+import '../core/services/vendor_api_service.dart';
 import '../models/admin_models.dart';
+import '../models/vendor_profile.dart';
 export '../models/admin_models.dart';
 import 'auth_provider.dart';
 
 String? _token(Ref ref) => ref.watch(authProvider.notifier).accessToken;
+
+/// Full vendor directory (every category, every listing/service) for the
+/// admin Guest Capacity screen — reuses the same paginated fetch the AI
+/// matching pipeline uses (see vendor_ai_provider.dart), not a parallel
+/// admin-only endpoint, since GET /api/vendors is already open to any
+/// authenticated role.
+final adminAllVendorsProvider = FutureProvider<List<VendorProfile>>((ref) async {
+  final token = _token(ref);
+  if (token == null) return [];
+  return VendorApiService.instance.fetchAllVendors(token);
+});
 
 final adminOverviewProvider = FutureProvider<AdminOverview>((ref) async {
   final token = _token(ref);

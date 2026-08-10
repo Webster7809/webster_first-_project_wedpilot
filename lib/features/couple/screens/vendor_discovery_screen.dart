@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/gold_rule.dart';
 import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/loading_shimmer.dart';
 import '../../../widgets/typeahead_field.dart';
 import '../../../widgets/vendor_hero_image.dart';
+import '../../../widgets/wed_card.dart';
+import '../../../widgets/wed_empty_state.dart';
+import '../../../widgets/wed_snack_bar.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../core/constants/app_constants.dart';
 
@@ -68,6 +75,8 @@ class _VendorDiscoveryScreenState
         (e) => MapEntry(e.key, (totalBudget * e.value).round()),
       ),
     );
+    // Shown once for the category being browsed rather than under every tab.
+    final selectedBudget = catBudgets[_selectedCategory];
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -93,54 +102,26 @@ class _VendorDiscoveryScreenState
                       Text(
                         'VENDOR MATCHES',
                         style: AppTextStyles.caption.copyWith(
-                          color: AppColors.amber,
+                          // Gold on the forest header — 4.99:1.
+                          color: AppColors.gold,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.4,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(18),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: const BoxDecoration(
-                                color: AppColors.amber,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.star_rounded,
-                                  color: Colors.white, size: 18),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${vendorAsync.valueOrNull?.length ?? 0} vendors matched to your wedding',
-                                    style: AppTextStyles.titleMedium.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Ranked by fit, budget & ratings in $city',
-                                    style: AppTextStyles.caption.copyWith(
-                                      color: Colors.white.withAlpha(178),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                      const SizedBox(height: 6),
+                      // The headline carries the count on its own — the boxed
+                      // banner that used to sit here was chrome between the
+                      // couple and the first photograph.
+                      Text(
+                        '${vendorAsync.valueOrNull?.length ?? 0} vendors matched',
+                        style: AppTextStyles.displaySmall
+                            .copyWith(color: Colors.white),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Ranked by fit, budget and ratings in $city',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: Colors.white.withAlpha(190)),
                       ),
                     ],
                   ),
@@ -154,28 +135,38 @@ class _VendorDiscoveryScreenState
             child: Container(
               color: AppColors.forestGreen,
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-              child: TypeaheadField<VendorProfile>(
-                hint: 'Search vendors by name...',
-                prefixIcon: Icons.search_rounded,
-                fillColor: Colors.white,
-                debounceDuration: const Duration(milliseconds: 300),
-                suggestionsCallback: (query) async {
-                  if (query.isEmpty) {
-                    if (_committedSearch.isNotEmpty && mounted) {
-                      setState(() => _committedSearch = '');
+              // This bar is always forest green with a white search box,
+              // regardless of app theme — so the field is forced to the light
+              // input theme too. Otherwise dark mode keeps the white fill (by
+              // design, for contrast against the green) but swaps the typed
+              // text to the dark theme's light-on-dark color, making it
+              // invisible on the still-white box.
+              child: Theme(
+                data: AppTheme.light,
+                child: TypeaheadField<VendorProfile>(
+                  hint: 'Search vendors by name...',
+                  prefixIcon: Icons.search,
+                  fillColor: Colors.white,
+                  debounceDuration: const Duration(milliseconds: 300),
+                  suggestionsCallback: (query) async {
+                    if (query.isEmpty) {
+                      if (_committedSearch.isNotEmpty && mounted) {
+                        setState(() => _committedSearch = '');
+                      }
+                      return <VendorProfile>[];
                     }
-                    return <VendorProfile>[];
-                  }
-                  final results = await ref.read(
-                    vendorSearchResultsProvider(
-                      (category: _selectedCategory, search: query),
-                    ).future,
-                  );
-                  if (mounted) setState(() => _committedSearch = query);
-                  return results;
-                },
-                displayStringForOption: (v) => v.businessName,
-                onSelected: (v) => setState(() => _committedSearch = v.businessName),
+                    final results = await ref.read(
+                      vendorSearchResultsProvider(
+                        (category: _selectedCategory, search: query),
+                      ).future,
+                    );
+                    if (mounted) setState(() => _committedSearch = query);
+                    return results;
+                  },
+                  displayStringForOption: (v) => v.businessName,
+                  onSelected: (v) =>
+                      setState(() => _committedSearch = v.businessName),
+                ),
               ),
             ),
           ),
@@ -188,64 +179,45 @@ class _VendorDiscoveryScreenState
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
+                  // One line, one label per category. The per-category budget
+                  // that used to sit under every tab now appears once, for the
+                  // selected category, in the count line below — same
+                  // information, a fraction of the noise.
                   child: Row(
                     children: _kCategoryTabs.map((cat) {
-                      final budget = catBudgets[cat];
                       final isSelected = _selectedCategory == cat;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
-                          borderRadius: BorderRadius.circular(10),
-                          onTap: () =>
-                              setState(() => _selectedCategory = cat),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.amber.withAlpha(40)
-                                  : Colors.white.withAlpha(18),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
+                            borderRadius: BorderRadius.circular(AppRadius.chip),
+                            onTap: () =>
+                                setState(() => _selectedCategory = cat),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 9),
+                              decoration: BoxDecoration(
                                 color: isSelected
-                                    ? AppColors.amber
-                                    : Colors.transparent,
-                                width: 1.5,
+                                    ? AppColors.gold
+                                    : Colors.white.withAlpha(20),
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.chip),
+                              ),
+                              child: Text(
+                                cat,
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  // Ink on the gold fill, white on the forest.
+                                  color: isSelected
+                                      ? AppColors.textOnSecondary
+                                      : Colors.white,
+                                ),
                               ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  cat,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: isSelected
-                                        ? AppColors.amber
-                                        : Colors.white,
-                                  ),
-                                ),
-                                if (budget != null) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    fmtCurrency(budget),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: isSelected
-                                          ? AppColors.amber.withAlpha(200)
-                                          : Colors.white.withAlpha(160),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
                           ),
                         ),
                       );
@@ -256,73 +228,53 @@ class _VendorDiscoveryScreenState
             ),
           ),
 
-          // ── Filter pills ─────────────────────────────────────────────────────
+          // ── Result count + filter entry point ────────────────────────────────
+          // The four filters used to sit here as a permanent second pill row.
+          // They now live behind one control that states what is active, so
+          // the first vendor photograph is one row closer to the top.
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: List.generate(activeFilters.length, (i) {
-                    final active = _filterIndex == i;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Material(
-                        animationDuration: const Duration(milliseconds: 150),
-                        color: active
-                            ? AppColors.forestGreen
-                            : AppColors.surface,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          side: BorderSide(
-                            color: active
-                                ? AppColors.forestGreen
-                                : AppColors.divider,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: vendorAsync.when(
+                      data: (vendors) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${_applyFilter(vendors).length} ${_categoryNoun}vendors in $city',
+                            style: AppTextStyles.titleMedium.copyWith(
+                                color:
+                                    Theme.of(context).colorScheme.onSurface),
                           ),
-                        ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: () => setState(() => _filterIndex = i),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            child: Text(
-                              _filterLabel(i, guestCount),
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: active
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                                color: active
-                                    ? Colors.white
-                                    : AppColors.textSecondary,
-                              ),
+                          if (selectedBudget != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Your $_selectedCategory budget: ${fmtCurrency(selectedBudget)}',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant),
                             ),
-                          ),
-                        ),
+                          ],
+                        ],
                       ),
-                    );
-                  }),
-                ),
-              ),
-            ),
-          ),
-
-          // ── Match count text ─────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-              child: vendorAsync.when(
-                data: (vendors) => Text(
-                  '${_applyFilter(vendors).length} ${_categoryNoun}vendors'
-                  ' match your Flexible tier in $city',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
+                      loading: () => const LoadingShimmer(
+                          width: 180, height: 16, borderRadius: 4),
+                      error: (e, st) => const SizedBox.shrink(),
+                    ),
                   ),
-                ),
-                loading: () => const SizedBox.shrink(),
-                error: (e, st) => const SizedBox.shrink(),
+                  const SizedBox(width: 12),
+                  _FilterButton(
+                    label: _filterIndex == 0
+                        ? 'Filter'
+                        : _filterLabel(_filterIndex, guestCount),
+                    isActive: _filterIndex != 0,
+                    onTap: () => _openFilterSheet(activeFilters, guestCount),
+                  ),
+                ],
               ),
             ),
           ),
@@ -361,25 +313,13 @@ class _VendorDiscoveryScreenState
               final vendors = _applyFilter(allVendors);
               return vendors.isEmpty
                   ? SliverToBoxAdapter(
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(48),
-                          child: Column(
-                            children: [
-                              const Icon(Icons.search_off_rounded,
-                                  size: 48, color: AppColors.textHint),
-                              const SizedBox(height: 12),
-                              Text(
-                                _selectedCategory == kAllVendorCategories
-                                    ? 'No vendors in $city yet'
-                                    : 'No $_selectedCategory vendors in $city yet',
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                    color: AppColors.textSecondary),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
+                      child: WedEmptyState(
+                        icon: Icons.search_off,
+                        title: 'No vendors found',
+                        message: _selectedCategory == kAllVendorCategories
+                            ? 'No vendors in $city yet'
+                            : 'No $_selectedCategory vendors in $city yet',
+                        imageUrl: VendorCategoryImages.galleryFor('Venue')[0],
                       ),
                     )
                   : SliverPadding(
@@ -399,6 +339,58 @@ class _VendorDiscoveryScreenState
         ],
       ),
     );
+  }
+
+  /// Filters live in a sheet rather than a permanent pill row: only one can be
+  /// active at a time, so a whole row of them was spending the screen's most
+  /// valuable space to show four options the couple mostly isn't using.
+  Future<void> _openFilterSheet(List<String> filters, int? guestCount) async {
+    final chosen = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final colors = Theme.of(sheetContext).colorScheme;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                child: Text('Filter vendors',
+                    style: AppTextStyles.displaySmall
+                        .copyWith(color: colors.onSurface)),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: GoldRule(),
+              ),
+              ...List.generate(filters.length, (i) {
+                final selected = i == _filterIndex;
+                return ListTile(
+                  onTap: () => Navigator.of(sheetContext).pop(i),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                  minVerticalPadding: 14,
+                  title: Text(
+                    _filterLabel(i, guestCount),
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      color: colors.onSurface,
+                      fontWeight:
+                          selected ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                  trailing: selected
+                      ? Icon(Icons.check, color: colors.primary)
+                      : null,
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (chosen != null && mounted) setState(() => _filterIndex = chosen);
   }
 
   /// Singular-ish noun for count text, e.g. "1 venue vendors" or, when
@@ -440,6 +432,13 @@ class _VendorMatchCard extends ConsumerWidget {
 
   const _VendorMatchCard({required this.vendor});
 
+  Future<void> _toggleWishlist(BuildContext context, WidgetRef ref) async {
+    final error = await ref.read(wishlistProvider.notifier).toggle(vendor.id);
+    if (error != null && context.mounted) {
+      showWedSnackBar(context, error, type: SnackType.error);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final priceMin = vendor.priceMin > 0
@@ -449,220 +448,151 @@ class _VendorMatchCard extends ConsumerWidget {
     final isBookedOnWeddingDate = weddingDate != null &&
         vendor.blockedDates.contains(weddingDate.toIso8601String().split('T').first);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.cardShadow,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    final isWishlisted = ref.watch(wishlistProvider).contains(vendor.id);
+
+    // The card is the primary action: tapping it opens the profile. The old
+    // layout had three controls competing — a heart, "View profile", and
+    // "Shortlist" — where the heart and "Shortlist" toggled the same wishlist.
+    return WedCard(
+      padding: EdgeInsets.zero,
+      borderRadius: AppRadius.card,
+      onTap: () => context.push('/couple/vendors/${vendor.id}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Photo area with match badge
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                child: SizedBox(
-                  height: 180,
-                  width: double.infinity,
-                  child: VendorHeroImage(
+          // ── Photograph, doing the selling ──────────────────────────────────
+          ClipRRect(
+            borderRadius: AppRadius.top(AppRadius.card),
+            child: SizedBox(
+              height: 220,
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  VendorHeroImage(
                     vendor: vendor,
-                    height: 180,
+                    height: 220,
                     memCacheWidth: 720,
                     single: true,
                   ),
-                ),
-              ),
-              if (vendor.isVerified)
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
+                  // Scrim: the name sits on the photo, so it needs a
+                  // predictable ground regardless of what the vendor uploaded.
+                  const DecoratedBox(
                     decoration: BoxDecoration(
-                      color: AppColors.forestGreen,
-                      borderRadius: BorderRadius.circular(20),
+                      gradient: LinearGradient(
+                        begin: Alignment.center,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x00000000), Color(0xCC000000)],
+                      ),
                     ),
-                    child: const Row(
+                  ),
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 14,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.verified_rounded,
-                            color: Colors.white, size: 12),
-                        SizedBox(width: 4),
                         Text(
-                          'Verified',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
+                          vendor.businessName,
+                          style: AppTextStyles.headlineLarge
+                              .copyWith(color: Colors.white),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          [vendor.category, vendor.location]
+                              .whereType<String>()
+                              .where((s) => s.isNotEmpty)
+                              .join(' · '),
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: Colors.white.withAlpha(205)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                ),
-            ],
+                  if (vendor.isVerified)
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: _OverlayBadge(
+                        icon: Icons.verified,
+                        label: 'Verified',
+                      ),
+                    ),
+                  if (vendor.rating != null)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: _OverlayBadge(
+                        icon: Icons.star,
+                        label: vendor.rating!.toStringAsFixed(1),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
 
-          // Content
+          // ── Quiet metadata ─────────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+            child: Row(
               children: [
-                // Name + rating
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        vendor.businessName,
-                        style: AppTextStyles.headlineLarge.copyWith(
-                          color: AppColors.forestGreen,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    if (vendor.rating != null) ...[
-                      const SizedBox(width: 8),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.star_rounded,
-                              color: AppColors.amber, size: 16),
-                          const SizedBox(width: 3),
-                          Text(
-                            vendor.rating!.toStringAsFixed(1),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (priceMin != null)
+                        Text(priceMin,
+                            style: AppTextStyles.dataMedium.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface))
+                      else
+                        Text('Price on request',
                             style: AppTextStyles.bodySmall.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${vendor.category} · ${vendor.location ?? ''}',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 10),
-
-                // Chips row
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    if (vendor.isVerified)
-                      _TagChip(
-                        label: 'Verified',
-                        icon: Icons.verified_user_outlined,
-                        color: AppColors.success,
-                        textColor: AppColors.success,
-                        bgColor: AppColors.successBg,
-                      ),
-                    if (isBookedOnWeddingDate)
-                      _TagChip(
-                        label: 'Booked on your date',
-                        icon: Icons.event_busy_outlined,
-                        color: AppColors.warning,
-                        textColor: AppColors.warning,
-                        bgColor: AppColors.warningBg,
-                      ),
-                  ],
-                ),
-
-                if (priceMin != null) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    priceMin,
-                    style: AppTextStyles.priceTag.copyWith(
-                      color: AppColors.amber,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-                if (vendor.maxGuestCapacity != null) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.groups_outlined,
-                          size: 14, color: AppColors.textSecondary),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Can serve up to: ${vendor.maxGuestCapacity} guests',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.textSecondary),
-                      ),
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant)),
+                      if (vendor.maxGuestCapacity != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Seats up to ${vendor.maxGuestCapacity} guests',
+                          style: AppTextStyles.bodySmall.copyWith(
+                              color:
+                                  Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                      if (isBookedOnWeddingDate) ...[
+                        const SizedBox(height: 6),
+                        _TagChip(
+                          label: 'Booked on your date',
+                          icon: Icons.event_busy_outlined,
+                          color: AppColors.warning,
+                          textColor: AppColors.warning,
+                          bgColor: AppColors.warningBg,
+                        ),
+                      ],
                     ],
                   ),
-                ],
-
-                const SizedBox(height: 12),
-                // Action row
-                Builder(builder: (context) {
-                  final isWishlisted = ref.watch(wishlistProvider).contains(vendor.id);
-                  return Row(
-                    children: [
-                      IconButton(
-                        tooltip: isWishlisted ? 'Remove from wishlist' : 'Add to wishlist',
-                        icon: Icon(
-                          isWishlisted ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                          color: isWishlisted ? AppColors.error : AppColors.textSecondary,
-                          size: 22,
-                        ),
-                        onPressed: () => ref.read(wishlistProvider.notifier).toggle(vendor.id),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () =>
-                              context.push('/couple/vendors/${vendor.id}'),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.divider),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20)),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            foregroundColor: AppColors.textPrimary,
-                          ),
-                          child: const Text('View profile',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 13)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () => ref.read(wishlistProvider.notifier).toggle(vendor.id),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.amber,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20)),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            elevation: 0,
-                          ),
-                          child: Text(isWishlisted ? 'Shortlisted' : 'Shortlist',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 13)),
-                        ),
-                      ),
-                    ],
-                  );
-                }),
+                ),
+                IconButton(
+                  tooltip: isWishlisted
+                      ? 'Remove ${vendor.businessName} from wishlist'
+                      : 'Save ${vendor.businessName} to wishlist',
+                  icon: Icon(
+                    isWishlisted ? Icons.favorite : Icons.favorite_outlined,
+                    color: isWishlisted
+                        ? AppColors.error
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    size: 24,
+                  ),
+                  onPressed: () => _toggleWishlist(context, ref),
+                ),
               ],
             ),
           ),
@@ -670,7 +600,98 @@ class _VendorMatchCard extends ConsumerWidget {
       ),
     );
   }
+}
 
+// ── Overlay badge ─────────────────────────────────────────────────────────────
+
+/// A pill sitting on top of a photograph. Deliberately dark rather than gold:
+/// over an unknown image only a solid dark ground guarantees the white label
+/// stays readable.
+class _OverlayBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _OverlayBadge({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.forestGreen.withAlpha(230),
+        borderRadius: AppRadius.bfull,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppColors.gold, size: 13),
+          const SizedBox(width: 5),
+          Text(label,
+              style: AppTextStyles.caption.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Filter button ─────────────────────────────────────────────────────────────
+
+class _FilterButton extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _FilterButton({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: isActive ? AppColors.forestGreen : colors.surface,
+      borderRadius: AppRadius.bfull,
+      child: InkWell(
+        borderRadius: AppRadius.bfull,
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44, maxWidth: 190),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.bfull,
+            border: Border.all(
+              color: isActive ? AppColors.forestGreen : colors.outline,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.tune_outlined,
+                  size: 16,
+                  color: isActive ? Colors.white : colors.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: isActive ? Colors.white : colors.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Tag chip ──────────────────────────────────────────────────────────────────

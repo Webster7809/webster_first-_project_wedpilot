@@ -9,8 +9,10 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../models/messaging.dart';
 import '../../../providers/vendor_own_provider.dart';
 import '../../../widgets/hamburger_menu_button.dart';
+import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_chip.dart';
+import '../../../widgets/wed_empty_state.dart';
 import '../../../widgets/wed_snack_bar.dart';
-import '../../../widgets/wed_text_field.dart';
 
 class LeadInboxScreen extends ConsumerStatefulWidget {
   const LeadInboxScreen({super.key});
@@ -82,7 +84,8 @@ class _LeadInboxScreenState extends ConsumerState<LeadInboxScreen> {
                       Text(
                         '${inquiries.length} TOTAL INQUIRIES',
                         style: AppTextStyles.caption.copyWith(
-                          color: AppColors.amber,
+                          // Gold on the forest header — 4.99:1.
+                          color: AppColors.gold,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.2,
                         ),
@@ -151,18 +154,13 @@ class _LeadInboxScreenState extends ConsumerState<LeadInboxScreen> {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 48),
             sliver: filtered.isEmpty
-                ? SliverToBoxAdapter(
+                ? const SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 60),
-                      child: Column(
-                        children: [
-                          const Icon(Icons.inbox_outlined,
-                              size: 48, color: AppColors.textHint),
-                          const SizedBox(height: 12),
-                          Text('No inquiries here',
-                              style: AppTextStyles.headlineSmall
-                                  .copyWith(color: AppColors.textSecondary)),
-                        ],
+                      padding: EdgeInsets.only(top: 28),
+                      child: WedEmptyState(
+                        icon: Icons.inbox_outlined,
+                        title: 'No inquiries here',
+                        message: 'New booking requests will show up here.',
                       ),
                     ),
                   )
@@ -217,13 +215,16 @@ class _LeadCard extends StatelessWidget {
     final isUnread = inquiry.status == InquiryStatus.newInquiry;
     final isBooked = inquiry.status == InquiryStatus.booked;
     final isDeclined = inquiry.status == InquiryStatus.declined;
+    final isCancelled = inquiry.status == InquiryStatus.cancelled;
     final name = inquiry.coupleName ?? 'Unknown couple';
 
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
+        // goldDeep, not gold: this border is the only thing marking a lead as
+        // unread, so it has to clear 3:1 against the white card (4.86:1).
         border: isUnread
-            ? Border.all(color: AppColors.amber, width: 1.5)
+            ? Border.all(color: AppColors.goldDeep, width: 1.5)
             : null,
         boxShadow: [
           BoxShadow(
@@ -257,7 +258,7 @@ class _LeadCard extends StatelessWidget {
                     child: Text(
                       _initials(name),
                       style: AppTextStyles.labelLarge.copyWith(
-                        color: AppColors.amber,
+                        color: AppColors.primary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -313,6 +314,8 @@ class _LeadCard extends StatelessWidget {
                   _Chip(label: 'Booked', color: AppColors.success)
                 else if (isDeclined)
                   _Chip(label: 'Declined', color: AppColors.error)
+                else if (isCancelled)
+                  _Chip(label: 'Cancelled by couple', color: AppColors.textSecondary)
                 else ...[
                   if (inquiry.weddingDate != null)
                     _Chip(
@@ -398,13 +401,12 @@ class _LeadDetailSheetState extends ConsumerState<_LeadDetailSheet> {
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          WedButton(
+            label: 'Accept',
+            variant: WedButtonVariant.success,
+            shrinkWrap: true,
+            height: 40,
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Accept'),
           ),
         ],
       ),
@@ -425,13 +427,18 @@ class _LeadDetailSheetState extends ConsumerState<_LeadDetailSheet> {
   }
 
   Future<void> _decline(Inquiry inquiry) async {
-    final reason = await showModalBottomSheet<String>(
+    // Confirm first — declining is final for the couple and, unlike accepting,
+    // there's no way for them to undo it from their side. The reason is
+    // optional: a vendor should be able to answer a lead as easily as they
+    // accept one, and forcing a reason out of them was the whole cost of the
+    // old flow.
+    final reason = await showDialog<String>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _DeclineReasonSheet(),
+      builder: (_) => _DeclineConfirmDialog(
+        coupleName: inquiry.coupleName ?? 'this couple',
+      ),
     );
-    if (reason == null || reason.trim().isEmpty) return;
+    if (reason == null) return;
 
     setState(() => _isBusy = true);
     final error = await ref.read(vendorOwnProvider.notifier).markInquiryStatus(
@@ -477,7 +484,8 @@ class _LeadDetailSheetState extends ConsumerState<_LeadDetailSheet> {
     if (inquiry == null) return const SizedBox.shrink();
 
     final isPending = inquiry.status != InquiryStatus.booked &&
-        inquiry.status != InquiryStatus.declined;
+        inquiry.status != InquiryStatus.declined &&
+        inquiry.status != InquiryStatus.cancelled;
     final name = inquiry.coupleName ?? 'Unknown couple';
 
     return Container(
@@ -547,44 +555,41 @@ class _LeadDetailSheetState extends ConsumerState<_LeadDetailSheet> {
                 ),
               ),
             ],
+            if (inquiry.status == InquiryStatus.cancelled) ...[
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.creamDark,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'This couple cancelled the request.',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
 
             if (isPending) ...[
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
+                    child: WedButton(
+                      label: 'Decline',
+                      variant: WedButtonVariant.danger,
                       onPressed: _isBusy ? null : () => _decline(inquiry),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.error,
-                        side: const BorderSide(color: AppColors.error),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: const Text('Decline'),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton(
+                    child: WedButton(
+                      label: 'Accept Booking',
+                      variant: WedButtonVariant.success,
+                      isLoading: _isBusy,
                       onPressed: _isBusy ? null : () => _accept(inquiry),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.success,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        elevation: 0,
-                      ),
-                      child: _isBusy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2),
-                            )
-                          : const Text('Accept Booking'),
                     ),
                   ),
                 ],
@@ -605,7 +610,7 @@ class _LeadDetailSheetState extends ConsumerState<_LeadDetailSheet> {
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () => _messageCouple(inquiry),
-                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                icon: const Icon(Icons.chat_bubble_outlined, size: 16),
                 label: const Text('Message couple'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.forestGreen,
@@ -675,7 +680,7 @@ class _ServiceDoneSection extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
+            const Icon(Icons.check_circle_outlined, size: 18, color: AppColors.success),
             const SizedBox(width: 8),
             Text('Rated by this couple',
                 style: AppTextStyles.labelMedium.copyWith(color: AppColors.success)),
@@ -717,8 +722,8 @@ class _ServiceDoneSection extends StatelessWidget {
             icon: const Icon(Icons.notifications_active_outlined, size: 16),
             label: Text(isFirst ? 'Notify Couple to Rate' : 'Send Reminder (Final Chance)'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.amber,
-              side: const BorderSide(color: AppColors.amber),
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
@@ -729,124 +734,89 @@ class _ServiceDoneSection extends StatelessWidget {
   }
 }
 
-// ── Decline reason sheet ────────────────────────────────────────────────────
+// ── Decline confirmation ────────────────────────────────────────────────────
 
 const _kDeclineReasons = [
   'Fully booked on this date',
   'Outside our service area',
   "Budget doesn't align",
   'Not the right fit',
-  'Other',
 ];
 
-class _DeclineReasonSheet extends StatefulWidget {
-  const _DeclineReasonSheet();
+/// Confirms a decline, mirroring the Accept dialog so answering a lead either
+/// way is one decision plus one confirmation.
+///
+/// The reason is genuinely optional. It used to be mandatory — the vendor had
+/// to pick a chip (and type free text for "Other") before the button even
+/// enabled — which made saying no meaningfully harder than saying yes for no
+/// good reason. A reason is still offered because the couple sees it, and
+/// [_kDefaultDeclineReason] stands in when none is given, since the API
+/// requires a non-empty one.
+const _kDefaultDeclineReason = 'The vendor is not available for this booking';
+
+class _DeclineConfirmDialog extends StatefulWidget {
+  final String coupleName;
+
+  const _DeclineConfirmDialog({required this.coupleName});
 
   @override
-  State<_DeclineReasonSheet> createState() => _DeclineReasonSheetState();
+  State<_DeclineConfirmDialog> createState() => _DeclineConfirmDialogState();
 }
 
-class _DeclineReasonSheetState extends State<_DeclineReasonSheet> {
+class _DeclineConfirmDialogState extends State<_DeclineConfirmDialog> {
   String? _selected;
-  final _otherCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _otherCtrl.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final reason = _selected == 'Other' ? _otherCtrl.text.trim() : _selected;
-    if (reason == null || reason.isEmpty) return;
-    Navigator.pop(context, reason);
-  }
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    return AlertDialog(
+      title: const Text('Decline this booking?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Are you sure you want to decline ${widget.coupleName}? '
+            'They will be notified and this cannot be undone.',
+            style: AppTextStyles.bodySmall
+                .copyWith(color: AppColors.textSecondary, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Add a reason (optional)',
+            style: AppTextStyles.labelMedium
+                .copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _kDeclineReasons.map((reason) {
+              return WedChip(
+                label: reason,
+                isSelected: _selected == reason,
+                // Tapping the selected chip again clears it — the reason is
+                // optional, so it has to be possible to take one back.
+                onTap: () => setState(
+                    () => _selected = _selected == reason ? null : reason),
+              );
+            }).toList(),
+          ),
+        ],
       ),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text('Why are you declining?',
-                style: AppTextStyles.headlineMedium
-                    .copyWith(color: AppColors.forestGreen)),
-            const SizedBox(height: 4),
-            Text(
-              'A short reason helps the couple understand — this is shared with them.',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _kDeclineReasons.map((reason) {
-                final selected = _selected == reason;
-                return ChoiceChip(
-                  label: Text(reason),
-                  selected: selected,
-                  onSelected: (_) => setState(() => _selected = reason),
-                  selectedColor: AppColors.forestGreen,
-                  labelStyle: AppTextStyles.labelMedium.copyWith(
-                    color: selected ? Colors.white : AppColors.textSecondary,
-                  ),
-                  backgroundColor: AppColors.creamDark,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: selected ? AppColors.forestGreen : AppColors.divider,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            if (_selected == 'Other') ...[
-              const SizedBox(height: 16),
-              WedTextField(
-                label: 'Reason',
-                hint: 'Tell them briefly why…',
-                controller: _otherCtrl,
-                maxLines: 3,
-              ),
-            ],
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _selected == null ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.error,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  elevation: 0,
-                ),
-                child: const Text('Decline Inquiry',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Keep it'),
         ),
-      ),
+        WedButton(
+          label: 'Yes, decline',
+          variant: WedButtonVariant.danger,
+          shrinkWrap: true,
+          height: 40,
+          onPressed: () =>
+              Navigator.pop(context, _selected ?? _kDefaultDeclineReason),
+        ),
+      ],
     );
   }
 }

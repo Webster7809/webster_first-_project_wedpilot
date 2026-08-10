@@ -41,6 +41,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
       backgroundColor: AppColors.cream,
       appBar: AppBar(
         title: const Text('Reports'),
+        centerTitle: true,
+        backgroundColor: AppColors.forestGreen,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -52,6 +55,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
           controller: _tabs,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
           tabs: const [
             Tab(text: 'Budget'),
             Tab(text: 'RSVP'),
@@ -164,7 +170,7 @@ class _BudgetReportTab extends StatelessWidget {
         if (s.hasOverBudgetCategories) ...[
           _AlertBanner(
             color: AppColors.error,
-            icon: Icons.warning_amber_rounded,
+            icon: Icons.warning_amber,
             title: 'Over-budget categories',
             items: s.overBudgetCategories,
           ),
@@ -173,7 +179,7 @@ class _BudgetReportTab extends StatelessWidget {
         if (s.hasNearLimitCategories) ...[
           _AlertBanner(
             color: AppColors.warning,
-            icon: Icons.info_outline,
+            icon: Icons.info_outlined,
             title: 'Near limit (≥ 90%)',
             items: s.nearLimitCategories,
           ),
@@ -895,8 +901,8 @@ class _HealthBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = isHealthy ? AppColors.success : AppColors.error;
     final icon = isHealthy
-        ? Icons.check_circle_outline
-        : Icons.warning_amber_rounded;
+        ? Icons.check_circle_outlined
+        : Icons.warning_amber;
     final msg = isHealthy
         ? 'Budget is on track — no categories over budget.'
         : 'Action needed — one or more categories have exceeded their allocation.';

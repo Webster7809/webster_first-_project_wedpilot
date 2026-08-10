@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/services/vendor_api_service.dart';
+import '../core/utils/inquiry_status_display.dart';
 import '../models/messaging.dart';
 import '../models/vendor_profile.dart';
 import 'auth_provider.dart';
@@ -43,3 +44,33 @@ final rateableVendorsProvider = FutureProvider<List<VendorProfile>>((ref) async 
   );
   return results.whereType<VendorProfile>().toList();
 });
+
+/// Vendors the couple currently has a live request with, keyed by vendor id —
+/// anything not declined or cancelled (see [InquiryStatusDisplay.isActive]).
+///
+/// Derived from [myBookingsProvider] rather than fetching again, so it stays
+/// consistent with every other booking surface and refreshes from the same
+/// single invalidation.
+///
+/// This is what stops the AI re-proposing a vendor the couple already
+/// committed to: the matcher subtracts these before it scores anything, so a
+/// decision the couple already made is never silently re-made for them.
+/// Where the same vendor has several rows (older declined ones, say), the most
+/// recent live request wins.
+final activeRequestsByVendorProvider =
+    FutureProvider<Map<String, Inquiry>>((ref) async {
+  final bookings = await ref.watch(myBookingsProvider.future);
+  final active = bookings
+      .where((b) => InquiryStatusDisplay.isActive(b.status))
+      .toList()
+    ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  // Ascending sort + plain assignment means the newest row for a vendor is the
+  // one left in the map.
+  return {for (final b in active) b.vendorId: b};
+});
+
+/// Whether the automatic "rate this vendor" popup has already been shown
+/// this app session — so it surfaces once per launch rather than every time
+/// the dashboard rebuilds. Resets naturally on app restart, which is fine:
+/// if there's still something to rate, it's worth surfacing again next time.
+final ratePromptShownProvider = StateProvider<bool>((ref) => false);

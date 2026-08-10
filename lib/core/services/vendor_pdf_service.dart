@@ -2,7 +2,6 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import '../../models/budget.dart';
 import '../../models/couple_profile.dart';
 import '../../models/vendor_profile.dart';
 
@@ -51,7 +50,6 @@ class VendorPdfService {
 
   static Future<Uint8List> buildWeddingPlanPdf({
     CoupleProfile? couple,
-    Budget? budget,
     required List<VendorProfile> vendors,
     Map<String, String> reasoningByVendorId = const {},
   }) async {
@@ -75,10 +73,6 @@ class VendorPdfService {
         build: (context) => [
           _buildCover(couple, vendors.length, byCategory.keys.length),
           pw.SizedBox(height: 20),
-          if (budget != null) ...[
-            _buildBudgetBreakdown(budget),
-            pw.SizedBox(height: 24),
-          ],
           for (final entry in byCategory.entries) ...[
             _buildCategoryHeader(entry.key),
             pw.SizedBox(height: 8),
@@ -93,61 +87,6 @@ class VendorPdfService {
 
     return doc.save();
   }
-
-  static pw.Widget _buildBudgetBreakdown(Budget budget) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(16),
-      decoration: pw.BoxDecoration(
-        color: PdfColors.grey100,
-        borderRadius: pw.BorderRadius.circular(8),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text('Budget Breakdown',
-              style: pw.TextStyle(
-                  fontSize: 14, fontWeight: pw.FontWeight.bold, color: _green)),
-          pw.SizedBox(height: 4),
-          pw.Text(
-            'Total budget: ${budget.currency} ${budget.totalAmount.toStringAsFixed(0)}',
-            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 10),
-          pw.Table(
-            columnWidths: const {
-              0: pw.FlexColumnWidth(3),
-              1: pw.FlexColumnWidth(2),
-              2: pw.FlexColumnWidth(2),
-            },
-            children: [
-              pw.TableRow(children: [
-                _tableCell('Category', bold: true),
-                _tableCell('Allocated', bold: true),
-                _tableCell('% of budget', bold: true),
-              ]),
-              for (final c in budget.categories.where((c) => c.allocatedAmount > 0))
-                pw.TableRow(children: [
-                  _tableCell(_pdfSafe(c.categoryName)),
-                  _tableCell(
-                      '${budget.currency} ${c.allocatedAmount.toStringAsFixed(0)}'),
-                  _tableCell(budget.totalAmount > 0
-                      ? '${(c.allocatedAmount / budget.totalAmount * 100).toStringAsFixed(0)}%'
-                      : '-'),
-                ]),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  static pw.Widget _tableCell(String text, {bool bold = false}) => pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-        child: pw.Text(text,
-            style: pw.TextStyle(
-                fontSize: 9,
-                fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
-      );
 
   static pw.Widget _buildCover(
       CoupleProfile? couple, int vendorCount, int categoryCount) {
@@ -168,7 +107,7 @@ class VendorPdfService {
           pw.SizedBox(height: 6),
           pw.Text(
             'Prepared by WedPilot - AI-matched $vendorCount vendor${vendorCount == 1 ? '' : 's'} across $categoryCount '
-            'categor${categoryCount == 1 ? 'y' : 'ies'}, with full budget breakdown',
+            'categor${categoryCount == 1 ? 'y' : 'ies'}',
             style: const pw.TextStyle(color: PdfColors.white, fontSize: 11),
           ),
           if (couple != null) ...[
@@ -223,10 +162,6 @@ class VendorPdfService {
   }
 
   static pw.Widget _buildVendorBlock(VendorProfile v, String? reasoning) {
-    final mapsUrl = (v.latitude != null && v.longitude != null)
-        ? 'https://www.google.com/maps?q=${v.latitude},${v.longitude}'
-        : null;
-
     return pw.Container(
       padding: const pw.EdgeInsets.all(12),
       decoration: pw.BoxDecoration(
@@ -263,15 +198,6 @@ class VendorPdfService {
           if (v.location != null && v.location!.isNotEmpty)
             pw.Text('Location: ${_pdfSafe(v.location!)}',
                 style: const pw.TextStyle(fontSize: 10)),
-          if (mapsUrl != null)
-            pw.UrlLink(
-              destination: mapsUrl,
-              child: pw.Text('View exact location on map',
-                  style: const pw.TextStyle(
-                      fontSize: 9,
-                      color: PdfColors.blue,
-                      decoration: pw.TextDecoration.underline)),
-            ),
           if (v.phone != null && v.phone!.isNotEmpty)
             pw.Text('Phone: ${_pdfSafe(v.phone!)}',
                 style: const pw.TextStyle(fontSize: 10)),

@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
 
 /// Landing screen for the link emailed by ForgotPasswordScreen — reads the
@@ -44,9 +45,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     if (!mounted) return;
     final error = ref.read(authProvider).error;
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: AppColors.error),
-      );
+      showWedSnackBar(context, error, type: SnackType.error);
       return;
     }
     setState(() => _done = true);
@@ -94,7 +93,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(
-                                      Icons.lock_outline_rounded,
+                                      Icons.lock_outlined,
                                       size: 32,
                                       color: AppColors.forestGreen,
                                     ),
@@ -115,7 +114,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                                     hint: 'Enter new password',
                                     controller: _passCtrl,
                                     isPassword: true,
-                                    prefixIcon: Icons.lock_outline,
+                                    prefixIcon: Icons.lock_outlined,
                                     validator: (v) {
                                       if (v == null || v.isEmpty) return 'Required';
                                       if (v.length < 8) return 'Min 8 characters';
@@ -128,7 +127,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                                     hint: 'Re-enter new password',
                                     controller: _confirmCtrl,
                                     isPassword: true,
-                                    prefixIcon: Icons.lock_outline,
+                                    prefixIcon: Icons.lock_outlined,
                                     validator: (v) {
                                       if (v == null || v.isEmpty) return 'Required';
                                       if (v != _passCtrl.text) return 'Passwords do not match';
@@ -170,7 +169,7 @@ class _DoneView extends StatelessWidget {
             height: 80,
             decoration: BoxDecoration(
                 color: AppColors.success.withAlpha(26), shape: BoxShape.circle),
-            child: const Icon(Icons.check_circle_outline_rounded,
+            child: const Icon(Icons.check_circle_outlined,
                 size: 40, color: AppColors.success),
           ),
           const SizedBox(height: 24),
@@ -205,7 +204,7 @@ class _InvalidLinkView extends StatelessWidget {
             height: 80,
             decoration: BoxDecoration(
                 color: AppColors.error.withAlpha(26), shape: BoxShape.circle),
-            child: const Icon(Icons.error_outline_rounded,
+            child: const Icon(Icons.error_outlined,
                 size: 40, color: AppColors.error),
           ),
           const SizedBox(height: 24),

@@ -3,6 +3,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/typeahead_field.dart';
+import '../../../widgets/wed_card.dart';
 
 class HelpScreen extends StatefulWidget {
   const HelpScreen({super.key});
@@ -67,7 +68,12 @@ class _HelpScreenState extends State<HelpScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Help & Support')),
+      appBar: AppBar(
+        title: const Text('Help & Support'),
+        centerTitle: true,
+        backgroundColor: AppColors.forestGreen,
+        foregroundColor: Colors.white,
+      ),
       body: Column(
         children: [
           Padding(
@@ -76,7 +82,6 @@ class _HelpScreenState extends State<HelpScreen> {
               controller: _searchCtrl,
               focusNode: _searchFocus,
               hint: 'Search help topics...',
-              fillColor: AppColors.surface,
               onChanged: (_) => setState(() {}),
               suggestionsCallback: (q) => _faqs
                   .where((f) =>
@@ -129,7 +134,7 @@ class _HelpScreenState extends State<HelpScreen> {
                           child: const Text(
                             'Chat',
                             style: TextStyle(
-                              color: AppColors.secondary,
+                              color: AppColors.primary,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -172,29 +177,31 @@ class _FaqTile extends StatefulWidget {
 class _FaqTileState extends State<_FaqTile> {
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        title: HighlightedText(
-          text: widget.faq.question,
-          query: widget.query,
-          style: AppTextStyles.titleMedium,
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Text(
-              widget.faq.answer,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-                height: 1.6,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: WedCard(
+        padding: EdgeInsets.zero,
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          title: HighlightedText(
+            text: widget.faq.question,
+            query: widget.query,
+            style: AppTextStyles.titleMedium,
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Text(
+                widget.faq.answer,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.6,
+                ),
               ),
             ),
-          ),
-        ],
-        onExpansionChanged: (_) {},
+          ],
+          onExpansionChanged: (_) {},
+        ),
       ),
     );
   }

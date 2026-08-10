@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/router/app_routes.dart';
 import '../../../core/services/admin_api_service.dart';
 import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/theme/app_colors.dart';
@@ -11,6 +13,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
+import '../../../widgets/wed_text_field.dart';
 
 class VendorVerificationScreen extends ConsumerWidget {
   const VendorVerificationScreen({super.key});
@@ -35,6 +38,12 @@ class VendorVerificationScreen extends ConsumerWidget {
         ),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.groups_outlined),
+            tooltip: 'Manage guest capacity',
+            color: AppColors.forestGreen,
+            onPressed: () => context.push(AppRoutes.adminVendorCapacity),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Center(
@@ -73,7 +82,7 @@ class VendorVerificationScreen extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(
-                    Icons.check_circle_rounded,
+                    Icons.check_circle,
                     size: 64,
                     color: AppColors.success,
                   ),
@@ -211,21 +220,10 @@ class _VerificationCardState extends State<_VerificationCard> {
                   .copyWith(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
-            TextField(
+            WedTextField(
               controller: ctrl,
               maxLines: 3,
-              decoration: InputDecoration(
-                hintText:
-                    'e.g. Missing business registration document…',
-                hintStyle: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textHint),
-                filled: true,
-                fillColor: AppColors.adminPage,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
+              hint: 'e.g. Missing business registration document…',
             ),
             const SizedBox(height: 16),
             WedButton(
@@ -375,8 +373,8 @@ class _VerificationCardState extends State<_VerificationCard> {
                           const SizedBox(width: 2),
                           Icon(
                             _expanded
-                                ? Icons.keyboard_arrow_up_rounded
-                                : Icons.keyboard_arrow_down_rounded,
+                                ? Icons.keyboard_arrow_up
+                                : Icons.keyboard_arrow_down,
                             size: 16,
                             color: AppColors.adminIndigo,
                           ),

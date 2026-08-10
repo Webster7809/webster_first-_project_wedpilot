@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -11,10 +11,11 @@ import 'package:wed_plan_pilot/providers/budget_provider.dart';
 import 'package:wed_plan_pilot/providers/vendor_provider.dart';
 
 /// Stand-in for the vendor pool the real backend would return. Overriding
-/// [allVendorsProvider] (rather than mocking HTTP) keeps this test independent
-/// of a running backend and of the couple being signed in — [allVendorsProvider]
-/// is already the seam the AI matcher reads from, so this is the same boundary
-/// production code uses, just fed fixed data instead of a network call.
+/// [vendorPoolProvider] (rather than mocking HTTP) keeps this test independent
+/// of a running backend and of the couple being signed in — [vendorPoolProvider]
+/// is already the seam vendorMatchValidationProvider reads from, so this is
+/// the same boundary production code uses, just fed fixed data instead of a
+/// network call.
 final _fakeVendors = [
   const VendorProfile(
     id: 'venue-1',
@@ -260,6 +261,21 @@ class _StaleThenSlowBudgetNotifier extends BudgetNotifier {
   }
 }
 
+/// Scrolls [finder] into view and pumps a frame before returning.
+///
+/// `tester.ensureVisible` jumps the scroll position without pumping, so the
+/// render tree still carries the pre-scroll geometry when it returns. A `tap`
+/// issued straight afterwards derives its offset from that stale layout, misses
+/// the widget, and — because a missed tap is only a printed warning, never a
+/// failure — silently does nothing while the test still passes. That is exactly
+/// what was happening to the category chips below: neither was ever actually
+/// ticked, and the wizard's "no categories selected → fall back to every
+/// category" path (see `_activeCategories`) made the assertions pass anyway.
+Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pump();
+}
+
 /// Pumps the wizard, fills in Step 0 with the given budget/guests/location,
 /// optionally selects a wedding-class card, taps the Venue and Catering
 /// category chips, then advances straight through Date/Style to the AI
@@ -281,7 +297,7 @@ Future<void> _pumpWizardToReviewStep(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        allVendorsProvider.overrideWith((ref) async => vendors),
+        vendorPoolProvider.overrideWith((ref, categories) async => vendors),
         budgetProvider.overrideWith(
           budgetNotifierBuilder ?? (ref) => _FakeBudgetNotifier(ref),
         ),
@@ -298,7 +314,7 @@ Future<void> _pumpWizardToReviewStep(
   await tester.pump();
 
   if (weddingClass != null) {
-    await tester.ensureVisible(find.text(weddingClass));
+    await _scrollTo(tester, find.text(weddingClass));
     await tester.tap(find.text(weddingClass));
     await tester.pump();
   }
@@ -306,30 +322,46 @@ Future<void> _pumpWizardToReviewStep(
   // The vendor-category checklist is collapsed by default (see
   // _CategoryChecklist) — its items don't exist in the tree at all until
   // the header is tapped to expand it.
-  await tester.ensureVisible(find.text('Select the services you need'));
+  await _scrollTo(tester, find.text('Select the services you need'));
   await tester.tap(find.text('Select the services you need'));
   // Let the checklist's 200ms AnimatedSize expansion finish before tapping
-  // anything inside it — mid-animation, the item area's hit-test geometry
-  // doesn't yet match where the tester computes the tap offset.
+  // anything inside it. Both pumps are load-bearing: the first commits the
+  // rebuild and *starts* the size animation (AnimatedSize still measures zero
+  // height at that point), and only the second advances the clock past its
+  // 200ms duration. With just one, the expanded items are laid out at their
+  // real coordinates — so `getRect`/`ensureVisible` report them as visible —
+  // but sit entirely outside the still-collapsed AnimatedSize's clip, so hit
+  // testing never reaches them and every tap below silently lands on the page
+  // behind. That failure is invisible without the assertion further down: a
+  // missed tap is only a printed warning, and the wizard's "no categories
+  // ticked → fall back to every category" path (see `_activeCategories`) left
+  // the rest of the flow looking correct anyway.
+  await tester.pump();
   await tester.pump(const Duration(milliseconds: 250));
-  await tester.ensureVisible(find.text('Venue'));
+  await _scrollTo(tester, find.text('Venue'));
   await tester.tap(find.text('Venue'));
+  await tester.pump();
+  await _scrollTo(tester, find.text('Catering'));
   await tester.tap(find.text('Catering'));
   await tester.pump();
-
-  await tester.ensureVisible(find.text('Continue'));
+  // Guards the taps above rather than the widget: a tap that misses its target
+  // is only a printed warning, so without this the whole wizard flow still
+  // passes with nothing ticked. See the pump comment above for how that hid a
+  // real breakage.
+  expect(find.text('2 services selected'), findsOneWidget);
+  await _scrollTo(tester, find.text('Continue'));
   await tester.tap(find.text('Continue'));
   await tester.pump();
 
   // ── Step 1: Date (skip picking — not required to continue) ─────────────
-  await tester.ensureVisible(find.text('Continue'));
+  await _scrollTo(tester, find.text('Continue'));
   await tester.tap(find.text('Continue'));
   await tester.pump();
 
   // ── Step 2: Style → create the plan ─────────────────────────────────────
   await tester.tap(find.text('Elegant'));
   await tester.pump();
-  await tester.ensureVisible(find.text('Create our wedding plan'));
+  await _scrollTo(tester, find.text('Create our wedding plan'));
   await tester.tap(find.text('Create our wedding plan'));
   await tester.pump();
 
@@ -365,7 +397,7 @@ Future<void> _runWizardFlow(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        allVendorsProvider.overrideWith((ref) async => _fakeVendors),
+        vendorPoolProvider.overrideWith((ref, categories) async => _fakeVendors),
         budgetProvider.overrideWith((ref) => _FakeBudgetNotifier(ref)),
       ],
       child: const MaterialApp(home: CouplePlanningScreen()),
@@ -382,30 +414,46 @@ Future<void> _runWizardFlow(WidgetTester tester) async {
   // The vendor-category checklist is collapsed by default (see
   // _CategoryChecklist) — its items don't exist in the tree at all until
   // the header is tapped to expand it.
-  await tester.ensureVisible(find.text('Select the services you need'));
+  await _scrollTo(tester, find.text('Select the services you need'));
   await tester.tap(find.text('Select the services you need'));
   // Let the checklist's 200ms AnimatedSize expansion finish before tapping
-  // anything inside it — mid-animation, the item area's hit-test geometry
-  // doesn't yet match where the tester computes the tap offset.
+  // anything inside it. Both pumps are load-bearing: the first commits the
+  // rebuild and *starts* the size animation (AnimatedSize still measures zero
+  // height at that point), and only the second advances the clock past its
+  // 200ms duration. With just one, the expanded items are laid out at their
+  // real coordinates — so `getRect`/`ensureVisible` report them as visible —
+  // but sit entirely outside the still-collapsed AnimatedSize's clip, so hit
+  // testing never reaches them and every tap below silently lands on the page
+  // behind. That failure is invisible without the assertion further down: a
+  // missed tap is only a printed warning, and the wizard's "no categories
+  // ticked → fall back to every category" path (see `_activeCategories`) left
+  // the rest of the flow looking correct anyway.
+  await tester.pump();
   await tester.pump(const Duration(milliseconds: 250));
-  await tester.ensureVisible(find.text('Venue'));
+  await _scrollTo(tester, find.text('Venue'));
   await tester.tap(find.text('Venue'));
+  await tester.pump();
+  await _scrollTo(tester, find.text('Catering'));
   await tester.tap(find.text('Catering'));
   await tester.pump();
-
-  await tester.ensureVisible(find.text('Continue'));
+  // Guards the taps above rather than the widget: a tap that misses its target
+  // is only a printed warning, so without this the whole wizard flow still
+  // passes with nothing ticked. See the pump comment above for how that hid a
+  // real breakage.
+  expect(find.text('2 services selected'), findsOneWidget);
+  await _scrollTo(tester, find.text('Continue'));
   await tester.tap(find.text('Continue'));
   await tester.pump();
 
   // ── Step 1: Date (skip picking — not required to continue) ─────────────
-  await tester.ensureVisible(find.text('Continue'));
+  await _scrollTo(tester, find.text('Continue'));
   await tester.tap(find.text('Continue'));
   await tester.pump();
 
   // ── Step 2: Style → create the plan ─────────────────────────────────────
   await tester.tap(find.text('Elegant'));
   await tester.pump();
-  await tester.ensureVisible(find.text('Create our wedding plan'));
+  await _scrollTo(tester, find.text('Create our wedding plan'));
   await tester.tap(find.text('Create our wedding plan'));
   await tester.pump();
 
@@ -430,7 +478,7 @@ Future<void> _reachStyleStep(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        allVendorsProvider.overrideWith((ref) async => _fakeVendors),
+        vendorPoolProvider.overrideWith((ref, categories) async => _fakeVendors),
         budgetProvider.overrideWith((ref) => _FakeBudgetNotifier(ref)),
       ],
       child: const MaterialApp(home: CouplePlanningScreen()),
@@ -446,21 +494,35 @@ Future<void> _reachStyleStep(WidgetTester tester) async {
   // The vendor-category checklist is collapsed by default (see
   // _CategoryChecklist) — its items don't exist in the tree at all until
   // the header is tapped to expand it.
-  await tester.ensureVisible(find.text('Select the services you need'));
+  await _scrollTo(tester, find.text('Select the services you need'));
   await tester.tap(find.text('Select the services you need'));
   // Let the checklist's 200ms AnimatedSize expansion finish before tapping
-  // anything inside it — mid-animation, the item area's hit-test geometry
-  // doesn't yet match where the tester computes the tap offset.
+  // anything inside it. Both pumps are load-bearing: the first commits the
+  // rebuild and *starts* the size animation (AnimatedSize still measures zero
+  // height at that point), and only the second advances the clock past its
+  // 200ms duration. With just one, the expanded items are laid out at their
+  // real coordinates — so `getRect`/`ensureVisible` report them as visible —
+  // but sit entirely outside the still-collapsed AnimatedSize's clip, so hit
+  // testing never reaches them and every tap below silently lands on the page
+  // behind. That failure is invisible without the assertion further down: a
+  // missed tap is only a printed warning, and the wizard's "no categories
+  // ticked → fall back to every category" path (see `_activeCategories`) left
+  // the rest of the flow looking correct anyway.
+  await tester.pump();
   await tester.pump(const Duration(milliseconds: 250));
-  await tester.ensureVisible(find.text('Venue'));
+  await _scrollTo(tester, find.text('Venue'));
   await tester.tap(find.text('Venue'));
   await tester.pump();
-  await tester.ensureVisible(find.text('Continue'));
+  // Guards the tap above rather than the widget — see the identical assertion
+  // in _pumpWizardToReviewStep for why a missed tap would otherwise pass.
+  expect(find.text('1 service selected'), findsOneWidget);
+
+  await _scrollTo(tester, find.text('Continue'));
   await tester.tap(find.text('Continue'));
   await tester.pump();
 
   // ── Step 1: Date (skip picking — not required to continue) ─────────────
-  await tester.ensureVisible(find.text('Continue'));
+  await _scrollTo(tester, find.text('Continue'));
   await tester.tap(find.text('Continue'));
   await tester.pump();
 
@@ -568,13 +630,12 @@ void main() {
     );
 
     expect(find.text("We couldn't build your plan yet"), findsOneWidget);
-    // Both the AI-plan summary error and the vendor-validation card surface
-    // the same blocking message, since both AI calls are gated on the same
-    // validation result — a couple must never see one AI-generated
-    // allocation blocked while another is silently produced anyway.
+    // aiRecommendedVendorsProvider is the sole decision-maker for the review
+    // step (see vendor_ai_provider.dart) — a single _VendorValidationFailureCard
+    // renders its blocking message, not a separate duplicate summary.
     expect(
       find.textContaining('No vendors are currently available in your selected location'),
-      findsNWidgets(2),
+      findsOneWidget,
     );
     expect(find.text('Edit requirements'), findsOneWidget);
     expect(find.text('AI top pick'), findsNothing);
@@ -602,7 +663,7 @@ void main() {
     expect(find.text("We couldn't build your plan yet"), findsOneWidget);
     expect(
       find.textContaining('too small for any vendor we have on file'),
-      findsNWidgets(2),
+      findsOneWidget,
     );
     expect(find.text('AI top pick'), findsNothing);
 

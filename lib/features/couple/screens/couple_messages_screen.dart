@@ -5,6 +5,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/messaging_provider.dart';
 import '../../../widgets/wed_avatar.dart';
+import '../../../widgets/wed_empty_state.dart';
+import '../../../widgets/wed_skeleton.dart';
 
 class CoupleMessagesScreen extends ConsumerWidget {
   const CoupleMessagesScreen({super.key});
@@ -17,29 +19,14 @@ class CoupleMessagesScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Messages')),
       body: convsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const WedListSkeleton(rows: 6),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (convs) {
           if (convs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('💬', style: TextStyle(fontSize: 56)),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No conversations yet',
-                    style: AppTextStyles.headlineMedium,
-                  ),
-                  Text(
-                    'Send an inquiry to a vendor to start chatting',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
+            return const WedEmptyState(
+              icon: Icons.chat_bubble_outlined,
+              title: 'No conversations yet',
+              message: 'Send an inquiry to a vendor to start chatting',
             );
           }
           return ListView.separated(
@@ -116,7 +103,7 @@ class CoupleMessagesScreen extends ConsumerWidget {
                         child: Text(
                           '${conv.unreadCount}',
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: AppColors.textOnSecondary,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),

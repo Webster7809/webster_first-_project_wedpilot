@@ -20,4 +20,13 @@ class ApiConfig {
     if (Platform.isAndroid) return 'http://10.0.2.2:$_port'; // Android emulator → host localhost
     return 'http://localhost:$_port'; // iOS simulator, desktop
   }
+
+  // The Web-type OAuth 2.0 client ID from Google Cloud Console — passed as
+  // GoogleSignIn's serverClientId (on every platform, including Android) so
+  // the ID token's audience matches what the backend's GOOGLE_CLIENT_ID
+  // verifies against. Set via `--dart-define=GOOGLE_SERVER_CLIENT_ID=...`;
+  // empty until that client exists (see GOOGLE_SIGNIN_SETUP.md), in which
+  // case Google Sign-In is treated as not configured.
+  static const String googleServerClientId =
+      String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID', defaultValue: '');
 }

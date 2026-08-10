@@ -14,7 +14,7 @@ class HamburgerMenuButton extends StatelessWidget {
     final shell = ShellScaffold.of(context);
     if (shell == null) return const SizedBox.shrink();
     return IconButton(
-      icon: Icon(Icons.menu_rounded, color: color),
+      icon: Icon(Icons.menu, color: color),
       tooltip: 'Menu',
       onPressed: () => shell.scaffoldKey.currentState?.openDrawer(),
     );

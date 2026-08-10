@@ -1,4 +1,4 @@
-﻿import 'dart:typed_data';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -155,7 +155,7 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
                   child: Row(
                     children: [
                       const Icon(
-                        Icons.error_outline,
+                        Icons.error_outlined,
                         color: AppColors.error,
                         size: 18,
                       ),
@@ -316,7 +316,7 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
                 onPressed: _pickReceipt,
                 icon: Icon(
                   _receiptBytes != null
-                      ? Icons.check_circle_outline_rounded
+                      ? Icons.check_circle_outlined
                       : Icons.receipt_long_outlined,
                 ),
                 label: Text(
@@ -457,7 +457,7 @@ class _ExpenseRow extends ConsumerWidget {
             const SizedBox(width: 4),
             IconButton(
               icon: const Icon(
-                Icons.delete_outline,
+                Icons.delete_outlined,
                 size: 18,
                 color: AppColors.error,
               ),

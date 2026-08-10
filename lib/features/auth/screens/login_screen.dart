@@ -1,9 +1,14 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../models/user.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/google_signin_button.dart';
 import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -33,9 +38,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
     final state = ref.read(authProvider);
     if (state.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(state.error!), backgroundColor: AppColors.error),
-      );
+      showWedSnackBar(context, state.error!, type: SnackType.error);
     }
   }
 
@@ -105,7 +108,31 @@ class _HeroSection extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned.fill(child: Container(color: AppColors.forestGreen)),
+          Positioned.fill(
+            child: CachedNetworkImage(
+              imageUrl: VendorCategoryImages.authHero()[0],
+              fit: BoxFit.cover,
+              fadeInDuration: const Duration(milliseconds: 300),
+              placeholder: (_, _) => Container(color: AppColors.forestGreen),
+              errorWidget: (_, _, _) =>
+                  Container(color: AppColors.forestGreen),
+            ),
+          ),
+          // Scrim so the eyebrow/heading/circles stay legible over the photo.
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.forestGreen.withAlpha(210),
+                    AppColors.forestGreen.withAlpha(165),
+                  ],
+                ),
+              ),
+            ),
+          ),
           // Decorative circles
           Positioned(
             top: -40,
@@ -139,7 +166,7 @@ class _HeroSection extends StatelessWidget {
                       ),
                       child: const Icon(
                         Icons.favorite,
-                        color: Colors.white,
+                        color: AppColors.textOnSecondary,
                         size: 24,
                       ),
                     ),
@@ -162,7 +189,9 @@ class _HeroSection extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.amber,
+                    // Gold, not forest: this eyebrow sits on the forest hero
+                    // (4.99:1). Forest on forest is invisible.
+                    color: AppColors.gold,
                     letterSpacing: 1.5,
                   ),
                 ),
@@ -283,7 +312,7 @@ class _FormCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: AppColors.amber,
+                        color: AppColors.primary,
                       ),
                     ),
                   ),
@@ -300,6 +329,10 @@ class _FormCard extends StatelessWidget {
               height: 52,
               borderRadius: 28,
             ),
+            const SizedBox(height: 20),
+            const OrDivider(),
+            const SizedBox(height: 20),
+            GoogleSignInButton(role: UserRole.couple, isLoading: isLoading),
             const SizedBox(height: 32),
 
             Center(
@@ -321,7 +354,7 @@ class _FormCard extends StatelessWidget {
                           TextSpan(
                             text: 'Create an account',
                             style: TextStyle(
-                              color: AppColors.amber,
+                              color: AppColors.primary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),

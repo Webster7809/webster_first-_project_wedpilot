@@ -1,6 +1,6 @@
 import '../core/utils/enum_utils.dart';
 
-enum InquiryStatus { newInquiry, viewed, responded, quoted, booked, declined }
+enum InquiryStatus { newInquiry, viewed, responded, quoted, booked, declined, cancelled }
 
 class Inquiry {
   final String id;

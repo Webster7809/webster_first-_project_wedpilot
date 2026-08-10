@@ -58,7 +58,8 @@ class VendorFeedbackScreen extends ConsumerWidget {
                       Text(
                         'PRIVATE — VISIBLE ONLY TO YOU',
                         style: AppTextStyles.caption.copyWith(
-                          color: AppColors.amber,
+                          // Gold on the forest header — 4.99:1.
+                          color: AppColors.gold,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.2,
                         ),
@@ -185,15 +186,15 @@ class _FeedbackSummaryCard extends StatelessWidget {
                                   color: AppColors.textSecondary,
                                   fontWeight: FontWeight.w600)),
                           const SizedBox(width: 4),
-                          const Icon(Icons.star_rounded,
-                              size: 12, color: AppColors.amber),
+                          const Icon(Icons.star,
+                              size: 12, color: AppColors.goldDeep),
                           const SizedBox(width: 8),
                           Expanded(
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(3),
                               child: LinearProgressIndicator(
                                 value: fill,
-                                backgroundColor: const Color(0xFFEEEBE4),
+                                backgroundColor: AppColors.progressTrack,
                                 valueColor: const AlwaysStoppedAnimation<Color>(
                                     AppColors.amber),
                                 minHeight: 7,
@@ -246,9 +247,9 @@ class _StarRow extends StatelessWidget {
       children: List.generate(
         5,
         (i) => Icon(
-          i < rating ? Icons.star_rounded : Icons.star_outline_rounded,
+          i < rating ? Icons.star : Icons.star_outlined,
           size: 16,
-          color: AppColors.amber,
+          color: AppColors.goldDeep,
         ),
       ),
     );
@@ -335,10 +336,10 @@ class _FeedbackCard extends StatelessWidget {
                 const SizedBox(width: 10),
                 Icon(
                   feedback.onTime == OnTimeAnswer.yes
-                      ? Icons.check_circle_outline
+                      ? Icons.check_circle_outlined
                       : feedback.onTime == OnTimeAnswer.no
                           ? Icons.cancel_outlined
-                          : Icons.remove_circle_outline,
+                          : Icons.remove_circle_outlined,
                   size: 14,
                   color: AppColors.textSecondary,
                 ),

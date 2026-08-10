@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 
-import '../config/api_config.dart';
 import '../../models/notification_model.dart';
+import 'authenticated_dio.dart';
 
 // Flutter never touches the database directly.
 // All calls go through the Node/Express backend.
@@ -15,12 +15,7 @@ class NotificationApiService {
   NotificationApiService._();
   static final NotificationApiService instance = NotificationApiService._();
 
-  final Dio _dio = Dio(BaseOptions(
-    baseUrl: ApiConfig.baseUrl,
-    connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 60),
-    headers: {'Content-Type': 'application/json'},
-  ));
+  final Dio _dio = buildApiDio();
 
   Options _auth(String accessToken) =>
       Options(headers: {'Authorization': 'Bearer $accessToken'});

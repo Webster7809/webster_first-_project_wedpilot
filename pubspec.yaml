@@ -52,6 +52,9 @@ dependencies:
   share_plus: ^10.1.2
   url_launcher: ^6.3.1
 
+  # Google Sign-In
+  google_sign_in: ^7.2.0
+
   # QR Code
   qr_flutter: ^4.1.0
 
@@ -69,7 +72,7 @@ dependencies:
   printing: ^5.13.2
 
   # File picker
-  file_picker: ^11.0.2
+  file_picker: ^8.1.4
 
   # Shimmer loading effect
   shimmer: ^3.0.0
@@ -96,26 +99,48 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-# Placeholder branding generated from AppColors — swap assets/icon/*.png for real
-# artwork later and rerun: dart run flutter_launcher_icons && dart run flutter_native_splash:create
+  # Bundled rather than fetched at runtime by google_fonts: a first launch on a
+  # poor connection would otherwise fall back to Roboto silently, which is the
+  # exact failure this replaces. google_fonts stays a dependency only for the
+  # user-selectable invitation template faces.
+  fonts:
+    - family: Playfair Display
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PlayfairDisplay-Bold.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+
+# Ring logo artwork — rerun after changing assets/icon/*.png:
+# dart run flutter_launcher_icons && dart run flutter_native_splash:create
 flutter_launcher_icons:
   android: true
   image_path: "assets/icon/icon.png"
-  adaptive_icon_background: "#1B3A2D"
+  adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/icon/icon_foreground.png"
   web:
     generate: true
     image_path: "assets/icon/icon.png"
-    background_color: "#1B3A2D"
-    theme_color: "#1B3A2D"
+    background_color: "#FFFFFF"
+    theme_color: "#163D2C"
 
 flutter_native_splash:
-  color: "#F5EFE6"
+  color: "#FAF9FC"
   image: assets/icon/splash_logo_light.png
   color_dark: "#111318"
   image_dark: assets/icon/icon_foreground.png
   android_12:
     image: assets/icon/splash_logo_light.png
-    icon_background_color: "#F5EFE6"
+    icon_background_color: "#FAF9FC"
     image_dark: assets/icon/icon_foreground.png
     icon_background_color_dark: "#111318"

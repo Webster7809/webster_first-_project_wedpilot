@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../config/api_config.dart';
 import '../../models/invitation.dart';
+import 'authenticated_dio.dart';
 
 /// Resolves a stored relative upload path (e.g. '/uploads/invitations/x.jpg')
 /// to an absolute URL. Already-absolute URLs are returned unchanged.
@@ -19,12 +20,7 @@ class InvitationApiService {
   InvitationApiService._();
   static final InvitationApiService instance = InvitationApiService._();
 
-  final Dio _dio = Dio(BaseOptions(
-    baseUrl: ApiConfig.baseUrl,
-    connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 60),
-    headers: {'Content-Type': 'application/json'},
-  ));
+  final Dio _dio = buildApiDio();
 
   Options _auth(String accessToken) =>
       Options(headers: {'Authorization': 'Bearer $accessToken'});

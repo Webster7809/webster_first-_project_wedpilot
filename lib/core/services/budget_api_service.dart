@@ -2,8 +2,8 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
-import '../config/api_config.dart';
 import '../../models/budget.dart';
+import 'authenticated_dio.dart';
 
 // Flutter never touches the database directly.
 // All calls go through the Node/Express backend.
@@ -17,12 +17,7 @@ class BudgetApiService {
   BudgetApiService._();
   static final BudgetApiService instance = BudgetApiService._();
 
-  final Dio _dio = Dio(BaseOptions(
-    baseUrl: ApiConfig.baseUrl,
-    connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 60),
-    headers: {'Content-Type': 'application/json'},
-  ));
+  final Dio _dio = buildApiDio();
 
   Options _auth(String accessToken) =>
       Options(headers: {'Authorization': 'Bearer $accessToken'});

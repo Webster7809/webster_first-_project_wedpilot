@@ -9,18 +9,30 @@ import '../core/services/budget_validation_service.dart';
 import '../core/services/couple_profile_service.dart';
 import '../core/services/guest_capacity_validation_service.dart';
 import '../core/services/location_validation_service.dart';
-import '../core/services/vendor_api_service.dart';
 import '../core/services/vendor_filtering_service.dart';
 import '../core/services/wedding_ai_service.dart';
 import '../core/utils/format_utils.dart';
 import '../core/utils/geo_utils.dart';
 import 'auth_provider.dart';
+import 'booking_provider.dart';
 import 'budget_provider.dart';
 import 'vendor_provider.dart';
 
 export '../models/budget_class.dart';
 export '../models/vendor_validation.dart';
 export '../core/services/wedding_ai_service.dart' show VendorMatchSuggestion;
+
+/// Currency-scale tolerance for every "does this price fit the budget"
+/// comparison below (sequential funding, the final funded-pool filter,
+/// over-budget scoring, and budget-realism re-checks) — applied identically
+/// across every [BudgetClass]. [remaining]/[categoryBudget] are the result of
+/// repeated floating-point subtraction across however many categories were
+/// funded before this one, so a couple whose entered budget is *exactly*
+/// equal to a vendor's price can otherwise land a few hundredths off after
+/// that arithmetic and get wrongly rejected as "too expensive" — a vendor
+/// priced at or within a cent of what's available must always count as
+/// affordable, never just strictly under.
+const _kBudgetEpsilon = 0.01;
 
 /// Stage-by-stage wall-clock timing for one matching run, printed as a
 /// single aligned block once the run finishes (debug builds only — see
@@ -133,18 +145,62 @@ final vendorMatchValidationProvider =
   // other category too, only to discard them a moment later in
   // VendorFilteringService.filterEligible. Scoping the fetch itself keeps
   // both the DB scan and the network payload proportional to what this
-  // couple actually asked for.
-  final token = ref.watch(authProvider.notifier).accessToken;
-  final allVendors = token == null
-      ? const <VendorProfile>[]
-      : await VendorApiService.instance.fetchAllVendors(
-          token,
-          categories: categories.isEmpty ? null : categories,
-        );
-  timer.lap('Database fetch (${allVendors.length} vendors)');
+  // couple actually asked for. Routed through [vendorPoolProvider] (rather
+  // than calling VendorApiService directly) so this stage stays overridable
+  // in tests — see that provider's doc comment.
+  final fetchedVendors = await ref.watch(vendorPoolProvider(categories).future);
+  timer.lap('Database fetch (${fetchedVendors.length} vendors)');
+
+  // Step 0 — subtract what the couple has already decided.
+  //
+  // A vendor with a live request is a commitment, not a candidate: re-running
+  // the plan must never re-propose them, nor quietly swap them for someone
+  // else in the same category. So the category is locked out of matching
+  // entirely and its vendor removed from the pool, and only the categories
+  // still genuinely undecided go on to be scored. A declined or cancelled
+  // request is finished business and frees its category again — see
+  // [InquiryStatusDisplay.isActive].
+  //
+  // A locked vendor that isn't in this pool (its category isn't among the ones
+  // the couple selected this time) is still dropped from the pool, but locks
+  // no category — there's nothing here to lock.
+  final activeRequests = await ref.watch(activeRequestsByVendorProvider.future);
+  final lockedCategories = <String, LockedCategoryRequest>{};
+  if (activeRequests.isNotEmpty) {
+    for (final vendor in fetchedVendors) {
+      final inquiry = activeRequests[vendor.id];
+      if (inquiry == null) continue;
+      lockedCategories.putIfAbsent(
+        vendor.category,
+        () => LockedCategoryRequest(vendor: vendor, inquiry: inquiry),
+      );
+    }
+  }
+  final allVendors = activeRequests.isEmpty
+      ? fetchedVendors
+      : fetchedVendors.where((v) => !activeRequests.containsKey(v.id)).toList();
+  final openCategories =
+      categories.where((c) => !lockedCategories.containsKey(c)).toList();
+
+  // Money already spoken for by those requests must leave the budget before
+  // anything else is funded against it, or the remaining categories would be
+  // allocated money the couple has effectively already committed and the
+  // budget recap would overstate what's left.
+  final lockedSpend = lockedCategories.values
+      .map((l) => l.vendor.priceForClass(budgetClass))
+      .where((p) => p > 0)
+      .fold<double>(0, (sum, p) => sum + p);
+  final budgetForOpenCategories = enteredBudget - lockedSpend;
+
+  // Every requested category is already committed — there is nothing left to
+  // match, and that's a success state, not a failure.
+  if (openCategories.isEmpty) {
+    timer.report('Vendor validation pipeline (all categories already requested)');
+    return VendorValidationResult(lockedCategories: lockedCategories);
+  }
 
   // Step 1 — filter by category, then hard-restrict to the couple's location.
-  final eligible = VendorFilteringService.filterEligible(allVendors, categories);
+  final eligible = VendorFilteringService.filterEligible(allVendors, openCategories);
   final locationPool = VendorFilteringService.restrictToLocation(eligible.pool, locationString);
   timer.lap('Category + location filtering');
 
@@ -156,10 +212,13 @@ final vendorMatchValidationProvider =
   );
   if (locationFailure != null) {
     timer.report('Vendor validation pipeline (blocked: no vendors in location)');
-    return VendorValidationResult(blockingFailure: locationFailure);
+    return VendorValidationResult(
+      lockedCategories: lockedCategories,
+      blockingFailure: locationFailure,
+    );
   }
 
-  final byCategory = VendorFilteringService.groupByCategory(locationPool, categories);
+  final byCategory = VendorFilteringService.groupByCategory(locationPool, openCategories);
 
   // Step 3 — per-category coverage. A category with zero vendors is excluded
   // (soft, single-category message) rather than blocking the whole plan, so
@@ -176,7 +235,6 @@ final vendorMatchValidationProvider =
   final capacityChecked = GuestCapacityValidationService.validate(
     byCategory: coverage.covered,
     guestCount: guestCount,
-    location: locationString,
   );
   timer.lap('Coverage + guest-capacity filtering');
 
@@ -189,23 +247,34 @@ final vendorMatchValidationProvider =
   if (coverage.covered.isNotEmpty && capacityChecked.covered.isEmpty) {
     timer.report('Vendor validation pipeline (blocked: no vendor meets guest capacity)');
     return VendorValidationResult(
-      blockingFailure: const VendorValidationFailure(
+      lockedCategories: lockedCategories,
+      blockingFailure: VendorValidationFailure(
         type: VendorValidationFailureType.noVendorCapacityForGuestCount,
         message:
-            'No vendors in your selected location can currently accommodate your wedding size. '
-            'Please reduce the number of guests, choose another location, or wait for more '
-            'vendors to become available.',
+            'No vendors are currently available that can serve your wedding size of '
+            '$guestCount guests. Please reduce the number of guests or choose another vendor.',
       ),
     );
   }
+
+  final weddingDateStr = coupleProfile?.weddingDate != null
+      ? coupleProfile!.weddingDate!.toIso8601String().split('T').first
+      : null;
 
   // Step 4 — prefer the couple's wedding-class rating band within each
   // category (High class → 4.5★+, Budget-friendly → under 4.5★ or unrated,
   // Flexible → either), falling back to the full category when nobody
   // matches so a class preference never empties out a category.
-  final ratedByCategory =
+  final weddingClassFiltered =
       VendorFilteringService.preferredByWeddingClass(capacityChecked.covered, budgetClass);
-  timer.lap('Wedding-class filtering');
+
+  // Step 4b — hard-exclude vendors already booked on the couple's wedding
+  // date, per category, before budget is ever funded against one of them —
+  // see VendorFilteringService.excludeBookedOnDate for the graceful-degrade
+  // fallback when a category would otherwise go to zero.
+  final ratedByCategory =
+      VendorFilteringService.excludeBookedOnDate(weddingClassFiltered, weddingDateStr);
+  timer.lap('Wedding-class + availability filtering');
 
   // Every affordability figure below uses the class-adjusted price: High
   // Class budgets against the premium end of each vendor (their luxury
@@ -222,15 +291,23 @@ final vendorMatchValidationProvider =
   if (pricedPool.isNotEmpty) {
     final cheapestOverall =
         pricedPool.map(priceOf).reduce((a, b) => a < b ? a : b);
-    if (enteredBudget < cheapestOverall) {
+    // Measured against what's left after already-requested vendors, not the
+    // headline budget — money committed to a live request can't fund anything
+    // else.
+    if (cheapestOverall - budgetForOpenCategories > _kBudgetEpsilon) {
       timer.report('Vendor validation pipeline (blocked: budget too low)');
       return VendorValidationResult(
+        lockedCategories: lockedCategories,
         blockingFailure: VendorValidationFailure(
           type: VendorValidationFailureType.budgetTooLowForAnyVendor,
-          message:
-              'Your budget of ${fmtCurrency(enteredBudget)} is too small for any vendor we '
-              'have on file — the cheapest available vendor costs ${fmtCurrency(cheapestOverall)}. '
-              'Please increase your budget to continue.',
+          message: lockedSpend > 0
+              ? 'After the ${fmtCurrency(lockedSpend)} committed to vendors you\'ve already '
+                  'requested, the ${fmtCurrency(budgetForOpenCategories)} left is too small for any '
+                  'vendor we have on file — the cheapest available costs ${fmtCurrency(cheapestOverall)}. '
+                  'Please increase your budget or cancel a request to continue.'
+              : 'Your budget of ${fmtCurrency(enteredBudget)} is too small for any vendor we '
+                  'have on file — the cheapest available vendor costs ${fmtCurrency(cheapestOverall)}. '
+                  'Please increase your budget to continue.',
         ),
       );
     }
@@ -259,11 +336,8 @@ final vendorMatchValidationProvider =
   //      the entered budget as the real vendor pool allows instead of
   //      quietly under-spending.
   final coords = locationString != null ? coordsForLocation(locationString) : null;
-  final weddingDateStr = coupleProfile?.weddingDate != null
-      ? coupleProfile!.weddingDate!.toIso8601String().split('T').first
-      : null;
 
-  final fundableCategories = categories
+  final fundableCategories = openCategories
       .where((c) =>
           !coverage.excludedMessages.containsKey(c) &&
           !capacityChecked.excludedMessages.containsKey(c))
@@ -289,15 +363,16 @@ final vendorMatchValidationProvider =
   // always stays a tight, real number.
   double? scoredPickPrice(String cat, double ceiling) {
     final candidates = ratedByCategory[cat] ?? const <VendorProfile>[];
-    final affordable =
-        candidates.where((v) => priceOf(v) <= 0 || priceOf(v) <= ceiling).toList();
+    final affordable = candidates
+        .where((v) => priceOf(v) <= 0 || priceOf(v) - ceiling <= _kBudgetEpsilon)
+        .toList();
     final scored = _AiEngine.scoreAll(affordable, budgetClass, coords?[0], coords?[1],
-        weddingDateStr, {cat: ceiling}, eligible.tiers);
+        weddingDateStr, {cat: ceiling}, eligible.tiers, guestCount);
     if (scored.isEmpty) return null;
     return scored.reduce((a, b) => a.finalScore >= b.finalScore ? a : b).effectivePrice;
   }
 
-  var remaining = enteredBudget;
+  var remaining = budgetForOpenCategories;
   var moneyExhausted = false;
   final ceilings = <String, double>{};
   final committedPrice = <String, double>{};
@@ -313,7 +388,7 @@ final vendorMatchValidationProvider =
     }
 
     final cheapest = cheapestPriceByCategory[cat];
-    if (cheapest != null && cheapest > remaining) {
+    if (cheapest != null && cheapest - remaining > _kBudgetEpsilon) {
       moneyExhausted = true;
       rescueCandidate = cat;
       exhaustedMessages[cat] = 'Cannot proceed — your money ends here. Even the cheapest real '
@@ -339,7 +414,7 @@ final vendorMatchValidationProvider =
     final remainingSnapshot = remaining;
     final downgraded = <String>{};
 
-    while (cheapestE - remaining > 0.01) {
+    while (cheapestE - remaining > _kBudgetEpsilon) {
       String? bestCat;
       var bestSaving = 0.0;
       for (final funded in ceilings.keys) {
@@ -361,7 +436,7 @@ final vendorMatchValidationProvider =
       downgraded.add(bestCat);
     }
 
-    if (cheapestE - remaining <= 0.01) {
+    if (cheapestE - remaining <= _kBudgetEpsilon) {
       ceilings[cat] = cheapestE;
       committedPrice[cat] = cheapestE;
       remaining -= cheapestE;
@@ -381,7 +456,7 @@ final vendorMatchValidationProvider =
   // Phase 3 — polish pass: spend whatever's left on real, pricier upgrades
   // within categories already funded, so the total lands close to the
   // entered budget rather than quietly under-spending it.
-  if (remaining > 0.01) {
+  if (remaining > _kBudgetEpsilon) {
     var changed = true;
     while (changed) {
       changed = false;
@@ -394,7 +469,7 @@ final vendorMatchValidationProvider =
         if (above.isEmpty) continue;
         final nextPrice = above.reduce((a, b) => a < b ? a : b);
         final delta = nextPrice - current;
-        if (delta <= remaining) {
+        if (delta - remaining <= _kBudgetEpsilon) {
           remaining -= delta;
           committedPrice[cat] = nextPrice;
           ceilings[cat] = nextPrice;
@@ -407,7 +482,7 @@ final vendorMatchValidationProvider =
   final fundedByCategory = <String, List<VendorProfile>>{
     for (final cat in ceilings.keys)
       cat: (ratedByCategory[cat] ?? const <VendorProfile>[])
-          .where((v) => priceOf(v) <= 0 || priceOf(v) <= ceilings[cat]!)
+          .where((v) => priceOf(v) <= 0 || priceOf(v) - ceilings[cat]! <= _kBudgetEpsilon)
           .toList(),
   };
   timer.lap('Budget funding (sequential + rescue + polish)');
@@ -420,6 +495,7 @@ final vendorMatchValidationProvider =
     excludedCategoryMessages: coverage.excludedMessages,
     budgetExhaustedMessages: exhaustedMessages,
     guestCapacityExcludedMessages: capacityChecked.excludedMessages,
+    lockedCategories: lockedCategories,
   );
 });
 
@@ -430,6 +506,10 @@ final aiRecommendedVendorsProvider =
   final coupleProfile = ref.watch(coupleProfileProvider);
   final wizardLocation = ref.watch(wizardLocationProvider);
   final wizardStyles = ref.watch(wizardStylesProvider);
+  final wizardGuestCount = ref.watch(wizardGuestCountProvider);
+  final guestCount = (wizardGuestCount != null && wizardGuestCount > 0)
+      ? wizardGuestCount
+      : coupleProfile?.guestCount;
 
   final validation = await ref.watch(vendorMatchValidationProvider.future);
   timer.lap('Validation pipeline (breakdown logged separately above)');
@@ -451,7 +531,7 @@ final aiRecommendedVendorsProvider =
   final tiers = validation.tiers;
 
   final scored = _AiEngine.scoreAll(pool, budgetClass, coords?[0], coords?[1],
-      weddingDateStr, categoryBudgets, tiers);
+      weddingDateStr, categoryBudgets, tiers, guestCount);
   // This deterministic ranking is now the sole decision-maker for which
   // vendor wins each category — see `_AiEngine._finalScore`. It's already
   // scored against the exact same per-category ledger the sequential
@@ -614,8 +694,9 @@ class _AiEngine {
     double? coupleLon,
     String? weddingDateStr,
     Map<String, double> categoryBudgets,
-    Map<String, VendorPriceTier> priceTiers,
-  ) {
+    Map<String, VendorPriceTier> priceTiers, [
+    int? guestCount,
+  ]) {
     return pool.map((v) {
       final tier = priceTiers[v.id] ?? v.priceTier;
       final rep = v.performanceScore;
@@ -625,7 +706,11 @@ class _AiEngine {
       final val = _valueScore(price, budgetClass, categoryBudget);
       final isBooked =
           weddingDateStr != null && v.blockedDates.contains(weddingDateStr);
-      final overBudgetRatio = categoryBudget != null && categoryBudget > 0
+      // A price within a cent of the category's budget counts as fitting
+      // exactly, never as "slightly over" — see _kBudgetEpsilon.
+      final overBudgetRatio = categoryBudget != null &&
+              categoryBudget > 0 &&
+              (price - categoryBudget) > _kBudgetEpsilon
           ? ((price - categoryBudget) / categoryBudget).clamp(0.0, 1.0)
           : 0.0;
       final fin =
@@ -641,8 +726,36 @@ class _AiEngine {
         overBudgetRatio: overBudgetRatio,
         priceTier: tier,
         effectivePrice: price,
+        capacityRank: _capacityRank(v, guestCount),
+        guestCount: guestCount,
       );
     }).toList();
+  }
+
+  /// Ranks a vendor by closeness to the couple's guest count — the dominant
+  /// primary sort key in [recommend], ahead of budget/location/rating. `0`
+  /// when there's no guest count to compare against (capacity never affects
+  /// ranking without one); the sentinel `1 << 30` when no listing states a
+  /// capacity that covers the headcount (weakest signal, same "unstated =
+  /// neutral, not a rejection" rule as [VendorProfile.canServeGuestCount] —
+  /// never excluded, just ranked behind every vendor who proved a real fit);
+  /// otherwise `capacity - guestCount`, so `0` is an exact match and smaller
+  /// positive values are closer above it.
+  ///
+  /// Measured against [VendorProfile.fittingGuestCapacity] rather than
+  /// [VendorProfile.maxGuestCapacity], which would be wrong in both
+  /// directions: a vendor listing both a 100- and a 500-guest package would
+  /// rank 400 seats oversized for a 100-guest wedding instead of as the exact
+  /// match it is, and a vendor whose only qualifying listing states *no*
+  /// capacity (the neutral case that let them past
+  /// [GuestCapacityValidationService]) would rank on a smaller listing that
+  /// can't seat the party at all — going negative, which sorts ahead of every
+  /// genuine exact match. This value is never negative.
+  static int _capacityRank(VendorProfile v, int? guestCount) {
+    if (guestCount == null || guestCount <= 0) return 0;
+    final capacity = v.fittingGuestCapacity(guestCount);
+    if (capacity == null) return 1 << 30;
+    return capacity - guestCount;
   }
 
   /// Local, deterministic ranking — cannot throw, and is now the sole
@@ -657,7 +770,31 @@ class _AiEngine {
     required BudgetClass budgetClass,
     List<String> styles = const [],
   }) {
-    final ranked = [...scored]..sort((a, b) => b.finalScore.compareTo(a.finalScore));
+    // Priority ladder, each level only breaking ties left by the one above:
+    // 1-2. Capacity closeness (exact match, then closest-higher) — see
+    //      [_capacityRank]. Dominant across every wedding class; a smaller
+    //      vendor never outranks a closer-fitting one just for scoring
+    //      higher on reputation/value/location.
+    // 3.   Budget compatibility — least over-budget wins; both-fit ties break
+    //      on value score (how well-priced within the allocation).
+    // 4.   Location compatibility.
+    // 5.   Vendor rating (reputation).
+    // `finalScore` stays computed on every [_ScoredVendor] (still used
+    // elsewhere as a confidence figure, e.g. `_syncTopMatches`), it just no
+    // longer drives this order directly.
+    final ranked = [...scored]..sort((a, b) {
+      final capacity = a.capacityRank.compareTo(b.capacityRank);
+      if (capacity != 0) return capacity;
+      final budget = a.overBudgetRatio.compareTo(b.overBudgetRatio);
+      if (budget != 0) return budget;
+      if (a.overBudgetRatio <= 0 && b.overBudgetRatio <= 0) {
+        final value = b.value.compareTo(a.value);
+        if (value != 0) return value;
+      }
+      final location = b.location.compareTo(a.location);
+      if (location != 0) return location;
+      return b.reputation.compareTo(a.reputation);
+    });
 
     final catTotal = <String, int>{};
     for (final s in ranked) {
@@ -680,7 +817,8 @@ class _AiEngine {
     List<String> styles,
   ) {
     final steps = _reasonSteps(s.vendor, budgetClass, rank, s.isBookedOnWeddingDate,
-        s.categoryBudget, s.overBudgetRatio, styles, s.location, s.effectivePrice);
+        s.categoryBudget, s.overBudgetRatio, styles, s.location, s.effectivePrice,
+        s.guestCount);
 
     // Mirrors the backend's budget-fit/fallback rules (see /api/vendor-match):
     // a category with no allocated budget, or a pick priced at or under it,
@@ -747,7 +885,9 @@ class _AiEngine {
 
       final catScored = entry.value;
       final affordable = catScored
-          .where((s) => s.effectivePrice > 0 && s.effectivePrice <= categoryBudget)
+          .where((s) =>
+              s.effectivePrice > 0 &&
+              s.effectivePrice - categoryBudget <= _kBudgetEpsilon)
           .toList();
 
       final topIdx = result.indexWhere(
@@ -831,6 +971,8 @@ class _AiEngine {
         overBudgetRatio: 0.0,
         priceTier: s.priceTier,
         effectivePrice: s.effectivePrice,
+        capacityRank: s.capacityRank,
+        guestCount: s.guestCount,
       );
       result[i] = _buildMatch(realized, budgetClass, m.rankInCategory, m.totalInCategory, styles);
     }
@@ -933,6 +1075,7 @@ class _AiEngine {
     List<String> styles,
     double locationScore,
     double effectivePrice,
+    int? guestCount,
   ) {
     final stars = v.rating?.toStringAsFixed(1) ?? '—';
     final rev = v.feedbackCount;
@@ -952,6 +1095,32 @@ class _AiEngine {
           'Starts around ${effectivePrice.toStringAsFixed(0)}, above the ~${categoryBudget.toStringAsFixed(0)} '
           'you were allocated for $cat — still the closest available fit. You can move forward by asking '
           'for a smaller/custom package, trimming scope for $cat, or shifting budget from a lower-priority category.';
+    }
+
+    // Capacity is the dominant ranking signal (see _AiEngine.recommend), so
+    // the couple should see exactly why in terms of their own headcount —
+    // not just that a number is on file. Omitted only when there's neither a
+    // guest count to compare against nor a stated capacity to show. The
+    // headcount claim is made about the listing that actually seats the party
+    // (fittingGuestCapacity — the same figure _capacityRank ranked on), never
+    // the vendor's largest listing, which would otherwise overstate the fit or
+    // — for a vendor who only qualified on a capacity-less listing — claim a
+    // "fit above your headcount" that is in fact below it.
+    final capacity = v.maxGuestCapacity;
+    final fitting =
+        (guestCount != null && guestCount > 0) ? v.fittingGuestCapacity(guestCount) : null;
+    final String? guestCapacityText;
+    if (guestCount != null && guestCount > 0 && fitting != null) {
+      guestCapacityText = fitting == guestCount
+          ? 'Serves exactly $fitting guests — an exact capacity match for your $guestCount-guest wedding.'
+          : 'Serves up to $fitting guests — the closest available fit above your $guestCount-guest headcount.';
+    } else if (guestCount != null && guestCount > 0) {
+      guestCapacityText =
+          "Hasn't stated a firm capacity covering $guestCount guests, so this wasn't held against them — treated as neutral, not excluded. Confirm your party size with them directly.";
+    } else if (capacity != null) {
+      guestCapacityText = 'Serves up to $capacity guests.';
+    } else {
+      guestCapacityText = null;
     }
 
     final reputationText = v.rating == null
@@ -1008,6 +1177,8 @@ class _AiEngine {
     }
 
     final steps = [
+      if (guestCapacityText != null)
+        ReasoningStep(label: ReasoningStep.guestCapacity, text: guestCapacityText),
       ReasoningStep(label: ReasoningStep.budgetFit, text: budgetText),
       ReasoningStep(label: ReasoningStep.reputation, text: reputationText),
       ReasoningStep(label: ReasoningStep.availability, text: availabilityText),
@@ -1035,6 +1206,17 @@ class _ScoredVendor {
   /// [VendorProfile.priceForClass] (registered package price for the class
   /// when the vendor has one, else the vendor's price range).
   final double effectivePrice;
+
+  /// See [_AiEngine._capacityRank] — the dominant primary sort key in
+  /// [_AiEngine.recommend].
+  final int capacityRank;
+
+  /// The couple's headcount this vendor was scored against — carried
+  /// alongside [capacityRank] purely so reasoning text (see
+  /// `_AiEngine._reasonSteps`) can tell "exact match" apart from "no guest
+  /// count was entered", both of which produce a `capacityRank` of 0.
+  final int? guestCount;
+
   const _ScoredVendor({
     required this.vendor,
     required this.reputation,
@@ -1046,5 +1228,7 @@ class _ScoredVendor {
     this.overBudgetRatio = 0.0,
     this.priceTier = VendorPriceTier.mid,
     this.effectivePrice = 0.0,
+    this.capacityRank = 0,
+    this.guestCount,
   });
 }

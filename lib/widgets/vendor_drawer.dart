@@ -32,7 +32,7 @@ class VendorDrawer extends ConsumerWidget {
             width: double.infinity,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppColors.forestGreen, AppColors.vendorIndigo],
+                colors: [AppColors.forestGreen, AppColors.gradientAccentGreen],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -130,7 +130,7 @@ class VendorDrawer extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
                 _DrawerItem(
-                  icon: Icons.dashboard_rounded,
+                  icon: Icons.dashboard,
                   label: 'Dashboard',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -138,7 +138,7 @@ class VendorDrawer extends ConsumerWidget {
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.grid_view_rounded,
+                  icon: Icons.grid_view,
                   label: 'Listings',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -146,7 +146,7 @@ class VendorDrawer extends ConsumerWidget {
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.mail_rounded,
+                  icon: Icons.mail,
                   label: 'Inquiries',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -154,7 +154,7 @@ class VendorDrawer extends ConsumerWidget {
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.person_rounded,
+                  icon: Icons.person,
                   label: 'Account',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -168,7 +168,7 @@ class VendorDrawer extends ConsumerWidget {
                 ),
 
                 _DrawerItem(
-                  icon: Icons.settings_rounded,
+                  icon: Icons.settings,
                   label: 'Settings',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -182,7 +182,7 @@ class VendorDrawer extends ConsumerWidget {
                 ),
 
                 _DrawerItem(
-                  icon: Icons.logout_rounded,
+                  icon: Icons.logout,
                   label: 'Logout',
                   iconColor: AppColors.error,
                   labelColor: AppColors.error,

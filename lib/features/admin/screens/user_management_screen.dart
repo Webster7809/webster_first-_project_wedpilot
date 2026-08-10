@@ -233,7 +233,6 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                   focusNode: _searchFocus,
                   hint: 'Search by name or email…',
                   prefixIcon: Icons.search,
-                  fillColor: AppColors.adminPage,
                   onChanged: (_) => setState(() {}),
                   suggestionsCallback: (q) =>
                       filterAdminUsers(users, q, _filter).take(8).toList(),
@@ -291,7 +290,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(
-                          Icons.person_search_rounded,
+                          Icons.person_search,
                           size: 56,
                           color: AppColors.textHint,
                         ),

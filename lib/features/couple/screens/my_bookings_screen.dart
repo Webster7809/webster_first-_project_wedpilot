@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/router/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/inquiry_status_display.dart';
 import '../../../models/messaging.dart';
 import '../../../providers/booking_provider.dart';
+import '../../../widgets/booking_action_button.dart';
+import '../../../widgets/wed_empty_state.dart';
+import '../../../widgets/wed_skeleton.dart';
 
 class MyBookingsScreen extends ConsumerWidget {
   const MyBookingsScreen({super.key});
@@ -24,7 +29,7 @@ class MyBookingsScreen extends ConsumerWidget {
         foregroundColor: Colors.white,
       ),
       body: bookingsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const WedListSkeleton(rows: 4, asCards: true, cardHeight: 140),
         error: (error, stack) => Center(
           child: Text(
             'Unable to load your bookings.',
@@ -33,21 +38,11 @@ class MyBookingsScreen extends ConsumerWidget {
         ),
         data: (bookings) {
           if (bookings.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.event_available_outlined, size: 56, color: AppColors.textHint),
-                  const SizedBox(height: 12),
-                  Text('No bookings yet', style: AppTextStyles.headlineMedium),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Requests you send to vendors will show up here.',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
+            return WedEmptyState(
+              icon: Icons.event_available_outlined,
+              title: 'No bookings yet',
+              message: 'Requests you send to vendors will show up here.',
+              imageUrl: VendorCategoryImages.galleryFor('Photography')[0],
             );
           }
 
@@ -68,27 +63,24 @@ class MyBookingsScreen extends ConsumerWidget {
   }
 }
 
-class _BookingCard extends StatelessWidget {
+class _BookingCard extends ConsumerWidget {
   final Inquiry inquiry;
   const _BookingCard({required this.inquiry});
 
-  (String, Color) _statusPresentation() {
-    switch (inquiry.status) {
-      case InquiryStatus.booked:
-        return ('Confirmed', AppColors.success);
-      case InquiryStatus.declined:
-        return ('Declined', AppColors.error);
-      default:
-        return ('Pending', AppColors.amber);
-    }
-  }
-
   @override
-  Widget build(BuildContext context) {
-    final (statusLabel, statusColor) = _statusPresentation();
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Wording comes from the shared helper so a booking reads identically
+    // here, on the vendor card and in the plan. This screen used to collapse
+    // four distinct statuses into a single "Pending", which hid the most
+    // reassuring signal a waiting couple has — whether the vendor has opened
+    // the request at all.
+    final display = InquiryStatusDisplay.of(inquiry.status);
+    final statusLabel = display.label;
+    final statusColor = display.color;
     final canRate = inquiry.status == InquiryStatus.booked &&
         inquiry.serviceDoneAt != null &&
         !inquiry.hasFeedback;
+    final canCancel = InquiryStatusDisplay.isActive(inquiry.status);
 
     return Container(
       decoration: BoxDecoration(
@@ -169,7 +161,7 @@ class _BookingCard extends StatelessWidget {
             const SizedBox(height: 10),
             Row(
               children: [
-                const Icon(Icons.check_circle_outline, size: 16, color: AppColors.success),
+                const Icon(Icons.check_circle_outlined, size: 16, color: AppColors.success),
                 const SizedBox(width: 6),
                 Text("You've rated this vendor",
                     style: AppTextStyles.caption.copyWith(color: AppColors.success)),
@@ -191,6 +183,22 @@ class _BookingCard extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   elevation: 0,
+                ),
+              ),
+            ),
+          ],
+          if (canCancel) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => confirmAndCancelBooking(context, ref, inquiry),
+                child: Text(
+                  inquiry.status == InquiryStatus.booked ? 'Cancel booking' : 'Cancel request',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),

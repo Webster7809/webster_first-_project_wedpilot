@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
+import '../../../widgets/wed_text_field.dart';
 import '../../../widgets/wizard_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_own_provider.dart';
@@ -59,7 +60,7 @@ class _VendorOnboardingScreenState
   ];
 
   static const _categories = [
-    ('Venue', Icons.grid_view_rounded),
+    ('Venue', Icons.grid_view),
     ('Catering', Icons.restaurant_outlined),
     ('Photography', Icons.camera_alt_outlined),
     ('Decor & flowers', Icons.local_florist_outlined),
@@ -382,7 +383,7 @@ class _VendorOnboardingScreenState
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(
-                  Icons.check_circle_rounded,
+                  Icons.check_circle,
                   size: 14,
                   color: AppColors.forestGreen,
                 ),
@@ -408,7 +409,7 @@ class _VendorOnboardingScreenState
                     child: const Padding(
                       padding: EdgeInsets.all(3),
                       child: Icon(
-                        Icons.close_rounded,
+                        Icons.close,
                         size: 14,
                         color: AppColors.forestGreen,
                       ),
@@ -424,40 +425,12 @@ class _VendorOnboardingScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextField(
+              child: WedTextField(
                 controller: _customCategoryCtrl,
+                hint: 'Add another vendor type, e.g. Hair & Makeup',
                 textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _addCustomCategory(),
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.textPrimary,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Add another vendor type, e.g. Hair & Makeup',
-                  hintStyle: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textHint,
-                  ),
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.divider),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.divider),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(
-                      color: AppColors.amber,
-                      width: 1.5,
-                    ),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                ),
+                onFieldSubmitted: (_) => _addCustomCategory(),
+                borderRadius: 10,
               ),
             ),
             const SizedBox(width: 8),
@@ -470,7 +443,7 @@ class _VendorOnboardingScreenState
                 child: const SizedBox(
                   width: 44,
                   height: 44,
-                  child: Icon(Icons.add_rounded, color: Colors.white),
+                  child: Icon(Icons.add, color: Colors.white),
                 ),
               ),
             ),
@@ -489,16 +462,15 @@ class _VendorOnboardingScreenState
           label: 'Where are you based?',
         ),
         const SizedBox(height: 10),
-        TextField(
+        WedTextField(
           controller: _locationCtrl,
-          style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
-          decoration: _fieldDec('Ndola, Copperbelt'),
+          hint: 'Ndola, Copperbelt',
         ),
         const SizedBox(height: 32),
-        WizardContinueButton(
+        WedButton(
           onPressed: _next,
           label: 'Continue to portfolio',
-          showArrow: true,
+          trailingIcon: const Icon(Icons.arrow_forward),
         ),
       ],
     );
@@ -541,15 +513,15 @@ class _VendorOnboardingScreenState
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Icon(
-                      Icons.upload_rounded,
+                      Icons.upload,
                       size: 32,
-                      color: AppColors.amber,
+                      color: AppColors.goldDeep,
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Upload cover photo',
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: AppColors.amber,
+                        color: AppColors.primary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -613,7 +585,7 @@ class _VendorOnboardingScreenState
                       ),
                       child: const Icon(
                         Icons.camera_alt_outlined,
-                        color: AppColors.amber,
+                        color: AppColors.goldDeep,
                         size: 24,
                       ),
                     ),
@@ -638,7 +610,7 @@ class _VendorOnboardingScreenState
                           border: Border.all(color: AppColors.divider),
                         ),
                         child: const Icon(
-                          Icons.add_rounded,
+                          Icons.add,
                           color: AppColors.textHint,
                           size: 28,
                         ),
@@ -659,10 +631,9 @@ class _VendorOnboardingScreenState
         const SizedBox(height: 24),
         WizardSectionLabel(icon: Icons.edit_outlined, label: 'Listing title'),
         const SizedBox(height: 10),
-        TextField(
+        WedTextField(
           controller: _titleCtrl,
-          style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
-          decoration: _fieldDec('Mukuba Gardens — Open Air Venue'),
+          hint: 'Mukuba Gardens — Open Air Venue',
         ),
         const SizedBox(height: 20),
         WizardSectionLabel(
@@ -670,19 +641,16 @@ class _VendorOnboardingScreenState
           label: 'Description',
         ),
         const SizedBox(height: 10),
-        TextField(
+        WedTextField(
           controller: _descCtrl,
           maxLines: 4,
-          style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
-          decoration: _fieldDec(
-            'Spacious garden venue seating up to 300 guests...',
-          ),
+          hint: 'Spacious garden venue seating up to 300 guests...',
         ),
         const SizedBox(height: 32),
-        WizardContinueButton(
+        WedButton(
           onPressed: _next,
           label: 'Continue to contact info',
-          showArrow: true,
+          trailingIcon: const Icon(Icons.arrow_forward),
         ),
       ],
     );
@@ -746,13 +714,13 @@ class _VendorOnboardingScreenState
         ),
         const SizedBox(height: 20),
         WizardSectionLabel(
-          icon: Icons.chat_bubble_outline_rounded,
+          icon: Icons.chat_bubble_outlined,
           label: 'WhatsApp number',
         ),
         const SizedBox(height: 10),
         _IconField(
           controller: _whatsappCtrl,
-          icon: Icons.chat_bubble_outline_rounded,
+          icon: Icons.chat_bubble_outlined,
           hint: '+260 97 712 3456',
           inputType: TextInputType.phone,
         ),
@@ -791,10 +759,10 @@ class _VendorOnboardingScreenState
           inputType: TextInputType.url,
         ),
         const SizedBox(height: 32),
-        WizardContinueButton(
+        WedButton(
           onPressed: _submit,
           label: 'Submit for verification',
-          showArrow: true,
+          trailingIcon: const Icon(Icons.arrow_forward),
           isLoading: _isSubmitting,
         ),
       ],
@@ -822,7 +790,7 @@ class _VendorOnboardingScreenState
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
-                      Icons.check_rounded,
+                      Icons.check,
                       size: 40,
                       color: AppColors.success,
                     ),
@@ -868,25 +836,6 @@ class _VendorOnboardingScreenState
     );
   }
 
-  InputDecoration _fieldDec(String hint) => InputDecoration(
-    hintText: hint,
-    hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-    filled: true,
-    fillColor: AppColors.surface,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: AppColors.divider),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: AppColors.divider),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
-    ),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
-  );
 }
 
 // ── Icon-prefix field ─────────────────────────────────────────────────────────
@@ -906,33 +855,12 @@ class _IconField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return WedTextField(
       controller: controller,
+      hint: hint,
       keyboardType: inputType,
-      style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, size: 20, color: AppColors.textSecondary),
-        hintText: hint,
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-        filled: true,
-        fillColor: AppColors.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 17,
-        ),
-      ),
+      prefixIcon: icon,
+      prefixIconColor: AppColors.textSecondary,
     );
   }
 }
@@ -957,7 +885,7 @@ class _RemovePhotoButton extends StatelessWidget {
           width: size,
           height: size,
           child: Icon(
-            Icons.close_rounded,
+            Icons.close,
             size: size * 0.65,
             color: AppColors.textOnPrimary,
           ),

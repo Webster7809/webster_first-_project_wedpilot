@@ -42,7 +42,7 @@ class TypeaheadField<T extends Object> extends StatefulWidget {
     this.maxSuggestions = 8,
     this.label = '',
     this.hint,
-    this.prefixIcon = Icons.search_rounded,
+    this.prefixIcon = Icons.search,
     this.fillColor,
     this.borderRadius = 12.0,
     this.optionsMaxHeight = 280.0,
@@ -150,7 +150,7 @@ class _TypeaheadFieldState<T extends Object> extends State<TypeaheadField<T>> {
                   iconSize: 18,
                   tooltip: 'Clear',
                   icon: Icon(
-                    Icons.close_rounded,
+                    Icons.close,
                     color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                   ),
                   onPressed: () {

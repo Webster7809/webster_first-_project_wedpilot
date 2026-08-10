@@ -6,6 +6,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../models/vendor_profile.dart';
 import 'loading_shimmer.dart';
+import 'photo_viewer_screen.dart';
 
 /// Vendor imagery, in priority order: the vendor's own uploaded photos (a
 /// real swipeable carousel when there's more than one), else their logo,
@@ -63,22 +64,61 @@ class _VendorHeroImageState extends State<VendorHeroImage> {
         ? realUrls
         : vendor.logoUrl != null
             ? [resolveMediaUrl(vendor.logoUrl!)]
-            : VendorCategoryImages.galleryFor(vendor.category, width: widget.memCacheWidth);
+            : VendorCategoryImages.galleryFor(
+                vendor.category,
+                width: widget.memCacheWidth,
+                vendorId: vendor.id,
+              );
     final visible = widget.single ? [urls.first] : urls;
+    // Full-resolution versions for the zoomed viewer — a thumbnail sized for
+    // a card still looks soft blown up to full screen.
+    final zoomUrls = realUrls.isNotEmpty
+        ? realUrls
+        : vendor.logoUrl != null
+            ? [resolveMediaUrl(vendor.logoUrl!)]
+            : VendorCategoryImages.galleryFor(vendor.category,
+                width: 1600, vendorId: vendor.id);
 
-    Widget image(String url) => CachedNetworkImage(
-          imageUrl: url,
-          fit: BoxFit.cover,
-          memCacheWidth: widget.memCacheWidth,
-          placeholder: (context, url) => LoadingShimmer(
-            width: double.infinity,
-            height: widget.height,
-            borderRadius: 0,
+    Widget image(String url, int index) => InkWell(
+          onTap: () => PhotoViewerScreen.open(
+            context,
+            urls: zoomUrls,
+            initialIndex: index,
+            heroLabel: isSample
+                ? 'Sample ${vendor.category.toLowerCase()} photo'
+                : '${vendor.businessName} photo',
           ),
-          errorWidget: (context, url, error) => Container(
-            color: AppColors.creamDark,
-            child: const Icon(Icons.image_outlined,
-                color: AppColors.textHint, size: 40),
+          child: CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.cover,
+            memCacheWidth: widget.memCacheWidth,
+            // Says whose work this is — and, for a stock fallback, says that
+            // plainly rather than letting a screen reader imply it's the
+            // vendor's own photography.
+            //
+            // A plain Image, not Ink.image: Ink.image paints through the
+            // ancestor Material's ink-features layer, which — inside a
+            // GridView/PageView especially — often doesn't get its first
+            // paint until *something* forces the Material to repaint (like a
+            // tap), so the photo stayed invisible until the card was tapped
+            // once. A normal Image paints on its own render pass regardless.
+            imageBuilder: (context, provider) => Semantics(
+              image: true,
+              label: isSample
+                  ? 'Sample ${vendor.category.toLowerCase()} photo'
+                  : '${vendor.businessName} photo',
+              child: Image(image: provider, fit: BoxFit.cover),
+            ),
+            placeholder: (context, url) => LoadingShimmer(
+              width: double.infinity,
+              height: widget.height,
+              borderRadius: 0,
+            ),
+            errorWidget: (context, url, error) => Container(
+              color: AppColors.creamDark,
+              child: const Icon(Icons.image_outlined,
+                  color: AppColors.textHint, size: 40),
+            ),
           ),
         );
 
@@ -92,9 +132,9 @@ class _VendorHeroImageState extends State<VendorHeroImage> {
                   controller: _controller,
                   itemCount: visible.length,
                   onPageChanged: (i) => setState(() => _page = i),
-                  itemBuilder: (context, i) => image(visible[i]),
+                  itemBuilder: (context, i) => image(visible[i], i),
                 )
-              : image(visible.first),
+              : image(visible.first, 0),
         ),
         if (visible.length > 1)
           Positioned(

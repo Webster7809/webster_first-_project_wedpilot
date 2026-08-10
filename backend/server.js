@@ -462,6 +462,33 @@ Rules:
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
+// Every route above already wraps its own body in try/catch and returns a
+// clean JSON error — these two exist only to catch what's outside that: a
+// request for a route that doesn't exist, a synchronous throw a handler
+// forgot to guard, or (most commonly) express.json() rejecting a malformed
+// request body before any route handler even runs.
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found.' });
+});
+
+// Must be registered last and take all 4 arguments — that arity is what
+// tells Express this is an error handler rather than another route.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error(`Unhandled error on ${req.method} ${req.originalUrl}:`, err);
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Malformed request body.' });
+  }
+  // The real error is always logged server-side above — the client only
+  // ever gets err.message in development, never a stack trace, and gets a
+  // fully generic message in production so an unexpected failure mode can
+  // never describe the app's own internals to whoever triggered it.
+  const message = process.env.NODE_ENV === 'production'
+    ? 'Something went wrong. Please try again.'
+    : err.message || 'Something went wrong.';
+  res.status(err.status ?? err.statusCode ?? 500).json({ error: message });
+});
+
 const PORT = process.env.PORT || 3000;
 
 // A nodemon restart can race the previous process's socket release (Windows

@@ -7,6 +7,7 @@ import '../../../models/messaging.dart';
 import '../../../models/vendor_feedback.dart';
 import '../../../providers/vendor_own_provider.dart';
 import '../../../widgets/wed_card.dart';
+import '../../../widgets/wed_skeleton.dart';
 
 class VendorAnalyticsScreen extends ConsumerWidget {
   const VendorAnalyticsScreen({super.key});
@@ -27,7 +28,7 @@ class VendorAnalyticsScreen extends ConsumerWidget {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: ownState.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const WedListSkeleton(rows: 4, asCards: true, cardHeight: 140),
         error: (message) => Center(
           child: Text(message, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
         ),

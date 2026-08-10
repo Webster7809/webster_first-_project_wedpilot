@@ -10,7 +10,9 @@ import '../../../models/messaging.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/vendor_own_provider.dart';
 import '../../../widgets/hamburger_menu_button.dart';
-import '../../../widgets/wed_button.dart';
+import '../../../widgets/section_header.dart';
+import '../../../widgets/wed_error_state.dart';
+import '../../../widgets/wed_skeleton.dart';
 
 class VendorDashboardScreen extends ConsumerWidget {
   const VendorDashboardScreen({super.key});
@@ -26,31 +28,13 @@ class VendorDashboardScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: ownState.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (message) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.cloud_off_rounded,
-                    size: 48, color: Theme.of(context).colorScheme.onSurface.withAlpha(102)),
-                const SizedBox(height: 16),
-                Text("Couldn't load your dashboard", style: AppTextStyles.headlineMedium),
-                const SizedBox(height: 8),
-                Text(message,
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                    textAlign: TextAlign.center),
-                const SizedBox(height: 24),
-                WedButton(
-                  label: 'Retry',
-                  onPressed: () => ref.read(vendorOwnProvider.notifier).loadOwnVendorData(),
-                  icon: Icons.refresh_rounded,
-                  borderRadius: 30,
-                ),
-              ],
-            ),
-          ),
+        loading: () => const WedListSkeleton(rows: 4, asCards: true, cardHeight: 110),
+        error: (message) => WedErrorState(
+          title: "Couldn't load your dashboard",
+          message: message,
+          icon: Icons.cloud_off,
+          retryLabel: 'Retry',
+          onRetry: () => ref.read(vendorOwnProvider.notifier).loadOwnVendorData(),
         ),
         data: (ownData) => _VendorDashboardBody(
           vendor: ownData.profile,
@@ -103,7 +87,8 @@ class _VendorDashboardBody extends StatelessWidget {
                       Text(
                         'VENDOR DASHBOARD',
                         style: AppTextStyles.caption.copyWith(
-                          color: AppColors.amber,
+                          // Gold on the forest header — 4.99:1.
+                          color: AppColors.gold,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.4,
                         ),
@@ -118,8 +103,8 @@ class _VendorDashboardBody extends StatelessWidget {
                               color: AppColors.amber,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.storefront_rounded,
-                                color: Colors.white, size: 24),
+                            child: const Icon(Icons.storefront,
+                                color: AppColors.textOnSecondary, size: 24),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -164,21 +149,21 @@ class _VendorDashboardBody extends StatelessWidget {
                     _StatCard(
                       value: vendor?.rating?.toStringAsFixed(1) ?? '—',
                       label: 'Rating',
-                      icon: Icons.star_rounded,
-                      iconColor: AppColors.amber,
+                      icon: Icons.star,
+                      iconColor: AppColors.goldDeep,
                     ),
                     const SizedBox(width: 10),
                     _StatCard(
                       value: services.length.toString(),
                       label: 'Listings',
-                      icon: Icons.grid_view_rounded,
+                      icon: Icons.grid_view,
                       iconColor: AppColors.forestGreen,
                     ),
                     const SizedBox(width: 10),
                     _StatCard(
                       value: inquiries.length.toString(),
                       label: 'Inquiries',
-                      icon: Icons.mail_outline_rounded,
+                      icon: Icons.mail_outlined,
                       iconColor: AppColors.teal,
                     ),
                   ],
@@ -204,17 +189,17 @@ class _VendorDashboardBody extends StatelessWidget {
                   childAspectRatio: 1.1,
                   children: [
                     _QuickAction(
-                      icon: Icons.grid_view_rounded,
+                      icon: Icons.grid_view,
                       label: 'Listings',
                       onTap: () => context.go(AppRoutes.vendorListings),
                     ),
                     _QuickAction(
-                      icon: Icons.mail_outline_rounded,
+                      icon: Icons.mail_outlined,
                       label: 'Inquiries',
                       onTap: () => context.go(AppRoutes.vendorLeads),
                     ),
                     _QuickAction(
-                      icon: Icons.star_outline_rounded,
+                      icon: Icons.star_outlined,
                       label: 'Feedback',
                       onTap: () => context.go(AppRoutes.vendorFeedback),
                     ),
@@ -224,7 +209,7 @@ class _VendorDashboardBody extends StatelessWidget {
                       onTap: () => context.push(AppRoutes.vendorAvailability),
                     ),
                     _QuickAction(
-                      icon: Icons.bar_chart_rounded,
+                      icon: Icons.bar_chart,
                       label: 'Analytics',
                       onTap: () => context.push(AppRoutes.vendorAnalytics),
                     ),
@@ -234,7 +219,7 @@ class _VendorDashboardBody extends StatelessWidget {
                       onTap: () => context.push(AppRoutes.vendorSubscription),
                     ),
                     _QuickAction(
-                      icon: Icons.edit_note_rounded,
+                      icon: Icons.edit_note,
                       label: 'Update listing',
                       onTap: () => context.push(AppRoutes.vendorOnboarding),
                     ),
@@ -253,7 +238,7 @@ class _VendorDashboardBody extends StatelessWidget {
                       onPressed: () => context.go(AppRoutes.vendorListings),
                       child: Text('Edit',
                           style: AppTextStyles.labelMedium
-                              .copyWith(color: AppColors.amber)),
+                              .copyWith(color: AppColors.primary)),
                     ),
                   ],
                 ),
@@ -303,19 +288,10 @@ class _VendorDashboardBody extends StatelessWidget {
                 const SizedBox(height: 28),
 
                 // ── Recent inquiries preview ───────────────────────────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Recent inquiries',
-                        style: AppTextStyles.headlineSmall
-                            .copyWith(color: AppColors.forestGreen)),
-                    TextButton(
-                      onPressed: () => context.go(AppRoutes.vendorLeads),
-                      child: Text('See all',
-                          style: AppTextStyles.labelMedium
-                              .copyWith(color: AppColors.amber)),
-                    ),
-                  ],
+                WedSectionHeader(
+                  title: 'Recent inquiries',
+                  actionLabel: 'See all',
+                  onSeeAll: () => context.go(AppRoutes.vendorLeads),
                 ),
                 const SizedBox(height: 8),
                 if (inquiries.isEmpty)
@@ -465,7 +441,7 @@ class _InfoRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: AppColors.amber),
+          Icon(icon, size: 18, color: AppColors.goldDeep),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -519,7 +495,7 @@ class _InquiryCard extends StatelessWidget {
         leading: CircleAvatar(
           radius: 20,
           backgroundColor: AppColors.forestGreen.withAlpha(18),
-          child: const Icon(Icons.people_outline_rounded,
+          child: const Icon(Icons.people_outlined,
               size: 20, color: AppColors.forestGreen),
         ),
         title: Text(inquiry.coupleName ?? 'Unknown couple',

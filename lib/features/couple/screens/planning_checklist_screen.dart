@@ -1,14 +1,20 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/checklist_item.dart';
 import '../../../providers/task_provider.dart';
+import '../../../widgets/loading_shimmer.dart';
 import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_card.dart';
+import '../../../widgets/wed_chip.dart';
 import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
+import '../../../widgets/wed_skeleton.dart';
 
 class PlanningChecklistScreen extends ConsumerStatefulWidget {
   const PlanningChecklistScreen({super.key});
@@ -42,7 +48,7 @@ class _PlanningChecklistScreenState
             )
           : null,
       body: tasksState.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const WedListSkeleton(rows: 7),
         error: (message) => _ErrorState(
           message: message,
           onRetry: () => ref.read(taskProvider.notifier).loadTasks(),
@@ -151,7 +157,7 @@ class _ErrorState extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.cloud_off_rounded,
+              Icons.cloud_off,
               size: 48,
               color: Theme.of(context).colorScheme.onSurface.withAlpha(102),
             ),
@@ -172,7 +178,7 @@ class _ErrorState extends StatelessWidget {
             WedButton(
               label: 'Retry',
               onPressed: onRetry,
-              icon: Icons.refresh_rounded,
+              icon: const Icon(Icons.refresh),
               borderRadius: 30,
             ),
           ],
@@ -223,7 +229,7 @@ class _TaskPlannerBody extends ConsumerWidget {
             child: Text(
               '$completed/${tasks.length}',
               style: AppTextStyles.labelLarge.copyWith(
-                color: AppColors.secondary,
+                color: AppColors.primary,
               ),
             ),
           ),
@@ -286,25 +292,10 @@ class _TaskPlannerBody extends ConsumerWidget {
             itemBuilder: (_, i) {
               final phase = allPhases[i];
               final isSelected = filterPhase == phase;
-              return FilterChip(
-                label: Text(
-                  phase == 'All' ? 'All Phases' : phase,
-                  style: AppTextStyles.caption.copyWith(
-                    color: isSelected
-                        ? Colors.white
-                        : Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                selected: isSelected,
-                onSelected: (_) => onFilterChanged(phase),
-                selectedColor: AppColors.secondary,
-                backgroundColor: Theme.of(context).colorScheme.surface,
-                showCheckmark: false,
-                side: BorderSide(
-                  color: isSelected
-                      ? AppColors.secondary
-                      : Theme.of(context).colorScheme.outlineVariant,
-                ),
+              return WedChip(
+                label: phase == 'All' ? 'All Phases' : phase,
+                isSelected: isSelected,
+                onTap: () => onFilterChanged(phase),
               );
             },
           ),
@@ -357,7 +348,7 @@ class _DueSoonBanner extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Icon(
-              Icons.schedule_rounded,
+              Icons.schedule,
               size: 20,
               color: AppColors.warning,
             ),
@@ -470,7 +461,7 @@ class _PhaseSectionState extends State<_PhaseSection> {
               children: [
                 Icon(
                   _expanded ? Icons.expand_less : Icons.expand_more,
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   size: 20,
                 ),
                 const SizedBox(width: 6),
@@ -567,7 +558,7 @@ class _TaskTile extends StatelessWidget {
           color: AppColors.error.withAlpha(26),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Icon(Icons.delete_outline, color: AppColors.error),
+        child: const Icon(Icons.delete_outlined, color: AppColors.error),
       ),
       confirmDismiss: (_) async {
         bool confirmed = false;
@@ -595,94 +586,102 @@ class _TaskTile extends StatelessWidget {
         return confirmed;
       },
       onDismissed: (_) => onDelete(),
-      child: Card(
-        margin: const EdgeInsets.only(bottom: 6),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 2,
-          ),
-          leading: Material(
-            color: Colors.transparent,
-            shape: const CircleBorder(),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-            onTap: onToggle,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: item.isCompleted
-                    ? AppColors.secondary
-                    : Colors.transparent,
-                border: Border.all(
-                  color: item.isCompleted
-                      ? AppColors.secondary
-                      : AppColors.textSecondary,
-                  width: 2,
-                ),
-              ),
-              child: item.isCompleted
-                  ? const Icon(Icons.check, size: 14, color: Colors.white)
-                  : null,
-            ),
-            ),
-          ),
-          title: Text(
-            item.task,
-            style: AppTextStyles.bodyMedium.copyWith(
-              decoration: item.isCompleted ? TextDecoration.lineThrough : null,
-              color: item.isCompleted
-                  ? Theme.of(context).colorScheme.onSurface.withAlpha(128)
-                  : Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-          subtitle: item.dueDate != null
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_isOverdue || isDueSoon)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: Icon(
-                          _isOverdue
-                              ? Icons.error_outline_rounded
-                              : Icons.schedule_rounded,
-                          size: 13,
-                          color: _isOverdue
-                              ? AppColors.error
-                              : AppColors.warning,
-                        ),
-                      ),
-                    Flexible(
-                      child: Text(
-                        'Due ${DateFormat('MMM d, y').format(item.dueDate!)}',
-                        style: AppTextStyles.caption.copyWith(
-                          color: _isOverdue
-                              ? AppColors.error
-                              : isDueSoon
-                              ? AppColors.warning
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withAlpha(153),
-                          fontWeight: (_isOverdue || isDueSoon)
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: WedCard(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: onToggle,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: item.isCompleted
+                          ? AppColors.secondary
+                          : Colors.transparent,
+                      border: Border.all(
+                        color: item.isCompleted
+                            ? AppColors.secondary
+                            : AppColors.textSecondary,
+                        width: 2,
                       ),
                     ),
+                    child: item.isCompleted
+                        ? const Icon(Icons.check, size: 14, color: Colors.white)
+                        : null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.task,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        decoration: item.isCompleted ? TextDecoration.lineThrough : null,
+                        color: item.isCompleted
+                            ? Theme.of(context).colorScheme.onSurface.withAlpha(128)
+                            : Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    if (item.dueDate != null)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_isOverdue || isDueSoon)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: Icon(
+                                _isOverdue
+                                    ? Icons.error_outlined
+                                    : Icons.schedule,
+                                size: 13,
+                                color: _isOverdue
+                                    ? AppColors.error
+                                    : AppColors.warning,
+                              ),
+                            ),
+                          Flexible(
+                            child: Text(
+                              'Due ${DateFormat('MMM d, y').format(item.dueDate!)}',
+                              style: AppTextStyles.caption.copyWith(
+                                color: _isOverdue
+                                    ? AppColors.error
+                                    : isDueSoon
+                                    ? AppColors.warning
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withAlpha(153),
+                                fontWeight: (_isOverdue || isDueSoon)
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                   ],
-                )
-              : null,
-          trailing: IconButton(
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
-            onPressed: onEdit,
-            tooltip: 'Edit task',
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
+                onPressed: onEdit,
+                tooltip: 'Edit task',
+              ),
+            ],
           ),
         ),
       ),
@@ -734,18 +733,10 @@ class _EmptyStateState extends ConsumerState<_EmptyState> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 88,
-                  height: 88,
+                  width: 96,
+                  height: 96,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppColors.success,
-                        AppColors.success.withAlpha(200),
-                      ],
-                    ),
                     boxShadow: [
                       BoxShadow(
                         color: AppColors.success.withAlpha(70),
@@ -754,10 +745,34 @@ class _EmptyStateState extends ConsumerState<_EmptyState> {
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.task_alt_rounded,
-                    size: 44,
-                    color: Colors.white,
+                  child: ClipOval(
+                    child: CachedNetworkImage(
+                      imageUrl: VendorCategoryImages.galleryFor('Decor & flowers')[1],
+                      width: 96,
+                      height: 96,
+                      fit: BoxFit.cover,
+                      fadeInDuration: const Duration(milliseconds: 300),
+                      placeholder: (_, _) =>
+                          const LoadingShimmer(width: 96, height: 96, borderRadius: 48),
+                      errorWidget: (_, _, _) => Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppColors.success,
+                              AppColors.success.withAlpha(200),
+                            ],
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.task_alt,
+                          size: 44,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -786,7 +801,7 @@ class _EmptyStateState extends ConsumerState<_EmptyState> {
                       child: WedButton(
                         label: 'Add Task',
                         onPressed: widget.onAdd,
-                        icon: Icons.add,
+                        icon: const Icon(Icons.add),
                         borderRadius: 30,
                         width: 220,
                       ),
@@ -803,7 +818,7 @@ class _EmptyStateState extends ConsumerState<_EmptyState> {
                             height: 14,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.checklist_rounded, size: 18),
+                        : const Icon(Icons.checklist, size: 18),
                     label: const Text('Load starter checklist'),
                   ),
                 ],

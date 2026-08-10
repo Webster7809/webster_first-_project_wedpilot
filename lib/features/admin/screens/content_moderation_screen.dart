@@ -237,7 +237,7 @@ class _ModerationError extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline_rounded, size: 64, color: AppColors.error),
+          Icon(Icons.error_outlined, size: 64, color: AppColors.error),
           const SizedBox(height: 16),
           Text('Could not load this queue.', style: AppTextStyles.headlineMedium),
           const SizedBox(height: 6),
@@ -407,8 +407,8 @@ class _FeedbackModerationList extends StatelessWidget {
                   5,
                   (j) => Icon(
                     j < feedback.rating
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
+                        ? Icons.star
+                        : Icons.star_outlined,
                     size: 14,
                     color: AppColors.goldPremium,
                   ),
@@ -470,7 +470,7 @@ class _ImageModerationList extends StatelessWidget {
     return _ModerationListView<FlaggedImage>(
       asyncValue: imagesAsync,
       onRefresh: onRefresh,
-      emptyIcon: Icons.check_circle_rounded,
+      emptyIcon: Icons.check_circle,
       emptyMessage: 'All flagged images have been resolved.',
       itemBuilder: (context, img) {
         return Container(
@@ -609,7 +609,7 @@ class _MessageModerationList extends StatelessWidget {
     return _ModerationListView<FlaggedMessage>(
       asyncValue: messagesAsync,
       onRefresh: onRefresh,
-      emptyIcon: Icons.check_circle_rounded,
+      emptyIcon: Icons.check_circle,
       emptyMessage: 'All flagged messages have been resolved.',
       itemBuilder: (context, msg) {
         return Container(
@@ -637,7 +637,7 @@ class _MessageModerationList extends StatelessWidget {
                     child: Row(
                       children: [
                         const Icon(
-                          Icons.person_outline,
+                          Icons.person_outlined,
                           size: 14,
                           color: AppColors.textSecondary,
                         ),

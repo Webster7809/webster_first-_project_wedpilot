@@ -42,8 +42,35 @@ class VendorCategoryImages {
 
   /// The full curated set for a category, for the profile hero carousel and
   /// portfolio grid when a vendor has no uploads of their own to show yet.
-  static List<String> galleryFor(String category, {int width = 800}) {
+  ///
+  /// When [vendorId] is given, the set is rotated to start at the same index
+  /// [forVendor] would pick — so two vendors with no uploads in the same
+  /// category don't show an identical portfolio grid in an identical order,
+  /// and a vendor's profile "cover" photo (index 0) always matches whatever
+  /// single image a card elsewhere already picked for them.
+  static List<String> galleryFor(String category, {int width = 800, String? vendorId}) {
     final ids = _photoIdsByCategory[category] ?? _fallback;
+    if (vendorId == null) return ids.map((id) => _urlFor(id, width)).toList();
+    final offset = vendorId.hashCode.abs() % ids.length;
+    final rotated = [...ids.skip(offset), ...ids.take(offset)];
+    return rotated.map((id) => _urlFor(id, width)).toList();
+  }
+
+  /// A hand-picked cross-category rotation for full-bleed hero banners (the
+  /// dashboard countdown card) — reuses the same already-verified IDs above
+  /// rather than sourcing new unverified photos, since these are aspirational
+  /// "your wedding day" moments rather than one vendor's specific service.
+  static List<String> heroRotation({int width = 1200}) {
+    const ids = [35325793, 33852468, 37754302, 17001763, 31138818];
+    return ids.map((id) => _urlFor(id, width)).toList();
+  }
+
+  /// Two photos for the auth-screen (login/register) hero backgrounds,
+  /// chosen — and visually verified before adding — specifically to depict
+  /// Black African couples in elegant white-wedding attire: [0] a couple in
+  /// Lusaka, Zambia, [1] a Nigerian couple in a luxury studio portrait.
+  static List<String> authHero({int width = 1200}) {
+    const ids = [32895248, 33737505];
     return ids.map((id) => _urlFor(id, width)).toList();
   }
 }

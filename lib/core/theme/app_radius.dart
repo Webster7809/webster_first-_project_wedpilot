@@ -19,7 +19,7 @@ abstract final class AppRadius {
   static const double md = r12;
   static const double lg = r16;
   static const double xl = r20;
-  static const double card = r16;
+  static const double card = r20;
   static const double chip = r20;
   static const double button = r24;
   static const double input = r12;

@@ -85,7 +85,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
             const SizedBox(height: 16),
             TextButton(
               onPressed: () => context.go('/login'),
-              child: Text('Back to Login', style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary)),
+              child: Text('Back to Login', style: AppTextStyles.labelMedium.copyWith(color: AppColors.primary)),
             ),
           ],
         ),

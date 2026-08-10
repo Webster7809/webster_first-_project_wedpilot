@@ -1,11 +1,15 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../models/user.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/google_signin_button.dart';
 import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -68,9 +72,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     if (!mounted) return;
     final err = ref.read(authProvider).error;
     if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err), backgroundColor: AppColors.error),
-      );
+      showWedSnackBar(context, err, type: SnackType.error);
     } else {
       context.go('/verify-email');
     }
@@ -106,55 +108,91 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // ── Brand header ──────────────────────────────────────
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Stack(
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.amber,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(
-                                    Icons.favorite,
-                                    color: Colors.white,
-                                    size: 22,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'WedPilot',
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            Text(
-                              'GET STARTED',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.amber,
-                                letterSpacing: 1.6,
+                            Positioned.fill(
+                              child: CachedNetworkImage(
+                                imageUrl: VendorCategoryImages.authHero()[1],
+                                fit: BoxFit.cover,
+                                fadeInDuration: const Duration(milliseconds: 300),
+                                placeholder: (_, _) =>
+                                    Container(color: AppColors.forestGreen),
+                                errorWidget: (_, _, _) =>
+                                    Container(color: AppColors.forestGreen),
                               ),
                             ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Plan the wedding\nyou both deserve',
-                              style: TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                height: 1.25,
+                            Positioned.fill(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      AppColors.forestGreen.withAlpha(215),
+                                      AppColors.forestGreen.withAlpha(170),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 44,
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.amber,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: const Icon(
+                                          Icons.favorite,
+                                          color: AppColors.textOnSecondary,
+                                          size: 22,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        'WedPilot',
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Text(
+                                    'GET STARTED',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      // Gold, not forest: this eyebrow sits on
+                                      // the forest-tinted photo scrim. Forest
+                                      // on forest is invisible.
+                                      color: AppColors.gold,
+                                      letterSpacing: 1.6,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Plan the wedding\nyou both deserve',
+                                    style: TextStyle(
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -204,8 +242,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                     fontSize: 14,
                                   ),
                                   tabs: const [
-                                    Tab(text: "I'm a couple"),
-                                    Tab(text: "I'm a vendor"),
+                                    Tab(text: 'Couple'),
+                                    Tab(text: 'Vendor'),
                                   ],
                                 ),
                               ),
@@ -216,20 +254,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                 if (isPhone) ...[
                                   WedTextField(
                                     borderRadius: 16,
-                                    fillColor: AppColors.inputFillAlt,
                                     hint: 'Partner 1',
                                     controller: _partner1Ctrl,
                                     validator: _required,
-                                    prefixIcon: Icons.person_outline,
+                                    prefixIcon: Icons.person_outlined,
                                   ),
                                   const SizedBox(height: 20),
                                   WedTextField(
                                     borderRadius: 16,
-                                    fillColor: AppColors.inputFillAlt,
                                     hint: 'Partner 2',
                                     controller: _partner2Ctrl,
                                     validator: _required,
-                                    prefixIcon: Icons.person_outline,
+                                    prefixIcon: Icons.person_outlined,
                                   ),
                                 ] else ...[
                                   Row(
@@ -239,11 +275,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                       Expanded(
                                         child: WedTextField(
                                           borderRadius: 16,
-                                          fillColor: AppColors.inputFillAlt,
                                           hint: 'Partner 1',
                                           controller: _partner1Ctrl,
                                           validator: _required,
-                                          prefixIcon: Icons.person_outline,
+                                          prefixIcon: Icons.person_outlined,
                                         ),
                                       ),
                                       Padding(
@@ -256,7 +291,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                           '&',
                                           style: TextStyle(
                                             fontSize: 20,
-                                            color: AppColors.amber,
+                                            color: AppColors.primary,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
@@ -264,11 +299,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                       Expanded(
                                         child: WedTextField(
                                           borderRadius: 16,
-                                          fillColor: AppColors.inputFillAlt,
                                           hint: 'Partner 2',
                                           controller: _partner2Ctrl,
                                           validator: _required,
-                                          prefixIcon: Icons.person_outline,
+                                          prefixIcon: Icons.person_outlined,
                                         ),
                                       ),
                                     ],
@@ -277,7 +311,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                               ] else ...[
                                 WedTextField(
                                   borderRadius: 16,
-                                  fillColor: AppColors.inputFillAlt,
                                   hint: 'Business name',
                                   controller: _businessNameCtrl,
                                   validator: _required,
@@ -288,7 +321,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
                               WedTextField(
                                 borderRadius: 16,
-                                fillColor: AppColors.inputFillAlt,
                                 hint: 'Phone number',
                                 controller: _phoneCtrl,
                                 keyboardType: TextInputType.phone,
@@ -299,11 +331,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
                               WedTextField(
                                 borderRadius: 16,
-                                fillColor: AppColors.inputFillAlt,
                                 hint: 'Email address',
                                 controller: _emailCtrl,
                                 keyboardType: TextInputType.emailAddress,
-                                prefixIcon: Icons.mail_outline,
+                                prefixIcon: Icons.mail_outlined,
                                 validator: (v) {
                                   if (v == null || v.isEmpty) return 'Required';
                                   if (!v.contains('@')) return 'Invalid email';
@@ -314,11 +345,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
                               WedTextField(
                                 borderRadius: 16,
-                                fillColor: AppColors.inputFillAlt,
                                 hint: 'Password',
                                 controller: _passCtrl,
                                 isPassword: true,
-                                prefixIcon: Icons.lock_outline,
+                                prefixIcon: Icons.lock_outlined,
                                 validator: (v) {
                                   if (v == null || v.isEmpty) return 'Required';
                                   if (v.length < 8) return 'Min 8 characters';
@@ -338,6 +368,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                 height: 56,
                                 borderRadius: 16,
                               ),
+                              const SizedBox(height: 20),
+                              const OrDivider(),
+                              const SizedBox(height: 20),
+                              GoogleSignInButton(role: _role, isLoading: auth.isLoading),
                               const SizedBox(height: 16),
 
                               // ── Legal ──────────────────────────────────────
@@ -403,7 +437,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                     TextSpan(
                                       text: 'Log in',
                                       style: TextStyle(
-                                        color: AppColors.amber,
+                                        // Gold, not forest: this link sits
+                                        // below the form card, directly on
+                                        // the forest scaffold (its sibling
+                                        // span is Colors.white60).
+                                        color: AppColors.gold,
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),

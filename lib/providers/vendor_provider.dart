@@ -47,6 +47,26 @@ final vendorListProvider = FutureProvider.family<List<VendorProfile>, String>(
   },
 );
 
+/// Category-scoped vendor fetch — narrower than [allVendorsProvider] (every
+/// vendor, every category); this fetches only the categories asked for,
+/// matching what vendorMatchValidationProvider requests from the backend via
+/// GET /api/vendors?category_in=... (see routes/vendors.js). A distinct,
+/// overridable provider rather than a raw [VendorApiService] call inline in
+/// vendorMatchValidationProvider, so tests can substitute fixed vendor data
+/// here without a real access token or network call — see
+/// couple_planning_screen_test.dart.
+final vendorPoolProvider =
+    FutureProvider.family<List<VendorProfile>, List<String>>(
+  (ref, categories) async {
+    final token = ref.watch(authProvider.notifier).accessToken;
+    if (token == null) return const [];
+    return VendorApiService.instance.fetchAllVendors(
+      token,
+      categories: categories.isEmpty ? null : categories,
+    );
+  },
+);
+
 /// Backs the vendor discovery screen's typeahead search — a network call per
 /// query, so `.autoDispose` (the only such provider in this file) lets
 /// Riverpod garbage-collect the cache entry for each distinct search string
@@ -193,9 +213,13 @@ class WishlistNotifier extends StateNotifier<List<String>> {
     }
   }
 
-  Future<void> toggle(String vendorId) async {
+  /// Returns the server error message on failure (after rolling the
+  /// optimistic update back), or null on success — the icon flipping and
+  /// then silently flipping back within the same frame used to look
+  /// identical to "nothing happened" with no way to tell why.
+  Future<String?> toggle(String vendorId) async {
     final token = _token;
-    if (token == null) return;
+    if (token == null) return 'Please sign in to save vendors.';
     final wasWishlisted = state.contains(vendorId);
 
     // Optimistic update, rolled back if the API call fails.
@@ -209,11 +233,18 @@ class WishlistNotifier extends StateNotifier<List<String>> {
       } else {
         await VendorApiService.instance.addToWishlist(token, vendorId);
       }
-    } catch (_) {
+      return null;
+    } on VendorApiException catch (e) {
       // Roll back to the prior state on failure.
       state = wasWishlisted
           ? [...state, vendorId]
           : state.where((id) => id != vendorId).toList();
+      return e.message;
+    } catch (_) {
+      state = wasWishlisted
+          ? [...state, vendorId]
+          : state.where((id) => id != vendorId).toList();
+      return 'Could not save this vendor. Please try again.';
     }
   }
 

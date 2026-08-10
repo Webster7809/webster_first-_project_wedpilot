@@ -1,4 +1,4 @@
-﻿import 'dart:async' show unawaited;
+import 'dart:async' show unawaited;
 import 'dart:math' show min;
 import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -289,7 +289,7 @@ class _InvitationEditorScreenState
 
   Future<void> _pickImageFromFiles() async {
     try {
-      final result = await FilePicker.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'bmp', 'gif'],
         withData: true,
@@ -362,7 +362,7 @@ class _InvitationEditorScreenState
                 children: [
                   _photoOptionButton(
                     context,
-                    icon: Icons.camera_alt_rounded,
+                    icon: Icons.camera_alt,
                     label: 'Camera',
                     color: _accentColor,
                     onTap: () {
@@ -372,7 +372,7 @@ class _InvitationEditorScreenState
                   ),
                   _photoOptionButton(
                     context,
-                    icon: Icons.photo_library_rounded,
+                    icon: Icons.photo_library,
                     label: 'Gallery',
                     color: _accentColor,
                     onTap: () {
@@ -382,7 +382,7 @@ class _InvitationEditorScreenState
                   ),
                   _photoOptionButton(
                     context,
-                    icon: Icons.folder_open_rounded,
+                    icon: Icons.folder_open,
                     label: 'Files',
                     color: _accentColor,
                     onTap: () {
@@ -486,7 +486,7 @@ class _InvitationEditorScreenState
             },
             child: const Padding(
               padding: EdgeInsets.all(8),
-              child: Icon(Icons.chevron_left_rounded,
+              child: Icon(Icons.chevron_left,
                   color: AppColors.textPrimary, size: 20),
             ),
           ),
@@ -514,7 +514,7 @@ class _InvitationEditorScreenState
           padding: const EdgeInsets.only(right: 12),
           child: ElevatedButton.icon(
             onPressed: _saveAndShare,
-            icon: const Icon(Icons.share_rounded, size: 14),
+            icon: const Icon(Icons.share, size: 14),
             label: Text(
               'Share',
               style: GoogleFonts.inter(
@@ -714,11 +714,11 @@ class _InvitationEditorScreenState
   // ── Tab bar — individual floating chips on cream background ─────────────
   Widget _buildTabBar(ThemeData theme) {
     const tabs = [
-      (icon: Icons.camera_alt_rounded, label: 'Photo'),
-      (icon: Icons.text_fields_rounded, label: 'Text'),
-      (icon: Icons.draw_rounded, label: 'Font'),
-      (icon: Icons.color_lens_rounded, label: 'Color'),
-      (icon: Icons.grid_view_rounded, label: 'Layout'),
+      (icon: Icons.camera_alt, label: 'Photo'),
+      (icon: Icons.text_fields, label: 'Text'),
+      (icon: Icons.draw, label: 'Font'),
+      (icon: Icons.color_lens, label: 'Color'),
+      (icon: Icons.grid_view, label: 'Layout'),
     ];
     return Row(
       children: [
@@ -819,21 +819,21 @@ class _InvitationEditorScreenState
             children: [
               _photoOptionButton(
                 context,
-                icon: Icons.camera_alt_rounded,
+                icon: Icons.camera_alt,
                 label: 'Camera',
                 color: _accentColor,
                 onTap: () => _pickImage(ImageSource.camera),
               ),
               _photoOptionButton(
                 context,
-                icon: Icons.photo_library_rounded,
+                icon: Icons.photo_library,
                 label: 'Gallery',
                 color: _accentColor,
                 onTap: () => _pickImage(ImageSource.gallery),
               ),
               _photoOptionButton(
                 context,
-                icon: Icons.folder_open_rounded,
+                icon: Icons.folder_open,
                 label: 'Files',
                 color: _accentColor,
                 onTap: () => _pickImageFromFiles(),
@@ -854,7 +854,7 @@ class _InvitationEditorScreenState
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.photo_size_select_large_rounded,
+                      const Icon(Icons.photo_size_select_large,
                           size: 13, color: AppColors.secondary),
                       const SizedBox(width: 5),
                       Text(
@@ -970,7 +970,7 @@ class _InvitationEditorScreenState
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.delete_outline_rounded,
+                      Icon(Icons.delete_outlined,
                           color: AppColors.error, size: 16),
                       const SizedBox(width: 8),
                       Text(
@@ -1051,7 +1051,7 @@ class _InvitationEditorScreenState
                           ],
                         ),
                         child: _cardBgColor.toARGB32() == clr.toARGB32()
-                            ? const Icon(Icons.check_rounded,
+                            ? const Icon(Icons.check,
                                 color: Colors.white, size: 18)
                             : null,
                       ),
@@ -1106,13 +1106,13 @@ class _InvitationEditorScreenState
           _SectionLabel('Couple'),
           _fieldPad(WedTextField(
             label: 'Couple Names',
-            prefixIcon: Icons.favorite_rounded,
+            prefixIcon: Icons.favorite,
             controller: _nameCtrl,
             onChanged: (_) => setState(() {}),
           )),
           _fieldPad(WedTextField(
             label: 'Opening Line',
-            prefixIcon: Icons.format_quote_rounded,
+            prefixIcon: Icons.format_quote,
             controller: _subtitleCtrl,
             onChanged: (_) => setState(() {}),
           )),
@@ -1120,31 +1120,31 @@ class _InvitationEditorScreenState
           _SectionLabel('Ceremony'),
           _fieldPad(WedTextField(
             label: 'Church / Ceremony Venue',
-            prefixIcon: Icons.church_rounded,
+            prefixIcon: Icons.church,
             controller: _venueCtrl,
             onChanged: (_) => setState(() {}),
           )),
           _fieldPad(WedTextField(
             label: 'Wedding Date',
-            prefixIcon: Icons.calendar_today_rounded,
+            prefixIcon: Icons.calendar_today,
             controller: _dateCtrl,
             onChanged: (_) => setState(() {}),
           )),
           _fieldPad(WedTextField(
             label: 'Ceremony Time',
-            prefixIcon: Icons.schedule_rounded,
+            prefixIcon: Icons.schedule,
             controller: _timeCtrl,
             onChanged: (_) => setState(() {}),
           )),
           _fieldPad(WedTextField(
             label: 'Church Service Theme / Talk',
-            prefixIcon: Icons.record_voice_over_rounded,
+            prefixIcon: Icons.record_voice_over,
             controller: _churchThemeCtrl,
             onChanged: (_) => setState(() {}),
           )),
           _fieldPad(WedTextField(
             label: 'Church Service Time',
-            prefixIcon: Icons.access_time_rounded,
+            prefixIcon: Icons.access_time,
             controller: _churchTimeCtrl,
             onChanged: (_) => setState(() {}),
           )),
@@ -1152,7 +1152,7 @@ class _InvitationEditorScreenState
           _SectionLabel('Reception'),
           _fieldPad(WedTextField(
             label: 'Reception Venue',
-            prefixIcon: Icons.location_on_rounded,
+            prefixIcon: Icons.location_on,
             controller: _receptionVenueCtrl,
             onChanged: (_) => setState(() {}),
           )),
@@ -1160,25 +1160,25 @@ class _InvitationEditorScreenState
           _SectionLabel('RSVP & Gifts'),
           _fieldPad(WedTextField(
             label: 'RSVP By Date',
-            prefixIcon: Icons.event_available_rounded,
+            prefixIcon: Icons.event_available,
             controller: _rsvpCtrl,
             onChanged: (_) => setState(() {}),
           )),
           _fieldPad(WedTextField(
             label: 'Contact Number',
-            prefixIcon: Icons.phone_rounded,
+            prefixIcon: Icons.phone,
             controller: _contactCtrl,
             onChanged: (_) => setState(() {}),
           )),
           _fieldPad(WedTextField(
             label: 'Dress Code',
-            prefixIcon: Icons.checkroom_rounded,
+            prefixIcon: Icons.checkroom,
             controller: _dressCodeCtrl,
             onChanged: (_) => setState(() {}),
           )),
           _fieldPad(WedTextField(
             label: 'Gift Type',
-            prefixIcon: Icons.card_giftcard_rounded,
+            prefixIcon: Icons.card_giftcard,
             controller: _giftTypeCtrl,
             onChanged: (_) => setState(() {}),
           )),
@@ -1186,7 +1186,7 @@ class _InvitationEditorScreenState
           _SectionLabel('Message'),
           _fieldPad(WedTextField(
             label: 'Personal Message',
-            prefixIcon: Icons.message_rounded,
+            prefixIcon: Icons.message,
             controller: _msgCtrl,
             maxLines: 3,
             onChanged: (_) => setState(() {}),
@@ -1260,7 +1260,7 @@ class _InvitationEditorScreenState
                     IconButton(
                       tooltip: 'Decrease font size',
                       icon: Icon(
-                        Icons.remove_circle_outline_rounded,
+                        Icons.remove_circle_outlined,
                         color: _fontSize > 18
                             ? _accentColor
                             : theme.colorScheme.onSurface
@@ -1300,7 +1300,7 @@ class _InvitationEditorScreenState
                     IconButton(
                       tooltip: 'Increase font size',
                       icon: Icon(
-                        Icons.add_circle_outline_rounded,
+                        Icons.add_circle_outlined,
                         color: _fontSize < 48
                             ? _accentColor
                             : theme.colorScheme.onSurface
@@ -1437,7 +1437,7 @@ class _InvitationEditorScreenState
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Icon(Icons.arrow_forward_ios_rounded,
+                  Icon(Icons.arrow_forward_ios,
                       size: 14,
                       color: theme.colorScheme.onSurface
                           .withAlpha(102)),
@@ -1460,7 +1460,7 @@ class _InvitationEditorScreenState
                   label: 'Share Link',
                   variant: WedButtonVariant.secondary,
                   onPressed: _saveAndShare,
-                  icon: Icons.link_rounded,
+                  icon: const Icon(Icons.link),
                   height: 40,
                 ),
               ),
@@ -1475,7 +1475,7 @@ class _InvitationEditorScreenState
                           type: SnackType.success);
                     }
                   },
-                  icon: Icons.picture_as_pdf_outlined,
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
                   height: 40,
                 ),
               ),
@@ -1700,7 +1700,7 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.open_with_rounded,
+                        const Icon(Icons.open_with,
                             size: 10, color: Colors.white),
                         const SizedBox(width: 4),
                         Text(
@@ -2225,7 +2225,7 @@ class _FontCard extends StatelessWidget {
                     width: 18, height: 18,
                     decoration: BoxDecoration(
                         color: accentColor, shape: BoxShape.circle),
-                    child: const Icon(Icons.check_rounded,
+                    child: const Icon(Icons.check,
                         color: Colors.white, size: 12),
                   ),
               ],
@@ -2319,7 +2319,7 @@ class _ColorCategoryRow extends StatelessWidget {
                         ],
                       ),
                       child: selected
-                          ? const Icon(Icons.check_rounded,
+                          ? const Icon(Icons.check,
                               color: Colors.white, size: 18)
                           : null,
                     ),

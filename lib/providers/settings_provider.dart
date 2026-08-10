@@ -30,7 +30,7 @@ class AppSettings {
   final bool smsNotifications;
 
   const AppSettings({
-    this.themeMode = ThemeMode.system,
+    this.themeMode = ThemeMode.light,
     this.fontSize = FontSizeOption.medium,
     this.highContrast = false,
     this.reducedMotion = false,
@@ -67,7 +67,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
   @override
   AppSettings build() {
     _box = Hive.box('app_settings');
-    final modeIndex = (_box.get('themeMode', defaultValue: ThemeMode.system.index) as num).toInt();
+    final modeIndex = (_box.get('themeMode', defaultValue: ThemeMode.light.index) as num).toInt();
     final fontIndex = (_box.get('fontSize', defaultValue: FontSizeOption.medium.index) as num).toInt();
     return AppSettings(
       themeMode: ThemeMode.values[modeIndex.clamp(0, ThemeMode.values.length - 1)],

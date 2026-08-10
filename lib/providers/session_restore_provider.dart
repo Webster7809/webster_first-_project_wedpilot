@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/services/auth_service.dart';
+import '../core/services/session_manager.dart';
 import '../core/services/token_service.dart';
 import 'auth_provider.dart';
 
@@ -16,16 +17,17 @@ final sessionRestoreProvider = FutureProvider<void>((ref) async {
       return;
     }
 
-    // No refresh-token endpoint exists yet, so an expired access token forces
-    // a fresh login even if the refresh token is still valid.
+    // A closed-then-reopened app very commonly outlives the 1h access token
+    // while the 7-day refresh token is still good — refresh it here instead
+    // of forcing a fresh login every single cold start past an hour.
     final accessValid = await tokenService.isAccessTokenValid();
-    if (!accessValid) {
-      await tokenService.clearTokens();
-      return;
+    var token = accessValid ? await tokenService.getAccessToken() : null;
+    if (token == null) {
+      token = await sessionManager.refreshAccessToken();
+      if (token == null) return; // refresh itself already cleared tokens
     }
 
-    final token = await tokenService.getAccessToken();
-    final user = await AuthService.instance.fetchCurrentUser(token!);
+    final user = await AuthService.instance.fetchCurrentUser(token);
     await ref.read(authProvider.notifier).restoreSession(user, accessToken: token);
   } catch (e) {
     // ignore: avoid_print

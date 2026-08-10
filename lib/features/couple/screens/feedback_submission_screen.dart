@@ -121,7 +121,7 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.lock_outline_rounded, color: AppColors.info, size: 18),
+                          const Icon(Icons.lock_outlined, color: AppColors.info, size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -141,7 +141,7 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
                     TypeaheadField<VendorProfile>(
                       hint: "Search a vendor you've booked...",
                       controller: _vendorSearchCtrl,
-                      prefixIcon: Icons.search_rounded,
+                      prefixIcon: Icons.search,
                       suggestionsCallback: (query) {
                         final vendors = vendorsAsync.valueOrNull ?? const <VendorProfile>[];
                         if (query.isEmpty) return vendors;
@@ -201,7 +201,7 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 16),
+                          const Icon(Icons.check_circle, color: AppColors.success, size: 16),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -228,7 +228,7 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
                           child: Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: Icon(
-                              i < _rating ? Icons.star_rounded : Icons.star_border_rounded,
+                              i < _rating ? Icons.star : Icons.star_outlined,
                               color: AppColors.goldPremium,
                               size: 36,
                             ),

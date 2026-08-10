@@ -10,6 +10,7 @@ void showWedSnackBar(
   SnackType type = SnackType.info,
   String? actionLabel,
   VoidCallback? onAction,
+  Duration duration = const Duration(seconds: 3),
 }) {
   final colors = {
     SnackType.success: AppColors.success,
@@ -18,13 +19,20 @@ void showWedSnackBar(
     SnackType.info: AppColors.info,
   };
   final icons = {
-    SnackType.success: Icons.check_circle_outline,
-    SnackType.error: Icons.error_outline,
+    SnackType.success: Icons.check_circle_outlined,
+    SnackType.error: Icons.error_outlined,
     SnackType.warning: Icons.warning_amber_outlined,
-    SnackType.info: Icons.info_outline,
+    SnackType.info: Icons.info_outlined,
   };
 
-  ScaffoldMessenger.of(context).showSnackBar(
+  final messenger = ScaffoldMessenger.of(context);
+  // ScaffoldMessenger *queues* snack bars and plays them back to back, so
+  // booking three vendors in a row used to leave a bar on screen for three
+  // times its duration — indistinguishable from one that never dismisses.
+  // Only the newest message is ever worth showing, so drop whatever is on
+  // screen first.
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
     SnackBar(
       content: Row(
         children: [
@@ -40,12 +48,17 @@ void showWedSnackBar(
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       margin: const EdgeInsets.all(16),
-      duration: const Duration(seconds: 3),
+      duration: duration,
       action: actionLabel != null && onAction != null
           ? SnackBarAction(
               label: actionLabel,
               textColor: Colors.white,
-              onPressed: onAction,
+              // Dismiss as soon as the action is taken — leaving the bar up
+              // after an Undo invites tapping it twice.
+              onPressed: () {
+                messenger.hideCurrentSnackBar();
+                onAction();
+              },
             )
           : null,
     ),

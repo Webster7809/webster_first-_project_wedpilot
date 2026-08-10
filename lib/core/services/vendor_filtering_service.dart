@@ -127,6 +127,31 @@ class VendorFilteringService {
   /// happens for a category with no class-earning coverage at all — the
   /// seeded curated vendors (backend/scripts/seedCuratedVendors.js) guarantee
   /// every built-in category has real earners for every class.
+  /// Hard-excludes any vendor already booked on the couple's wedding date,
+  /// per category — "availability" is one of the things every recommendation
+  /// must satisfy, not just a scoring penalty. Falls back to the unfiltered
+  /// category list when the exclusion would otherwise empty it out, same
+  /// graceful-degrade shape as [preferredByWeddingClass]: a date conflict on
+  /// every vendor in a category is never a reason to show the couple
+  /// nothing — [_AiEngine._finalScore]'s booked-vendor penalty still demotes
+  /// them within that fallback case.
+  static Map<String, List<VendorProfile>> excludeBookedOnDate(
+    Map<String, List<VendorProfile>> byCategory,
+    String? weddingDateStr,
+  ) {
+    if (weddingDateStr == null || weddingDateStr.isEmpty) return byCategory;
+
+    bool isBooked(VendorProfile v) => v.blockedDates.contains(weddingDateStr);
+
+    return {
+      for (final entry in byCategory.entries)
+        entry.key: (() {
+          final available = entry.value.where((v) => !isBooked(v)).toList();
+          return available.isEmpty ? entry.value : available;
+        })(),
+    };
+  }
+
   static Map<String, List<VendorProfile>> preferredByWeddingClass(
     Map<String, List<VendorProfile>> byCategory,
     BudgetClass budgetClass,

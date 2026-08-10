@@ -1,7 +1,9 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -9,6 +11,7 @@ import '../../../core/utils/share_helper.dart';
 import '../../../models/invitation.dart';
 import '../../../providers/invitation_provider.dart';
 import '../../../widgets/hamburger_menu_button.dart';
+import '../../../widgets/loading_shimmer.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 class InvitationGalleryScreen extends ConsumerWidget {
@@ -104,7 +107,8 @@ class InvitationGalleryScreen extends ConsumerWidget {
                       Text(
                         'INVITATIONS',
                         style: AppTextStyles.caption.copyWith(
-                          color: AppColors.amber,
+                          // Gold on the forest header — 4.99:1.
+                          color: AppColors.gold,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.4,
                         ),
@@ -128,7 +132,7 @@ class InvitationGalleryScreen extends ConsumerWidget {
                 padding: const EdgeInsets.only(right: 16, top: 10, bottom: 10),
                 child: ElevatedButton.icon(
                   onPressed: () => _createAndOpen(context, ref),
-                  icon: const Icon(Icons.add_rounded, size: 16,
+                  icon: const Icon(Icons.add, size: 16,
                       color: Colors.white),
                   label: const Text('New',
                       style: TextStyle(
@@ -191,15 +195,24 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.forestGreen.withAlpha(12),
-              shape: BoxShape.circle,
+          ClipOval(
+            child: CachedNetworkImage(
+              imageUrl: VendorCategoryImages.galleryFor('Decor & flowers')[3],
+              width: 88,
+              height: 88,
+              fit: BoxFit.cover,
+              fadeInDuration: const Duration(milliseconds: 300),
+              placeholder: (_, _) =>
+                  const LoadingShimmer(width: 88, height: 88, borderRadius: 44),
+              errorWidget: (_, _, _) => Container(
+                decoration: BoxDecoration(
+                  color: AppColors.forestGreen.withAlpha(12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.mail_outlined,
+                    size: 38, color: AppColors.forestGreen),
+              ),
             ),
-            child: const Icon(Icons.mail_outline_rounded,
-                size: 38, color: AppColors.forestGreen),
           ),
           const SizedBox(height: 20),
           Text(
@@ -222,7 +235,7 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 28),
           ElevatedButton.icon(
             onPressed: onCreate,
-            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            icon: const Icon(Icons.add, color: Colors.white),
             label: const Text(
               'Create Invitation',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
@@ -287,7 +300,7 @@ class _InvitationCard extends StatelessWidget {
             height: 100,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppColors.forestGreen, Color(0xFF2A5C3F)],
+                colors: [AppColors.forestGreen, AppColors.gradientAccentGreen],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -312,8 +325,7 @@ class _InvitationCard extends StatelessWidget {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: const Color(0xFFD4A854)
-                                      .withAlpha(100),
+                                  color: AppColors.sageGold.withAlpha(100),
                                   width: 0.8,
                                 ),
                               ),
@@ -432,7 +444,7 @@ class _InvitationCard extends StatelessWidget {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: onDelete,
-                        icon: const Icon(Icons.delete_outline, size: 15),
+                        icon: const Icon(Icons.delete_outlined, size: 15),
                         label: const Text('Delete'),
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(

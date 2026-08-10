@@ -10,7 +10,9 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_own_provider.dart';
 import '../../../widgets/hamburger_menu_button.dart';
+import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
+import '../../../widgets/wed_text_field.dart';
 
 class VendorProfileManagementScreen extends ConsumerStatefulWidget {
   const VendorProfileManagementScreen({super.key});
@@ -86,7 +88,7 @@ class _VendorProfileManagementScreenState
               IconButton(
                 tooltip: 'Log out',
                 icon: const Icon(
-                  Icons.logout_rounded,
+                  Icons.logout,
                   color: Colors.white,
                   size: 24,
                 ),
@@ -106,7 +108,8 @@ class _VendorProfileManagementScreenState
                       Text(
                         'YOUR ACCOUNT',
                         style: AppTextStyles.caption.copyWith(
-                          color: AppColors.amber,
+                          // Gold on the forest header — 4.99:1.
+                          color: AppColors.gold,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.4,
                         ),
@@ -196,7 +199,7 @@ class _VendorProfileManagementScreenState
                                       height: 60,
                                       color: AppColors.amber,
                                       child: const Icon(
-                                        Icons.storefront_rounded,
+                                        Icons.storefront,
                                         color: Colors.white,
                                         size: 28,
                                       ),
@@ -318,66 +321,42 @@ class _VendorProfileManagementScreenState
                   inputType: TextInputType.url,
                 ),
                 const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
+                WedButton(
+                  label: 'Save changes',
+                  variant: WedButtonVariant.accent,
                   height: 46,
-                  child: ElevatedButton(
-                    onPressed: isSaving
-                        ? null
-                        : () async {
-                            final error = await ref
-                                .read(vendorOwnProvider.notifier)
-                                .saveProfile(
-                                  description: _descCtrl.text.trim().isEmpty
-                                      ? null
-                                      : _descCtrl.text.trim(),
-                                  phone: _phoneCtrl.text.trim().isEmpty
-                                      ? null
-                                      : _phoneCtrl.text.trim(),
-                                  website: _websiteCtrl.text.trim().isEmpty
-                                      ? null
-                                      : _websiteCtrl.text.trim(),
-                                );
-                            if (!context.mounted) return;
-                            if (error != null) {
-                              showWedSnackBar(
-                                context,
-                                error,
-                                type: SnackType.error,
+                  isLoading: isSaving,
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final error = await ref
+                              .read(vendorOwnProvider.notifier)
+                              .saveProfile(
+                                description: _descCtrl.text.trim().isEmpty
+                                    ? null
+                                    : _descCtrl.text.trim(),
+                                phone: _phoneCtrl.text.trim().isEmpty
+                                    ? null
+                                    : _phoneCtrl.text.trim(),
+                                website: _websiteCtrl.text.trim().isEmpty
+                                    ? null
+                                    : _websiteCtrl.text.trim(),
                               );
-                            } else {
-                              showWedSnackBar(
-                                context,
-                                'Profile updated successfully!',
-                                type: SnackType.success,
-                              );
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.amber,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            'Save changes',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                  ),
+                          if (!context.mounted) return;
+                          if (error != null) {
+                            showWedSnackBar(
+                              context,
+                              error,
+                              type: SnackType.error,
+                            );
+                          } else {
+                            showWedSnackBar(
+                              context,
+                              'Profile updated successfully!',
+                              type: SnackType.success,
+                            );
+                          }
+                        },
                 ),
                 const SizedBox(height: 28),
 
@@ -395,12 +374,12 @@ class _VendorProfileManagementScreenState
                           .updateNotifications(v),
                     ),
                     _MenuRow(
-                      icon: Icons.lock_outline_rounded,
+                      icon: Icons.lock_outlined,
                       label: 'Change password',
                       onTap: () {},
                     ),
                     _MenuRow(
-                      icon: Icons.help_outline_rounded,
+                      icon: Icons.help_outlined,
                       label: 'Help & support',
                       onTap: () => context.push('/help'),
                     ),
@@ -500,7 +479,7 @@ class _VendorProfileManagementScreenState
                 if (hasLogo) ...[
                   const Divider(height: 1, thickness: 1),
                   _LogoOptionTile(
-                    icon: Icons.delete_outline_rounded,
+                    icon: Icons.delete_outlined,
                     iconColor: AppColors.error,
                     label: 'Remove logo',
                     labelColor: AppColors.error,
@@ -602,7 +581,7 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: AppColors.amber),
+        Icon(icon, size: 16, color: AppColors.goldDeep),
         const SizedBox(width: 8),
         Text(
           label,
@@ -637,39 +616,14 @@ class _AccountField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return WedTextField(
       controller: controller ?? TextEditingController(text: value),
+      label: label,
       readOnly: readOnly,
       keyboardType: inputType,
-      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: AppTextStyles.caption.copyWith(
-          color: AppColors.textSecondary,
-        ),
-        prefixIcon: Icon(icon, size: 18, color: AppColors.amber),
-        filled: true,
-        fillColor: readOnly ? AppColors.creamDark : Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: AppColors.forestGreen,
-            width: 1.5,
-          ),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 14,
-        ),
-      ),
+      prefixIcon: icon,
+      prefixIconColor: AppColors.amber,
+      fillColor: readOnly ? AppColors.creamDark : Colors.white,
     );
   }
 }
@@ -689,41 +643,13 @@ class _AccountTextArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return WedTextField(
       controller: controller,
+      label: label,
       maxLines: 3,
-      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: AppTextStyles.caption.copyWith(
-          color: AppColors.textSecondary,
-        ),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.only(bottom: 44),
-          child: Icon(icon, size: 18, color: AppColors.amber),
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: AppColors.forestGreen,
-            width: 1.5,
-          ),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 14,
-        ),
-      ),
+      prefixIcon: icon,
+      prefixIconColor: AppColors.amber,
+      fillColor: Colors.white,
     );
   }
 }
@@ -784,7 +710,7 @@ class _ToggleRow extends StatelessWidget {
     return Material(
       color: Colors.white,
       child: ListTile(
-        leading: Icon(icon, size: 20, color: AppColors.amber),
+        leading: Icon(icon, size: 20, color: AppColors.goldDeep),
         title: Text(
           label,
           style: AppTextStyles.bodyMedium.copyWith(
@@ -821,7 +747,7 @@ class _MenuRow extends StatelessWidget {
       color: Colors.white,
       child: ListTile(
         onTap: onTap,
-        leading: Icon(icon, size: 20, color: AppColors.amber),
+        leading: Icon(icon, size: 20, color: AppColors.goldDeep),
         title: Text(
           label,
           style: AppTextStyles.bodyMedium.copyWith(

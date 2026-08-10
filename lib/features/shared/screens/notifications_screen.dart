@@ -10,6 +10,7 @@ import '../../../models/notification_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/notification_provider.dart';
 import '../../../widgets/wed_snack_bar.dart';
+import '../../../widgets/wed_skeleton.dart';
 
 // Notification types that deep-link somewhere beyond just marking read —
 // everything else keeps the original mark-read-only tap behavior.
@@ -21,7 +22,7 @@ class NotificationsScreen extends ConsumerWidget {
   static (IconData, Color, Color) _presentation(String type) {
     switch (type) {
       case 'message':
-        return (Icons.chat_bubble_outline_rounded, AppColors.forestGreen, AppColors.adminGreenBg);
+        return (Icons.chat_bubble_outlined, AppColors.forestGreen, AppColors.adminGreenBg);
       case 'budget_alert':
         return (Icons.account_balance_wallet_outlined, AppColors.warning, AppColors.warningBg);
       case 'vendor_verification':
@@ -31,7 +32,7 @@ class NotificationsScreen extends ConsumerWidget {
       case 'booking_declined':
         return (Icons.event_busy_outlined, AppColors.warning, AppColors.warningBg);
       case 'rate_vendor':
-        return (Icons.star_outline_rounded, AppColors.amber, AppColors.adminAmberBg);
+        return (Icons.star_outlined, AppColors.amber, AppColors.adminAmberBg);
       default:
         return (Icons.notifications_outlined, AppColors.amber, AppColors.adminAmberBg);
     }
@@ -83,24 +84,27 @@ class NotificationsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Notifications'),
         centerTitle: true,
+        backgroundColor: AppColors.forestGreen,
+        foregroundColor: Colors.white,
         actions: [
           TextButton(
             onPressed: unread > 0 ? () => _markAllRead(ref, context) : null,
             child: Text(
               'Mark all read',
               style: AppTextStyles.labelMedium.copyWith(
-                color: unread > 0 ? AppColors.amber : AppColors.textHint,
+                color: unread > 0 ? AppColors.amber : Colors.white38,
               ),
             ),
           ),
         ],
       ),
       body: notificationsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const WedListSkeleton(rows: 6),
         error: (error, stack) => Center(
           child: Text(
             'Unable to load notifications.',
-            style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.bodyLarge
+                .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
         data: (_) {
@@ -110,14 +114,16 @@ class NotificationsScreen extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.notifications_none_rounded,
-                      size: 56, color: AppColors.textHint),
+                  Icon(Icons.notifications_none,
+                      size: 56,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(height: 12),
                   Text('No notifications yet', style: AppTextStyles.headlineMedium),
                   const SizedBox(height: 6),
                   Text(
                     "We'll let you know when something needs your attention.",
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.bodySmall.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -133,7 +139,7 @@ class NotificationsScreen extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   child: Text(
                     '$unread unread notification${unread == 1 ? '' : 's'}',
-                    style: AppTextStyles.labelMedium.copyWith(color: AppColors.amber),
+                    style: AppTextStyles.labelMedium.copyWith(color: AppColors.primary),
                   ),
                 ),
               Expanded(

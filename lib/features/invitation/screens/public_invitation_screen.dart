@@ -4,10 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/constants/invitation_fonts.dart';
+import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/services/invitation_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/invitation.dart';
+import '../../../widgets/loading_shimmer.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 class PublicInvitationScreen extends StatefulWidget {
@@ -150,7 +152,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.mail_outline_rounded, size: 56, color: AppColors.textHint),
+                const Icon(Icons.mail_outlined, size: 56, color: AppColors.textHint),
                 const SizedBox(height: 16),
                 Text('Invitation not found',
                     style: AppTextStyles.headlineMedium.copyWith(color: AppColors.forestGreen)),
@@ -387,7 +389,19 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
       padding: const EdgeInsets.fromLTRB(24, 48, 24, 32),
       child: Column(
         children: [
-          const Text('🎊', style: TextStyle(fontSize: 72)),
+          ClipOval(
+            child: CachedNetworkImage(
+              imageUrl: VendorCategoryImages.galleryFor('DJ & MC')[2],
+              width: 104,
+              height: 104,
+              fit: BoxFit.cover,
+              fadeInDuration: const Duration(milliseconds: 300),
+              placeholder: (_, _) =>
+                  const LoadingShimmer(width: 104, height: 104, borderRadius: 52),
+              errorWidget: (_, _, _) =>
+                  const Text('🎊', style: TextStyle(fontSize: 72)),
+            ),
+          ),
           const SizedBox(height: 20),
           Text(
             justSubmitted ? 'Thank You!' : 'You\'ve already responded',
@@ -499,7 +513,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
                             ),
                           ),
                           const SizedBox(width: 6),
-                          const Icon(Icons.arrow_forward_rounded, size: 18),
+                          const Icon(Icons.arrow_forward, size: 18),
                         ],
                       ),
                     ),
@@ -538,7 +552,7 @@ class _InfoCard extends StatelessWidget {
               color: AppColors.amber.withAlpha(31),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 20, color: AppColors.amber),
+            child: Icon(icon, size: 20, color: AppColors.goldDeep),
           ),
           const SizedBox(width: 14),
           Expanded(

@@ -4,20 +4,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/router/app_routes.dart';
-import '../../../core/services/messaging_api_service.dart';
 import '../../../core/services/vendor_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_provider.dart';
+import '../../../widgets/booking_action_button.dart';
 import '../../../widgets/loading_shimmer.dart';
+import '../../../widgets/photo_viewer_screen.dart';
 import '../../../widgets/vendor_hero_image.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
-import '../../../widgets/wed_text_field.dart';
 import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/utils/format_utils.dart';
+import '../../../core/utils/share_helper.dart';
 
 class VendorProfileScreen extends ConsumerWidget {
   final String vendorId;
@@ -89,6 +90,13 @@ class _VendorProfileBody extends ConsumerStatefulWidget {
 }
 
 class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
+  Future<void> _toggleWishlist(String vendorId) async {
+    final error = await ref.read(wishlistProvider.notifier).toggle(vendorId);
+    if (error != null && mounted) {
+      showWedSnackBar(context, error, type: SnackType.error);
+    }
+  }
+
   Future<void> _reportPhoto(VendorMedia media) async {
     final reason = await showModalBottomSheet<String>(
       context: context,
@@ -148,7 +156,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                     top: MediaQuery.of(context).padding.top + 8,
                     left: 16,
                     child: _OverlayButton(
-                      icon: Icons.chevron_left_rounded,
+                      icon: Icons.chevron_left,
                       onTap: () => context.pop(),
                     ),
                   ),
@@ -160,16 +168,22 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                       children: [
                         _OverlayButton(
                           icon: Icons.share_outlined,
-                          onTap: () {},
+                          onTap: () => shareWithFallback(
+                            context,
+                            text: [
+                              'Check out ${vendor.businessName} on WedPilot',
+                              if (vendor.category.isNotEmpty) vendor.category,
+                              if (vendor.location != null) vendor.location!,
+                            ].join(' — '),
+                            subject: vendor.businessName,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         _OverlayButton(
                           icon: isWishlisted
-                              ? Icons.favorite_rounded
-                              : Icons.favorite_border_rounded,
-                          onTap: () => ref
-                              .read(wishlistProvider.notifier)
-                              .toggle(vendor.id),
+                              ? Icons.favorite
+                              : Icons.favorite_outlined,
+                          onTap: () => _toggleWishlist(vendor.id),
                           iconColor: isWishlisted
                               ? AppColors.error
                               : Colors.white,
@@ -220,8 +234,8 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.star_outline_rounded,
-                                    color: AppColors.amber, size: 14),
+                                const Icon(Icons.star_outlined,
+                                    color: AppColors.goldDeep, size: 14),
                                 const SizedBox(width: 4),
                                 Text(
                                   vendor.rating!.toStringAsFixed(1),
@@ -260,7 +274,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                         if (vendor.feedbackCount > 0)
                           _Pill(
                             label: 'Based on ${vendor.feedbackCount} completed bookings',
-                            icon: Icons.star_outline_rounded,
+                            icon: Icons.star_outlined,
                             color: AppColors.amber,
                             bgColor: AppColors.creamDark,
                           ),
@@ -332,7 +346,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                                   Text(
                                     'PRICE RANGE',
                                     style: AppTextStyles.caption.copyWith(
-                                      color: AppColors.amber,
+                                      color: AppColors.primary,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 1.2,
                                     ),
@@ -373,7 +387,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                                   Text(
                                     'GUEST CAPACITY',
                                     style: AppTextStyles.caption.copyWith(
-                                      color: AppColors.amber,
+                                      color: AppColors.primary,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 1.2,
                                     ),
@@ -434,7 +448,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                                     ),
                                   ),
                                 ),
-                                const Icon(Icons.chevron_right_rounded,
+                                const Icon(Icons.chevron_right,
                                     color: AppColors.textSecondary, size: 18),
                               ],
                             ),
@@ -477,7 +491,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const Icon(Icons.chevron_right_rounded,
+                                const Icon(Icons.chevron_right,
                                     color: AppColors.textSecondary, size: 18),
                               ],
                             ),
@@ -504,63 +518,98 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                         style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
                       ),
                       const SizedBox(height: 10),
-                      GridView.count(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                        childAspectRatio: 1,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: VendorCategoryImages.galleryFor(vendor.category, width: 300)
-                            .map((url) => ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: CachedNetworkImage(
-                                    imageUrl: url,
-                                    fit: BoxFit.cover,
-                                    memCacheWidth: 300,
-                                    placeholder: (context, url) => Container(
-                                      color: AppColors.amber.withAlpha(20),
-                                    ),
-                                    errorWidget: (context, url, error) => Container(
-                                      color: AppColors.amber.withAlpha(20),
-                                      child: const Icon(Icons.broken_image_outlined,
-                                          color: AppColors.amber, size: 24),
-                                    ),
+                      Builder(builder: (context) {
+                        final thumbs = VendorCategoryImages.galleryFor(
+                            vendor.category,
+                            width: 450,
+                            vendorId: vendor.id);
+                        final fullRes = VendorCategoryImages.galleryFor(
+                            vendor.category,
+                            width: 1600,
+                            vendorId: vendor.id);
+                        return GridView.count(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          childAspectRatio: 1,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: thumbs.asMap().entries.map((entry) {
+                            final i = entry.key;
+                            final url = entry.value;
+                            return GestureDetector(
+                              onTap: () => PhotoViewerScreen.open(
+                                context,
+                                urls: fullRes,
+                                initialIndex: i,
+                                heroLabel: 'Sample ${vendor.category} photo',
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: CachedNetworkImage(
+                                  imageUrl: url,
+                                  fit: BoxFit.cover,
+                                  memCacheWidth: 450,
+                                  placeholder: (context, url) => Container(
+                                    color: AppColors.amber.withAlpha(20),
                                   ),
-                                ))
-                            .toList(),
-                      ),
+                                  errorWidget: (context, url, error) => Container(
+                                    color: AppColors.amber.withAlpha(20),
+                                    child: const Icon(Icons.broken_image_outlined,
+                                        color: AppColors.goldDeep, size: 24),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      }),
                     ] else
-                      GridView.count(
+                      Builder(builder: (context) {
+                        final shown = vendor.media.take(6).toList();
+                        final fullRes =
+                            shown.map((m) => resolveMediaUrl(m.url)).toList();
+                        return GridView.count(
                         crossAxisCount: 3,
                         crossAxisSpacing: 8,
                         mainAxisSpacing: 8,
                         childAspectRatio: 1,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        children: vendor.media.take(6).map((m) => ClipRRect(
+                        children: shown.asMap().entries.map((entry) {
+                          final i = entry.key;
+                          final m = entry.value;
+                          return ClipRRect(
                               borderRadius: BorderRadius.circular(10),
                               child: Stack(
                                 fit: StackFit.expand,
                                 children: [
-                                  CachedNetworkImage(
-                                    imageUrl: resolveMediaUrl(m.url),
-                                    fit: BoxFit.cover,
-                                    memCacheWidth: 300,
-                                    placeholder: (context, url) => Container(
-                                      color: AppColors.amber.withAlpha(20),
-                                      child: const Center(
-                                        child: SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                  GestureDetector(
+                                    onTap: () => PhotoViewerScreen.open(
+                                      context,
+                                      urls: fullRes,
+                                      initialIndex: i,
+                                      heroLabel: '${vendor.businessName} photo',
+                                    ),
+                                    child: CachedNetworkImage(
+                                      imageUrl: resolveMediaUrl(m.url),
+                                      fit: BoxFit.cover,
+                                      memCacheWidth: 450,
+                                      placeholder: (context, url) => Container(
+                                        color: AppColors.amber.withAlpha(20),
+                                        child: const Center(
+                                          child: SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    errorWidget: (context, url, error) => Container(
-                                      color: AppColors.amber.withAlpha(20),
-                                      child: const Icon(Icons.broken_image_outlined,
-                                          color: AppColors.amber, size: 24),
+                                      errorWidget: (context, url, error) => Container(
+                                        color: AppColors.amber.withAlpha(20),
+                                        child: const Icon(Icons.broken_image_outlined,
+                                            color: AppColors.goldDeep, size: 24),
+                                      ),
                                     ),
                                   ),
                                   Positioned(
@@ -583,8 +632,10 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                                   ),
                                 ],
                               ),
-                            )).toList(),
-                      ),
+                            );
+                        }).toList(),
+                        );
+                      }),
                     const SizedBox(height: 24),
 
                     // Details
@@ -626,40 +677,14 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
         child: Row(
           children: [
             Expanded(
-              child: ElevatedButton(
-                onPressed: () => showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => _InquirySheet(vendor: vendor),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.amber,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  elevation: 0,
-                ),
-                child: const Text('Send inquiry',
-                    style:
-                        TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              ),
+              child: BookingActionButton(vendor: vendor, height: 52),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: OutlinedButton(
-                onPressed: () => ref.read(wishlistProvider.notifier).toggle(vendor.id),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.divider, width: 1.5),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  foregroundColor: AppColors.textPrimary,
-                ),
-                child: Text(isWishlisted ? 'Shortlisted' : 'Shortlist',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600)),
+              child: WedButton(
+                label: isWishlisted ? 'Shortlisted' : 'Shortlist',
+                variant: WedButtonVariant.secondary,
+                onPressed: () => _toggleWishlist(vendor.id),
               ),
             ),
           ],
@@ -670,132 +695,6 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
 
 }
 
-// ── Send inquiry sheet ────────────────────────────────────────────────────────
-
-class _InquirySheet extends ConsumerStatefulWidget {
-  final VendorProfile vendor;
-  const _InquirySheet({required this.vendor});
-
-  @override
-  ConsumerState<_InquirySheet> createState() => _InquirySheetState();
-}
-
-class _InquirySheetState extends ConsumerState<_InquirySheet> {
-  final _formKey = GlobalKey<FormState>();
-  final _messageCtrl = TextEditingController();
-  bool _isSending = false;
-
-  @override
-  void dispose() {
-    _messageCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _send() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-
-    final token = ref.read(authProvider.notifier).accessToken;
-    if (token == null) {
-      showWedSnackBar(context, 'Please sign in to send an inquiry.', type: SnackType.error);
-      return;
-    }
-
-    setState(() => _isSending = true);
-    try {
-      await VendorApiService.instance.sendInquiry(
-        token,
-        widget.vendor.id,
-        message: _messageCtrl.text.trim(),
-      );
-      // Best-effort: also open a chat thread so the couple can follow up
-      // beyond the initial inquiry. A failure here shouldn't block the
-      // inquiry itself from being reported as sent.
-      try {
-        await MessagingApiService.instance.startConversation(token, widget.vendor.id);
-      } catch (_) {}
-      if (!mounted) return;
-      Navigator.pop(context);
-      showWedSnackBar(context, 'Inquiry sent to ${widget.vendor.businessName}!', type: SnackType.success);
-    } on VendorApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _isSending = false);
-      showWedSnackBar(context, e.message, type: SnackType.error);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isSending = false);
-      showWedSnackBar(context, 'Could not send inquiry. Please try again.', type: SnackType.error);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Send inquiry to ${widget.vendor.businessName}',
-                style: AppTextStyles.headlineMedium.copyWith(color: AppColors.forestGreen),
-              ),
-              const SizedBox(height: 20),
-              WedTextField(
-                label: 'Message',
-                hint: 'Tell them about your wedding date, guest count, and what you need…',
-                controller: _messageCtrl,
-                maxLines: 5,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Message is required' : null,
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isSending ? null : _send,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.amber,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    elevation: 0,
-                  ),
-                  child: _isSending
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Text('Send inquiry',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ── Overlay circle button ─────────────────────────────────────────────────────
 

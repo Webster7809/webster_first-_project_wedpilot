@@ -2,6 +2,7 @@ const express = require('express');
 const { Op, fn, col } = require('sequelize');
 const User = require('../db/models/user');
 const Vendor = require('../db/models/vendor');
+const VendorService = require('../db/models/vendorService');
 const CoupleProfile = require('../db/models/coupleProfile');
 const VendorFeedback = require('../db/models/vendorFeedback');
 const VendorMedia = require('../db/models/vendorMedia');
@@ -10,6 +11,7 @@ const Notification = require('../db/models/notification');
 const verifyJwt = require('../middleware/verifyJwt');
 const { requireAdmin } = require('../middleware/roles');
 const { recalculateVendorStats } = require('../services/vendorStats');
+const { validateMaxGuests } = require('../services/guestCapacity');
 
 const router = express.Router();
 router.use(verifyJwt, requireAdmin);
@@ -142,6 +144,35 @@ router.patch('/vendors/:id/verification', async (req, res) => {
   } catch (err) {
     console.error('Vendor verification error:', err.message);
     res.status(500).json({ error: 'Could not update vendor verification.' });
+  }
+});
+
+// ── Vendor guest capacity ───────────────────────────────────────────────────────────
+// Lets an admin fill in or correct a listing's stated guest capacity directly
+// — for legacy listings created before the field was mandatory (see
+// backend/scripts/backfillGuestCapacity.js), or a vendor-reported mistake —
+// without waiting on the vendor to revisit their own listing. Reuses the
+// exact same rule the vendor's own PUT /me/services/:id enforces (see
+// routes/vendors.js) so the two entry points can never drift.
+
+router.patch('/vendor-services/:id/capacity', async (req, res) => {
+  try {
+    const service = await VendorService.findByPk(req.params.id);
+    if (!service) return res.status(404).json({ error: 'Listing not found.' });
+
+    const capacityError = validateMaxGuests(req.body.max_guests);
+    if (capacityError) return res.status(400).json({ error: capacityError });
+
+    service.max_guests = req.body.max_guests;
+    await service.save();
+    res.json({
+      service_id: service.service_id,
+      vendor_id: service.vendor_id,
+      max_guests: service.max_guests,
+    });
+  } catch (err) {
+    console.error('Admin update guest capacity error:', err.message);
+    res.status(500).json({ error: 'Could not update guest capacity.' });
   }
 });
 

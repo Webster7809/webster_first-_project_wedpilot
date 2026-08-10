@@ -5,6 +5,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/messaging_provider.dart';
 import '../../../widgets/wed_avatar.dart';
+import '../../../widgets/wed_empty_state.dart';
+import '../../../widgets/wed_skeleton.dart';
 
 class VendorMessagesScreen extends ConsumerWidget {
   const VendorMessagesScreen({super.key});
@@ -22,32 +24,14 @@ class VendorMessagesScreen extends ConsumerWidget {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: convsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const WedListSkeleton(rows: 6),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (convs) {
           if (convs.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.chat_bubble_outline_rounded,
-                        size: 64, color: AppColors.forestGreen.withAlpha(80)),
-                    const SizedBox(height: 16),
-                    Text('No messages yet',
-                        style: AppTextStyles.headlineSmall
-                            .copyWith(color: AppColors.forestGreen)),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Conversations with couples will appear here.',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.textSecondary),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
+            return const WedEmptyState(
+              icon: Icons.chat_bubble_outlined,
+              title: 'No messages yet',
+              message: 'Conversations with couples will appear here.',
             );
           }
           return ListView.separated(
@@ -90,7 +74,7 @@ class VendorMessagesScreen extends ConsumerWidget {
                         ),
                         child: Text('${conv.unreadCount}',
                             style: const TextStyle(
-                                color: Colors.white,
+                                color: AppColors.textOnSecondary,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600)),
                       )

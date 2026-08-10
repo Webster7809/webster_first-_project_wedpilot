@@ -14,16 +14,10 @@ const verifyJwt = require('../middleware/verifyJwt');
 const { requireCouple, requireVendor } = require('../middleware/roles');
 const { makeUploader, relativeUploadUrl } = require('../middleware/upload');
 const { recalculateVendorStats, statsForVendorIds } = require('../services/vendorStats');
+const { validateMaxGuests } = require('../services/guestCapacity');
 
 const router = express.Router();
 const mediaUploader = makeUploader('vendors', { allowedMimePrefixes: ['image/', 'video/'], maxSizeMb: 25 });
-
-// Sanity ceiling for a stated service capacity — mirrors
-// AppConstants.maxRealisticGuestCount on the Flutter side (couple wizard and
-// vendor listing form). Keeps a joke/fat-finger max_guests value (an extra
-// zero, a pasted phone number) from silently poisoning the couple-side
-// system-wide capacity gate, which trusts the largest max_guests on file.
-const MAX_REALISTIC_GUEST_COUNT = 20000;
 
 // ── Serialization ────────────────────────────────────────────────────────────────
 
@@ -327,12 +321,8 @@ router.post('/me/services', verifyJwt, requireVendor, async (req, res) => {
     // Guest capacity is mandatory on every new listing, in every category —
     // it feeds the AI matching pipeline's hard capacity filter, so a listing
     // without one would silently look like it can serve any party size.
-    if (max_guests == null || !Number.isInteger(max_guests) || max_guests <= 0 ||
-        max_guests > MAX_REALISTIC_GUEST_COUNT) {
-      return res.status(400).json({
-        error: `max_guests is required and must be a whole number between 1 and ${MAX_REALISTIC_GUEST_COUNT}.`,
-      });
-    }
+    const capacityError = validateMaxGuests(max_guests);
+    if (capacityError) return res.status(400).json({ error: capacityError });
     const service = await VendorService.create({
       vendor_id: vendor.vendor_id, title, description, price_min, price_max, unit: unit || 'package',
       max_guests,
@@ -354,17 +344,25 @@ router.put('/me/services/:id', verifyJwt, requireVendor, async (req, res) => {
     // Mandatory field: a PUT that includes the key at all must set a real
     // value — unlike other optional fields, it can never be explicitly
     // cleared back to null once a listing exists.
-    if ('max_guests' in req.body &&
-        (req.body.max_guests == null || !Number.isInteger(req.body.max_guests) ||
-         req.body.max_guests <= 0 || req.body.max_guests > MAX_REALISTIC_GUEST_COUNT)) {
-      return res.status(400).json({
-        error: `max_guests is required and must be a whole number between 1 and ${MAX_REALISTIC_GUEST_COUNT}.`,
-      });
+    if ('max_guests' in req.body) {
+      const capacityError = validateMaxGuests(req.body.max_guests);
+      if (capacityError) return res.status(400).json({ error: capacityError });
     }
 
-    const allFields = { ...req.body };
-    delete allFields.service_id;
-    delete allFields.vendor_id;
+    // Explicit allowlist, not a `{ ...req.body }` spread with a denylist —
+    // this is the vendor's own edit route, so it must never be able to write
+    // service_id/vendor_id (ownership/identity) or created_at/updated_at
+    // (Sequelize's timestamp columns, settable via .set() like any other
+    // field since they're mapped to these same snake_case names).
+    const allFields = {
+      title: req.body.title,
+      description: req.body.description,
+      price_min: req.body.price_min,
+      price_max: req.body.price_max,
+      unit: req.body.unit,
+      is_active: req.body.is_active,
+      max_guests: req.body.max_guests,
+    };
     service.set(Object.fromEntries(Object.entries(allFields).filter(([, v]) => v !== undefined)));
     await service.save();
     res.json({ service: serializeService(service) });
@@ -633,6 +631,54 @@ router.get('/inquiries/mine', verifyJwt, requireCouple, async (req, res) => {
   }
 });
 
+// A couple cancelling their own inquiry/booking — mirrors the vendor's
+// decline, but couple-initiated and without a reason requirement. Allowed at
+// any stage up to and including 'booked': backing out of a confirmed booking
+// is exactly what this is for, not just withdrawing an unanswered request.
+router.patch('/inquiries/:id/cancel', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const inquiry = await Inquiry.findOne({
+      where: { inquiry_id: req.params.id, couple_user_id: req.user.user_id },
+    });
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
+    if (['declined', 'cancelled'].includes(inquiry.status)) {
+      return res.status(409).json({ error: 'This booking is already closed.' });
+    }
+
+    const wasBooked = inquiry.status === 'booked';
+    inquiry.status = 'cancelled';
+    await inquiry.save();
+
+    const vendor = await Vendor.findByPk(inquiry.vendor_id);
+    if (vendor) {
+      // Undo the calendar hold a confirmed booking placed — otherwise the
+      // vendor stays blocked out on a date that just freed up.
+      if (wasBooked && inquiry.wedding_date) {
+        const blocked = new Set(vendor.blocked_dates || []);
+        if (blocked.delete(inquiry.wedding_date)) {
+          vendor.blocked_dates = [...blocked];
+          await vendor.save();
+        }
+      }
+      await recalculateVendorStats(vendor.vendor_id);
+      const coupleUser = await User.findByPk(req.user.user_id, { attributes: ['name'] });
+      await Notification.create({
+        user_id: vendor.user_id,
+        type: 'booking_cancelled',
+        title: wasBooked ? 'A couple cancelled their booking' : 'A couple withdrew their inquiry',
+        body: `${coupleUser?.name ?? 'A couple'} cancelled their ${wasBooked ? 'confirmed booking' : 'inquiry'} with you.`,
+        entity_id: inquiry.inquiry_id,
+        entity_type: 'inquiry',
+      });
+    }
+
+    res.json({ inquiry: serializeInquiry(inquiry) });
+  } catch (err) {
+    console.error('Cancel inquiry error:', err.message);
+    res.status(500).json({ error: 'Could not cancel this booking.' });
+  }
+});
+
 // Resolves the wedding date to use for a booking: the inquiry's own date if
 // it has one, otherwise the couple's on-file wedding date. Both columns are
 // DATEONLY so this returns a plain 'YYYY-MM-DD' string (or null if neither
@@ -802,6 +848,24 @@ router.post('/:id/inquiries', verifyJwt, requireCouple, async (req, res) => {
     }
     if (weddingDate && (vendor.blocked_dates || []).includes(weddingDate)) {
       return res.status(409).json({ error: 'This vendor isn’t available on your wedding date.' });
+    }
+
+    // One live request per couple/vendor pair. Nothing enforced this before,
+    // so a stale client — or a double tap — created duplicate rows that then
+    // rendered as several identical bookings, all sharing one vendor's
+    // has_feedback flag. Declined and cancelled rows are finished business and
+    // deliberately don't block a fresh request to the same vendor later.
+    const existing = await Inquiry.findOne({
+      where: {
+        couple_user_id: req.user.user_id,
+        vendor_id: vendor.vendor_id,
+        status: { [Op.notIn]: ['declined', 'cancelled'] },
+      },
+    });
+    if (existing) {
+      return res.status(409).json({
+        error: 'You already have an open request with this vendor.',
+      });
     }
 
     const inquiry = await Inquiry.create({

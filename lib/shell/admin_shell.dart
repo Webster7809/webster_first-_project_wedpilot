@@ -149,7 +149,7 @@ class _AdminSidebar extends StatelessWidget {
                   label: 'PEOPLE',
                   children: [
                     _SidebarItem(
-                      icon: Icons.people_outline,
+                      icon: Icons.people_outlined,
                       label: 'Couples',
                       index: 1,
                       currentIndex: currentIndex,
@@ -238,7 +238,7 @@ class _LogoIcon extends StatelessWidget {
         color: AppColors.amber,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: const Icon(Icons.favorite, color: Colors.white, size: 20),
+      child: const Icon(Icons.favorite, color: AppColors.textOnSecondary, size: 20),
     );
   }
 }

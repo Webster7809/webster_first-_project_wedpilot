@@ -161,7 +161,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 controller: _searchController,
                 focusNode: _searchFocus,
                 hint: 'Search vendors...',
-                prefixIcon: Icons.search_rounded,
+                prefixIcon: Icons.search,
                 borderRadius: 20,
                 fillColor: Theme.of(context).colorScheme.surface,
                 suggestionsCallback: (q) =>
@@ -174,7 +174,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           ] else
             IconButton(
               tooltip: 'Search',
-              icon: const Icon(Icons.search_rounded,
+              icon: const Icon(Icons.search,
                   color: AppColors.textPrimary, size: 22),
               onPressed: () => _showMobileSearch(context),
             ),
@@ -562,7 +562,7 @@ class _FlaggedContentBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.flag_rounded, color: AppColors.error, size: 20),
+          const Icon(Icons.flag, color: AppColors.error, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -645,7 +645,7 @@ class _RecentSignupsPanel extends StatelessWidget {
                       child: Text(
                         'View all',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.amber,
+                          color: AppColors.primary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -829,7 +829,7 @@ class _VerificationQueuePanel extends StatelessWidget {
                 Text(
                   '${vendors.length} pending',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.amber,
+                    color: AppColors.primary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -843,7 +843,7 @@ class _VerificationQueuePanel extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.check_circle_rounded,
+                  const Icon(Icons.check_circle,
                       size: 44, color: AppColors.adminGreen),
                   const SizedBox(height: 10),
                   Text('All caught up!',
@@ -923,7 +923,7 @@ class _VerificationQueuePanel extends StatelessWidget {
                             child: const SizedBox(
                               width: 32,
                               height: 32,
-                              child: Icon(Icons.check_rounded,
+                              child: Icon(Icons.check,
                                   size: 16, color: AppColors.adminGreen),
                             ),
                           ),
@@ -938,7 +938,7 @@ class _VerificationQueuePanel extends StatelessWidget {
                             child: const SizedBox(
                               width: 32,
                               height: 32,
-                              child: Icon(Icons.close_rounded,
+                              child: Icon(Icons.close,
                                   size: 16, color: AppColors.error),
                             ),
                           ),

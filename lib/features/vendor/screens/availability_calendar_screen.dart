@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/vendor_own_provider.dart';
 import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_card.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
 class AvailabilityCalendarScreen extends ConsumerStatefulWidget {
@@ -70,12 +71,11 @@ class _AvailabilityCalendarScreenState
       body: Column(
         children: [
           Expanded(
-            child: Card(
-              margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              elevation: 2,
-              child: LayoutBuilder(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: WedCard(
+                padding: EdgeInsets.zero,
+                child: LayoutBuilder(
                 builder: (context, constraints) {
                   // Lower bound only guards against a degenerate (non-positive)
                   // height on extremely short viewports — it must never force a
@@ -132,6 +132,7 @@ class _AvailabilityCalendarScreenState
                     ),
                   );
                 },
+                ),
               ),
             ),
           ),

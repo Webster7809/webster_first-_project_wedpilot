@@ -7,6 +7,7 @@ import '../utils/json_utils.dart';
 import '../../models/vendor_profile.dart';
 import '../../models/vendor_feedback.dart';
 import '../../models/messaging.dart' show Inquiry;
+import 'authenticated_dio.dart';
 
 /// Resolves a stored relative upload path (e.g. '/uploads/vendors/x.jpg') to
 /// an absolute URL. Already-absolute URLs are returned unchanged.
@@ -29,12 +30,7 @@ class VendorApiService {
   VendorApiService._();
   static final VendorApiService instance = VendorApiService._();
 
-  final Dio _dio = Dio(BaseOptions(
-    baseUrl: ApiConfig.baseUrl,
-    connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 60),
-    headers: {'Content-Type': 'application/json'},
-  ));
+  final Dio _dio = buildApiDio();
 
   Options _auth(String accessToken) =>
       Options(headers: {'Authorization': 'Bearer $accessToken'});
@@ -422,6 +418,21 @@ class VendorApiService {
       return (data['inquiries'] as List<dynamic>? ?? [])
           .map((i) => Inquiry.fromJson(i as Map<String, dynamic>))
           .toList();
+    } on DioException catch (e) {
+      throw VendorApiException(_extractError(e));
+    }
+  }
+
+  /// Couple-initiated cancel — allowed on a still-pending inquiry or an
+  /// already-confirmed booking alike; the vendor is notified either way.
+  Future<Inquiry> cancelInquiry(String accessToken, String inquiryId) async {
+    try {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/api/vendors/inquiries/$inquiryId/cancel',
+        options: _auth(accessToken),
+      );
+      final data = response.data ?? {};
+      return Inquiry.fromJson(data['inquiry'] as Map<String, dynamic>);
     } on DioException catch (e) {
       throw VendorApiException(_extractError(e));
     }

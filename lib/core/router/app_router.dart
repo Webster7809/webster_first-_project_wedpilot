@@ -30,6 +30,7 @@ import '../../features/vendor/screens/subscription_screen.dart';
 import '../../features/vendor/screens/vendor_messages_screen.dart';
 import '../../features/vendor/screens/vendor_feedback_screen.dart';
 import '../../features/admin/screens/admin_dashboard_screen.dart';
+import '../../features/admin/screens/admin_vendor_capacity_screen.dart';
 import '../../features/admin/screens/admin_categories_screen.dart';
 import '../../features/admin/screens/admin_invitation_templates_screen.dart';
 import '../../features/admin/screens/user_management_screen.dart';
@@ -268,6 +269,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.adminInvitationTemplates,
         builder: (_, _) => const AdminInvitationTemplatesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminVendorCapacity,
+        builder: (_, _) => const AdminVendorCapacityScreen(),
       ),
 
       // ══════════════════════════════════════════════════════════════════════

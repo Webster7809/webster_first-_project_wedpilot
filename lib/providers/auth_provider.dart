@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/services/auth_service.dart';
 import '../core/services/couple_profile_service.dart';
+import '../core/services/google_auth_helper.dart';
+import '../core/services/session_manager.dart';
 import '../core/services/token_service.dart';
 import '../core/services/vendor_api_service.dart';
 import '../models/user.dart';
@@ -48,7 +52,21 @@ class AuthState {
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._authService) : super(const AuthState());
+  AuthNotifier(this._authService) : super(const AuthState()) {
+    // SessionManager sits below Riverpod (every *ApiService is a plain
+    // singleton, refreshed transparently by authenticated_dio.dart's 401
+    // interceptor), so it reaches back into app state through these two
+    // callbacks rather than AuthNotifier polling it.
+    sessionManager.onTokenRefreshed = (token) => _accessToken = token;
+    sessionManager.onSessionExpired = () {
+      // The refresh token itself was rejected — e.g. its 7-day life ran out,
+      // or an admin suspended the account mid-session. There's no session
+      // left to preserve, so this drops straight to a logged-out state;
+      // logout() ends up re-clearing tokens SessionManager already cleared,
+      // which is harmless.
+      unawaited(logout());
+    };
+  }
 
   final AuthService _authService;
 
@@ -79,6 +97,33 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final result = await _authService.login(email: email, password: password);
       await _applyAuthResult(result);
+    } on AuthApiException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: 'Could not reach the server. Please try again.');
+    }
+  }
+
+  /// Signs in (or, for a brand-new email, registers) via Google. [role] only
+  /// decides the account's role the first time this email is seen — an
+  /// existing account keeps whatever role it already has server-side.
+  /// A cancelled account picker is treated as a silent no-op, not an error.
+  Future<void> loginWithGoogle(UserRole role) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final idToken = await GoogleAuthHelper.instance.signIn();
+      final result = await _authService.googleAuth(idToken: idToken, role: role);
+      // No forceOnboarding: a brand-new account already resolves
+      // needsOnboarding=true on its own (no profile row exists yet), while a
+      // returning account correctly skips back onboarding it already did.
+      await _applyAuthResult(result);
+    } on GoogleAuthCancelledException {
+      state = state.copyWith(isLoading: false);
+    } on GoogleAuthNotConfiguredException {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Google sign-in isn’t set up yet on this build.',
+      );
     } on AuthApiException catch (e) {
       state = state.copyWith(isLoading: false, error: e.message);
     } catch (_) {

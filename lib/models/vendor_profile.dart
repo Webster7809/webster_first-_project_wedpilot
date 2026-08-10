@@ -214,6 +214,25 @@ class VendorProfile {
     return stated.isEmpty ? null : stated.reduce((a, b) => a > b ? a : b);
   }
 
+  /// The *tightest* stated capacity that can actually seat [guestCount] — the
+  /// smallest listing at or above the headcount. This, not [maxGuestCapacity],
+  /// is what "how well does this vendor fit this wedding" means: a vendor with
+  /// both a 100- and a 500-guest package is an exact fit for 100 guests, not
+  /// 400 seats oversized.
+  ///
+  /// Null when no listing states a capacity that covers [guestCount] — either
+  /// because none state one at all, or because the only listings that let this
+  /// vendor past [canServeGuestCount] were the capacity-less (neutral) ones.
+  /// Callers must treat that null as "unproven fit", never as a capacity below
+  /// the headcount.
+  int? fittingGuestCapacity(int guestCount) {
+    final fitting = services
+        .map((s) => s.maxGuests)
+        .whereType<int>()
+        .where((c) => c >= guestCount);
+    return fitting.isEmpty ? null : fitting.reduce((a, b) => a < b ? a : b);
+  }
+
   factory VendorProfile.fromJson(Map<String, dynamic> json) => VendorProfile(
         id: requireString(json, 'vendor_id'),
         userId: requireString(json, 'user_id'),
@@ -487,12 +506,20 @@ class ReasoningStep {
 
   const ReasoningStep({required this.label, required this.text});
 
+  static const guestCapacity = 'Guest capacity';
   static const budgetFit = 'Budget fit';
   static const reputation = 'Reputation';
   static const availability = 'Availability';
   static const styleMatch = 'Style match';
   static const verdict = 'Verdict';
-  static const knownLabels = [budgetFit, reputation, availability, styleMatch, verdict];
+  static const knownLabels = [
+    guestCapacity,
+    budgetFit,
+    reputation,
+    availability,
+    styleMatch,
+    verdict,
+  ];
 
   factory ReasoningStep.fromJson(Map<String, dynamic> json) => ReasoningStep(
         label: json['label'] as String? ?? '',

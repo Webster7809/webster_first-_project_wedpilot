@@ -43,11 +43,11 @@ abstract final class AppShadows {
       ];
 
   // Card shadow — standard white card over cream background
-  static List<BoxShadow> get card => [
+  static List<BoxShadow> get card => const [
         BoxShadow(
-          color: AppColors.forestGreen.withAlpha(14),
-          blurRadius: 10,
-          offset: const Offset(0, 3),
+          color: AppColors.cardShadow,
+          blurRadius: 20,
+          offset: Offset(0, 4),
         ),
       ];
 

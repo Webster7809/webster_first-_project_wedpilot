@@ -16,7 +16,7 @@ const Inquiry = sequelize.define('Inquiry', {
     allowNull: false,
   },
   status: {
-    type: DataTypes.ENUM('newInquiry', 'viewed', 'responded', 'quoted', 'booked', 'declined'),
+    type: DataTypes.ENUM('newInquiry', 'viewed', 'responded', 'quoted', 'booked', 'declined', 'cancelled'),
     allowNull: false,
     defaultValue: 'newInquiry',
   },

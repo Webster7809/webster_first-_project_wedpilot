@@ -7,6 +7,8 @@ import '../../../models/user.dart';
 import '../../../providers/messaging_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_avatar.dart';
+import '../../../widgets/wed_text_field.dart';
+import '../../../widgets/wed_skeleton.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String convoId;
@@ -88,7 +90,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         children: [
           Expanded(
             child: messagesAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const WedListSkeleton(rows: 6, hasLeading: false),
               error: (e, _) => Center(
                 child: Text('Could not load messages.',
                     style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
@@ -124,22 +126,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             onPressed: () {},
                           ),
                           Expanded(
-                            child: TextField(
+                            child: WedTextField(
                               controller: _msgCtrl,
-                              decoration: InputDecoration(
-                                hintText: 'Type a message...',
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                filled: true,
-                                fillColor: AppColors.surface,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: const BorderSide(color: AppColors.divider),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: const BorderSide(color: AppColors.divider),
-                                ),
-                              ),
+                              hint: 'Type a message...',
+                              borderRadius: 24,
                               maxLines: null,
                               textInputAction: TextInputAction.newline,
                             ),
@@ -154,7 +144,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               child: const SizedBox(
                                 width: 44,
                                 height: 44,
-                                child: Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                                child: Icon(Icons.send, color: AppColors.textOnSecondary, size: 20),
                               ),
                             ),
                           ),

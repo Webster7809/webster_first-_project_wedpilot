@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -22,7 +24,7 @@ class BudgetShareScreen extends ConsumerWidget {
           backgroundColor: AppColors.forestGreen,
           leading: IconButton(
             tooltip: 'Back',
-            icon: const Icon(Icons.chevron_left_rounded,
+            icon: const Icon(Icons.chevron_left,
                 color: Colors.white, size: 28),
             onPressed: () => context.pop(),
           ),
@@ -60,38 +62,67 @@ class BudgetShareScreen extends ConsumerWidget {
             elevation: 0,
             leading: IconButton(
               tooltip: 'Back',
-              icon: const Icon(Icons.chevron_left_rounded,
+              icon: const Icon(Icons.chevron_left,
                   color: Colors.white, size: 28),
               onPressed: () => context.pop(),
             ),
             expandedHeight: 130,
             flexibleSpace: FlexibleSpaceBar(
-              background: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 44, 20, 12),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'FINAL BUDGET SUMMARY',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.amber,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Share & export your plan',
-                        style: AppTextStyles.displaySmall.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CachedNetworkImage(
+                    imageUrl: VendorCategoryImages.galleryFor('Cake & sweets')[0],
+                    fit: BoxFit.cover,
+                    fadeInDuration: const Duration(milliseconds: 300),
+                    placeholder: (_, _) =>
+                        Container(color: AppColors.forestGreen),
+                    errorWidget: (_, _, _) =>
+                        Container(color: AppColors.forestGreen),
                   ),
-                ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          AppColors.forestGreen.withAlpha(160),
+                          AppColors.forestGreen.withAlpha(215),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 44, 20, 12),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'FINAL BUDGET SUMMARY',
+                            style: AppTextStyles.caption.copyWith(
+                              // Gold, not forest: this eyebrow sits on the
+                              // forest-tinted photo scrim (4.99:1). Forest on
+                              // forest is invisible.
+                              color: AppColors.gold,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Share & export your plan',
+                            style: AppTextStyles.displaySmall.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -111,8 +142,8 @@ class BudgetShareScreen extends ConsumerWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.auto_awesome_rounded,
-                          color: AppColors.amber, size: 22),
+                      const Icon(Icons.auto_awesome,
+                          color: AppColors.goldDeep, size: 22),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -199,7 +230,7 @@ class BudgetShareScreen extends ConsumerWidget {
                           Text(
                             fmtPercent(budget.spendingPercentage * 100),
                             style: AppTextStyles.headlineMedium.copyWith(
-                              color: AppColors.amber,
+                              color: AppColors.textPrimary,
                               fontWeight: FontWeight.bold,
                             ),
                           ),

@@ -1,7 +1,11 @@
+import 'dart:async';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -9,12 +13,15 @@ import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/booking_provider.dart';
 import '../../../providers/budget_provider.dart';
 import '../../../providers/invitation_provider.dart';
 import '../../../providers/notification_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../widgets/hamburger_menu_button.dart';
+import '../../../widgets/rate_vendor_prompt.dart';
+import '../../../widgets/section_header.dart';
 import '../../../widgets/vendor_hero_image.dart';
 
 class CoupleDashboardScreen extends ConsumerWidget {
@@ -46,6 +53,20 @@ class CoupleDashboardScreen extends ConsumerWidget {
       );
     }
 
+    // Pops up automatically once a booking is marked complete — once per
+    // app session, so it doesn't nag on every dashboard rebuild — instead of
+    // making the couple go find a "rate this vendor" button themselves.
+    ref.listen<AsyncValue<List<VendorProfile>>>(rateableVendorsProvider,
+        (previous, next) {
+      if (ref.read(ratePromptShownProvider)) return;
+      final vendors = next.valueOrNull;
+      if (vendors == null || vendors.isEmpty) return;
+      ref.read(ratePromptShownProvider.notifier).state = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) showRateVendorPrompt(context, ref, vendors.first);
+      });
+    });
+
     final shortlisted = ref.watch(wishlistedVendorsProvider).valueOrNull ?? [];
 
     return Scaffold(
@@ -70,7 +91,8 @@ class CoupleDashboardScreen extends ConsumerWidget {
                 Text(
                   'Welcome back',
                   style: AppTextStyles.caption.copyWith(
-                    color: AppColors.amber,
+                    // Gold on the forest header — 4.99:1.
+                    color: AppColors.gold,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.6,
                   ),
@@ -123,7 +145,7 @@ class CoupleDashboardScreen extends ConsumerWidget {
               IconButton(
                 tooltip: 'Log out',
                 icon: const Icon(
-                  Icons.logout_rounded,
+                  Icons.logout,
                   color: Colors.white,
                   size: 26,
                 ),
@@ -159,10 +181,10 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       const SizedBox(height: 24),
 
                       // ── Shortlist ─────────────────────────────────────────────
-                      _SectionRow(
+                      WedSectionHeader(
                         title: 'Your shortlist',
                         actionLabel: 'See all',
-                        onAction: () => context.push('/couple/wishlist'),
+                        onSeeAll: () => context.push('/couple/wishlist'),
                       ),
                       const SizedBox(height: 12),
                       _ShortlistScroll(
@@ -173,10 +195,10 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       const SizedBox(height: 28),
 
                       // ── Planning Checklist ────────────────────────────────────
-                      _SectionRow(
+                      WedSectionHeader(
                         title: 'Planning checklist',
                         actionLabel: 'View all',
-                        onAction: () => context.push('/couple/checklist'),
+                        onSeeAll: () => context.push('/couple/checklist'),
                       ),
                       const SizedBox(height: 12),
                       _ChecklistPreview(
@@ -314,64 +336,42 @@ class _StatCardsGrid extends ConsumerWidget {
   }
 }
 
-// ── Section row header ─────────────────────────────────────────────────────────
-
-class _SectionRow extends StatelessWidget {
-  final String title;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  const _SectionRow({required this.title, this.actionLabel, this.onAction});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: AppTextStyles.headlineSmall.copyWith(
-              color: AppColors.forestGreen,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        if (actionLabel != null) ...[
-          const SizedBox(width: 8),
-          Flexible(
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(6),
-                onTap: onAction,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    actionLabel!,
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: AppColors.amber,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.end,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
 // ── Wedding Countdown Card ─────────────────────────────────────────────────────
 
-class _CountdownCard extends StatelessWidget {
+class _CountdownCard extends StatefulWidget {
   final dynamic couple;
   final VoidCallback onSetDate;
   const _CountdownCard({this.couple, required this.onSetDate});
+
+  @override
+  State<_CountdownCard> createState() => _CountdownCardState();
+}
+
+class _CountdownCardState extends State<_CountdownCard> {
+  static final _heroImages = VendorCategoryImages.heroRotation();
+
+  Timer? _timer;
+  int _imageIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final reduceMotion = MediaQuery.of(context).disableAnimations;
+      if (reduceMotion || _heroImages.length <= 1) return;
+      _timer = Timer.periodic(const Duration(seconds: 6), (_) {
+        if (!mounted) return;
+        setState(() => _imageIndex = (_imageIndex + 1) % _heroImages.length);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   String _formatDate(DateTime d) {
     const months = [
@@ -394,6 +394,7 @@ class _CountdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final couple = widget.couple;
     final hasDate = couple?.hasWeddingDate == true;
 
     if (!hasDate) {
@@ -417,7 +418,7 @@ class _CountdownCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: onSetDate,
+        onTap: widget.onSetDate,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Row(
@@ -431,7 +432,7 @@ class _CountdownCard extends StatelessWidget {
                 ),
                 child: const Icon(
                   Icons.calendar_month_outlined,
-                  color: AppColors.amber,
+                  color: AppColors.goldDeep,
                   size: 20,
                 ),
               ),
@@ -456,7 +457,7 @@ class _CountdownCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: AppColors.amber),
+              const Icon(Icons.chevron_right, color: AppColors.goldDeep),
             ],
           ),
         ),
@@ -469,9 +470,8 @@ class _CountdownCard extends StatelessWidget {
     final dateLabel = _formatDate(couple!.weddingDate as DateTime);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      height: 152,
       decoration: BoxDecoration(
-        color: AppColors.forestGreen,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -481,56 +481,98 @@ class _CountdownCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'YOUR WEDDING DAY',
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.amber,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  dateLabel,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 900),
+              child: CachedNetworkImage(
+                key: ValueKey(_imageIndex),
+                imageUrl: _heroImages[_imageIndex],
+                fit: BoxFit.cover,
+                fadeInDuration: const Duration(milliseconds: 300),
+                placeholder: (_, _) =>
+                    Container(color: AppColors.forestGreen),
+                errorWidget: (_, _, _) =>
+                    Container(color: AppColors.forestGreen),
+              ),
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                days,
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.amber,
-                  height: 1.0,
+            // Scrim so white/gold text stays legible over any photo — a flat
+            // AppColors.primary fill used to sit behind this card, and the
+            // eyebrow/day-count text was *also* AppColors.primary, making
+            // both invisible; gold + white against a darkened photo fixes it.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withAlpha(80),
+                    Colors.black.withAlpha(150),
+                  ],
                 ),
               ),
-              Text(
-                'DAYS LEFT',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.amber,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
-                  fontSize: 9,
-                ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'YOUR WEDDING DAY',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.gold,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          dateLabel,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        days,
+                        style: const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          height: 1.0,
+                        ),
+                      ),
+                      Text(
+                        'DAYS LEFT',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.gold,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.0,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -609,7 +651,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                     child: Text(
                       'Details',
                       style: AppTextStyles.labelMedium.copyWith(
-                        color: AppColors.amber,
+                        color: AppColors.primary,
                       ),
                     ),
                   ),
@@ -680,7 +722,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                           _catColors[c.categoryName] ?? AppColors.forestGreen,
                     ),
                   ),
-              const _LegendDot(label: 'Unallocated', color: Color(0xFFE0DDD6)),
+              const _LegendDot(label: 'Unallocated', color: AppColors.segmentedBarTrack),
             ],
           ),
         ],
@@ -782,7 +824,7 @@ class _SetupBudgetPrompt extends StatelessWidget {
                   ),
                   child: const Icon(
                     Icons.account_balance_wallet_outlined,
-                    color: AppColors.amber,
+                    color: AppColors.goldDeep,
                     size: 20,
                   ),
                 ),
@@ -807,7 +849,7 @@ class _SetupBudgetPrompt extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: AppColors.amber),
+                const Icon(Icons.chevron_right, color: AppColors.goldDeep),
               ],
             ),
           ),
@@ -857,7 +899,7 @@ class _RsvpCard extends StatelessWidget {
                     ),
                     child: const Icon(
                       Icons.people_alt_outlined,
-                      color: AppColors.amber,
+                      color: AppColors.goldDeep,
                       size: 20,
                     ),
                   ),
@@ -998,8 +1040,8 @@ class _ShortlistScroll extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(
-                  Icons.favorite_border,
-                  color: AppColors.amber,
+                  Icons.favorite_outlined,
+                  color: AppColors.goldDeep,
                   size: 28,
                 ),
                 const SizedBox(height: 8),
@@ -1049,6 +1091,7 @@ class _ShortlistCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rating = vendor.rating as double?;
+    final colors = Theme.of(context).colorScheme;
     return Container(
       width: 150,
       decoration: BoxDecoration(
@@ -1056,7 +1099,7 @@ class _ShortlistCard extends StatelessWidget {
         boxShadow: AppShadows.sm,
       ),
       child: Material(
-        color: Theme.of(context).colorScheme.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -1086,7 +1129,7 @@ class _ShortlistCard extends StatelessWidget {
                         vendor.businessName as String,
                         style: AppTextStyles.caption.copyWith(
                           fontWeight: FontWeight.w700,
-                          color: AppColors.forestGreen,
+                          color: colors.onSurface,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1098,7 +1141,7 @@ class _ShortlistCard extends StatelessWidget {
                             child: Text(
                               vendor.category as String,
                               style: AppTextStyles.caption.copyWith(
-                                color: AppColors.textSecondary,
+                                color: colors.onSurfaceVariant,
                                 fontSize: 10,
                               ),
                               maxLines: 1,
@@ -1107,9 +1150,9 @@ class _ShortlistCard extends StatelessWidget {
                           ),
                           if (rating != null) ...[
                             const Icon(
-                              Icons.star_rounded,
+                              Icons.star,
                               size: 12,
-                              color: AppColors.amber,
+                              color: AppColors.goldDeep,
                             ),
                             const SizedBox(width: 2),
                             Text(
@@ -1117,7 +1160,7 @@ class _ShortlistCard extends StatelessWidget {
                               style: AppTextStyles.caption.copyWith(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
+                                color: colors.onSurface,
                               ),
                             ),
                           ],
@@ -1166,8 +1209,8 @@ class _DiscoverMoreCard extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
-                  Icons.add_rounded,
-                  color: AppColors.amber,
+                  Icons.add,
+                  color: AppColors.goldDeep,
                   size: 22,
                 ),
               ),
@@ -1225,7 +1268,7 @@ class _ChecklistPreview extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.checklist_rounded,
+                          Icons.checklist,
                           color: AppColors.forestGreen,
                           size: 22,
                         ),

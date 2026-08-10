@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/router/app_routes.dart';
 import '../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
@@ -135,7 +136,7 @@ class AppDrawer extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
                 _DrawerItem(
-                  icon: Icons.home_rounded,
+                  icon: Icons.home,
                   label: 'Home',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -143,7 +144,7 @@ class AppDrawer extends ConsumerWidget {
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.mail_rounded,
+                  icon: Icons.mail,
                   label: 'Invitations',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -151,7 +152,7 @@ class AppDrawer extends ConsumerWidget {
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.account_balance_wallet_rounded,
+                  icon: Icons.account_balance_wallet,
                   label: 'Budget',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -159,15 +160,25 @@ class AppDrawer extends ConsumerWidget {
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.storefront_rounded,
+                  icon: Icons.storefront,
                   label: 'Vendors',
                   onTap: () {
                     Navigator.of(context).pop();
                     context.go('/couple/vendors');
                   },
                 ),
+                // push, not go: bookings is a full-screen route on top of the
+                // shell (see app_router.dart), not one of the shell's tabs.
                 _DrawerItem(
-                  icon: Icons.person_rounded,
+                  icon: Icons.event_available,
+                  label: 'My Bookings',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.push(AppRoutes.coupleBookings);
+                  },
+                ),
+                _DrawerItem(
+                  icon: Icons.person,
                   label: 'Profile',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -181,7 +192,7 @@ class AppDrawer extends ConsumerWidget {
                 ),
 
                 _DrawerItem(
-                  icon: Icons.settings_rounded,
+                  icon: Icons.settings,
                   label: 'Settings',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -189,7 +200,7 @@ class AppDrawer extends ConsumerWidget {
                   },
                 ),
                 _DrawerItem(
-                  icon: Icons.info_outline_rounded,
+                  icon: Icons.info_outlined,
                   label: 'About',
                   onTap: () {
                     Navigator.of(context).pop();
@@ -198,8 +209,8 @@ class AppDrawer extends ConsumerWidget {
                       applicationName: 'Wedpilot',
                       applicationVersion: '1.0.0',
                       applicationIcon: const Icon(
-                        Icons.favorite_rounded,
-                        color: AppColors.secondary,
+                        Icons.favorite,
+                        color: AppColors.goldDeep,
                         size: 36,
                       ),
                       applicationLegalese:
@@ -215,7 +226,7 @@ class AppDrawer extends ConsumerWidget {
                 ),
 
                 _DrawerItem(
-                  icon: Icons.logout_rounded,
+                  icon: Icons.logout,
                   label: 'Logout',
                   iconColor: AppColors.error,
                   labelColor: AppColors.error,

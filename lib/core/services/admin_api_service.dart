@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 
-import '../config/api_config.dart';
 import '../../models/admin_models.dart';
+import 'authenticated_dio.dart';
 
 // Flutter never touches the database directly.
 // All calls go through the Node/Express backend.
@@ -15,12 +15,7 @@ class AdminApiService {
   AdminApiService._();
   static final AdminApiService instance = AdminApiService._();
 
-  final Dio _dio = Dio(BaseOptions(
-    baseUrl: ApiConfig.baseUrl,
-    connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 60),
-    headers: {'Content-Type': 'application/json'},
-  ));
+  final Dio _dio = buildApiDio();
 
   Options _auth(String accessToken) =>
       Options(headers: {'Authorization': 'Bearer $accessToken'});
@@ -60,6 +55,25 @@ class AdminApiService {
       await _dio.patch(
         '/api/admin/vendors/$vendorId/verification',
         data: {'status': status, 'note': note},
+        options: _auth(accessToken),
+      );
+    } on DioException catch (e) {
+      throw AdminApiException(_extractError(e));
+    }
+  }
+
+  /// Corrects/fills in a vendor listing's stated guest capacity — the admin
+  /// counterpart to the vendor's own listing edit (see VendorApiService),
+  /// for legacy listings or vendor-reported mistakes.
+  Future<void> updateVendorServiceCapacity(
+    String accessToken,
+    String serviceId,
+    int maxGuests,
+  ) async {
+    try {
+      await _dio.patch(
+        '/api/admin/vendor-services/$serviceId/capacity',
+        data: {'max_guests': maxGuests},
         options: _auth(accessToken),
       );
     } on DioException catch (e) {

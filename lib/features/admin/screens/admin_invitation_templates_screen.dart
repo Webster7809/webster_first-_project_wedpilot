@@ -6,6 +6,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../models/invitation.dart';
 import '../../../providers/invitation_provider.dart';
 import '../../../widgets/wed_card.dart';
+import '../../../widgets/wed_skeleton.dart';
 
 class AdminInvitationTemplatesScreen extends ConsumerWidget {
   const AdminInvitationTemplatesScreen({super.key});
@@ -193,7 +194,7 @@ class AdminInvitationTemplatesScreen extends ConsumerWidget {
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const WedListSkeleton(rows: 5, asCards: true),
         error: (error, stack) => Center(
           child: Text(
             'Unable to load invitation templates.',

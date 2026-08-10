@@ -42,7 +42,7 @@ class SubscriptionScreen extends ConsumerWidget {
                 const Icon(
                   Icons.workspace_premium_outlined,
                   size: 28,
-                  color: AppColors.amber,
+                  color: AppColors.goldDeep,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -141,7 +141,7 @@ class SubscriptionScreen extends ConsumerWidget {
             ),
             child: Text(
               'View billing history',
-              style: AppTextStyles.labelMedium.copyWith(color: AppColors.amber),
+              style: AppTextStyles.labelMedium.copyWith(color: AppColors.primary),
             ),
           ),
         ],
@@ -200,9 +200,9 @@ class _PlanCard extends StatelessWidget {
                   children: [
                     if (isPremium)
                       const Icon(
-                        Icons.star_rounded,
+                        Icons.star,
                         size: 18,
-                        color: AppColors.amber,
+                        color: AppColors.goldDeep,
                       ),
                     if (isPremium) const SizedBox(width: 4),
                     Expanded(

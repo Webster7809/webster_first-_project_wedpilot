@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
@@ -34,9 +35,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     if (!mounted) return;
     final error = ref.read(authProvider).error;
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: AppColors.error),
-      );
+      showWedSnackBar(context, error, type: SnackType.error);
       return;
     }
     setState(() => _sent = true);
@@ -81,7 +80,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
-                                  Icons.lock_reset_rounded,
+                                  Icons.lock_reset,
                                   size: 32,
                                   color: AppColors.forestGreen,
                                 ),
@@ -126,7 +125,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                                   child: Text(
                                     'Back to Login',
                                     style: AppTextStyles.labelMedium
-                                        .copyWith(color: AppColors.secondary),
+                                        .copyWith(color: AppColors.primary),
                                   ),
                                 ),
                               ),

@@ -21,7 +21,6 @@ class GuestCapacityValidationService {
   }) validate({
     required Map<String, List<VendorProfile>> byCategory,
     required int? guestCount,
-    required String? location,
   }) {
     if (guestCount == null || guestCount <= 0) {
       return (covered: byCategory, excludedMessages: const {});
@@ -33,12 +32,9 @@ class GuestCapacityValidationService {
       final capable =
           entry.value.where((v) => v.canServeGuestCount(guestCount)).toList();
       if (capable.isEmpty) {
-        final where = (location != null && location.trim().isNotEmpty)
-            ? location.trim()
-            : 'your selected location';
-        excluded[entry.key] = 'No ${entry.key} vendors in $where state a serving '
-            'capacity of $guestCount guests or more. Reduce your guest count, or '
-            'ask a vendor directly about a custom package.';
+        excluded[entry.key] = 'No ${entry.key} vendors are currently available that can '
+            'serve your wedding size of $guestCount guests. Please reduce the number of '
+            'guests or choose another vendor.';
       } else {
         covered[entry.key] = capable;
       }

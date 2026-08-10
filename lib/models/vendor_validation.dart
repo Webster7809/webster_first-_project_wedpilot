@@ -1,4 +1,19 @@
+import 'messaging.dart';
 import 'vendor_profile.dart';
+
+/// A category the couple has already sent a booking request for, together with
+/// the vendor and the request itself.
+///
+/// The matcher skips these categories entirely rather than re-picking them: a
+/// vendor the couple already committed to must never be quietly swapped for
+/// someone else on the next run, and the already-requested vendor must never
+/// be proposed a second time.
+class LockedCategoryRequest {
+  final VendorProfile vendor;
+  final Inquiry inquiry;
+
+  const LockedCategoryRequest({required this.vendor, required this.inquiry});
+}
 
 /// Which validation stage produced a whole-plan rejection — lets the UI (or a
 /// future analytics hook) branch on failure kind without string-matching
@@ -54,6 +69,12 @@ class VendorValidationResult {
   /// [budgetExhaustedMessages], since money isn't the constraint here.
   final Map<String, String> guestCapacityExcludedMessages;
 
+  /// Categories the couple already has a live booking request in, keyed by
+  /// category. These never reach scoring at all — the request itself is the
+  /// answer for that category, so re-running the plan fills only what's still
+  /// undecided. Freed automatically once a request is declined or cancelled.
+  final Map<String, LockedCategoryRequest> lockedCategories;
+
   const VendorValidationResult({
     this.blockingFailure,
     this.byCategory = const {},
@@ -62,6 +83,7 @@ class VendorValidationResult {
     this.excludedCategoryMessages = const {},
     this.budgetExhaustedMessages = const {},
     this.guestCapacityExcludedMessages = const {},
+    this.lockedCategories = const {},
   });
 
   bool get isBlocked => blockingFailure != null;

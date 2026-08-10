@@ -319,7 +319,7 @@ class _PlatformAnalyticsScreenState extends ConsumerState<PlatformAnalyticsScree
                           if ((tiers['pro'] ?? 0) > 0)
                             PieChartSectionData(
                               value: (tiers['pro'] ?? 0).toDouble(),
-                              color: AppColors.secondary,
+                              color: AppColors.primary,
                               title: '${tiers['pro']}',
                               titleStyle: const TextStyle(
                                 color: Colors.white,
@@ -491,8 +491,8 @@ class _MetricCard extends StatelessWidget {
               if (!comingSoon)
                 Icon(
                   positive
-                      ? Icons.trending_up_rounded
-                      : Icons.trending_down_rounded,
+                      ? Icons.trending_up
+                      : Icons.trending_down,
                   size: 12,
                   color:
                       positive ? AppColors.success : AppColors.error,

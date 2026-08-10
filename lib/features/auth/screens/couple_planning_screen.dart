@@ -13,16 +13,21 @@ import '../../../core/utils/pdf_download.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/format_utils.dart';
+import '../../../core/utils/inquiry_status_display.dart';
+import '../../../models/messaging.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/budget_provider.dart';
 import '../../../providers/vendor_ai_provider.dart';
 import '../../../providers/vendor_provider.dart';
 import '../../../providers/vendor_wizard_provider.dart';
+import '../../../widgets/booking_action_button.dart'
+    show BookingActionButton, confirmAndCancelBooking;
 import '../../../widgets/loading_shimmer.dart';
 import '../../../widgets/wed_avatar.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
+import '../../../widgets/wed_text_field.dart';
 import '../../../widgets/wizard_widgets.dart';
 
 class CouplePlanningScreen extends ConsumerStatefulWidget {
@@ -334,7 +339,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
 
         // Wedding type
         WizardSectionLabel(
-          icon: Icons.favorite_border_rounded,
+          icon: Icons.favorite_outlined,
           label: 'Type of wedding',
         ),
         const SizedBox(height: 10),
@@ -347,7 +352,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
 
         // Guest count
         WizardSectionLabel(
-          icon: Icons.people_outline_rounded,
+          icon: Icons.people_outlined,
           label: 'Number of guests',
         ),
         const SizedBox(height: 10),
@@ -418,7 +423,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           ),
         ),
         const SizedBox(height: 32),
-        WizardContinueButton(onPressed: _next, label: 'Continue'),
+        WedButton(onPressed: _next, label: 'Continue'),
       ],
     );
   }
@@ -472,7 +477,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
             child: Row(
               children: [
                 Icon(
-                  Icons.calendar_month_rounded,
+                  Icons.calendar_month,
                   color: _weddingDate != null
                       ? AppColors.forestGreen
                       : AppColors.textHint,
@@ -499,7 +504,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           ),
         ),
         const SizedBox(height: 32),
-        WizardContinueButton(onPressed: _next, label: 'Continue'),
+        WedButton(onPressed: _next, label: 'Continue'),
       ],
     );
   }
@@ -586,7 +591,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           }).toList(),
         ),
         const SizedBox(height: 32),
-        WizardContinueButton(
+        WedButton(
           onPressed: _createPlan,
           label: 'Create our wedding plan',
         ),
@@ -605,6 +610,10 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         validationResult?.budgetExhaustedMessages ?? const <String, String>{};
     final guestCapacityExcludedMessages =
         validationResult?.guestCapacityExcludedMessages ?? const <String, String>{};
+    // Categories already committed to a vendor via a live booking request.
+    // These are rendered from the request itself and never re-matched.
+    final lockedCategories =
+        validationResult?.lockedCategories ?? const <String, LockedCategoryRequest>{};
     final pdfAsync = ref.watch(weddingPlanPdfBytesProvider);
     final categories = _activeCategories();
     final budgetClass = ref.watch(budgetClassProvider);
@@ -617,9 +626,17 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     // card — never the raw priceMin, which can be a completely different,
     // unrelated number once a vendor has a class-specific package price on file.
     final totalBudgetAmount = _parsedBudget();
+    // Requested vendors count as spent too — that money is committed even
+    // though the AI never picked them this run. Leaving them out would show a
+    // "Remaining" figure the couple can't actually spend.
+    final lockedSpend = lockedCategories.values
+        .map((l) => l.vendor.priceForClass(budgetClass))
+        .where((p) => p > 0)
+        .fold<double>(0, (sum, p) => sum + p);
     final usedAmount = (aiAsync.valueOrNull ?? const <VendorMatch>[])
-        .where((m) => m.rankInCategory == 1 && m.vendor.priceForClass(budgetClass) > 0)
-        .fold<double>(0, (sum, m) => sum + m.vendor.priceForClass(budgetClass));
+            .where((m) => m.rankInCategory == 1 && m.vendor.priceForClass(budgetClass) > 0)
+            .fold<double>(0, (sum, m) => sum + m.vendor.priceForClass(budgetClass)) +
+        lockedSpend;
     final hasRealUsage =
         totalBudgetAmount != null && totalBudgetAmount > 0 && usedAmount > 0;
     final remainingAmount = hasRealUsage ? totalBudgetAmount - usedAmount : null;
@@ -641,43 +658,8 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Wedding details recap ───────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.divider),
-          ),
-          child: Column(
-            children: [
-              _SummaryRow(label: 'Budget', value: budget),
-              if (hasRealUsage) ...[
-                _SummaryRow(label: 'Budget used', value: fmtCurrency(usedAmount)),
-                _SummaryRow(
-                  label: 'Remaining',
-                  value: remainingAmount! > 0
-                      ? fmtCurrency(remainingAmount)
-                      : remainingAmount < 0
-                          ? 'Over by ${fmtCurrency(remainingAmount.abs())}'
-                          : 'All budget used',
-                ),
-              ],
-              _SummaryRow(label: 'Wedding type', value: _weddingType),
-              _SummaryRow(label: 'Wedding class', value: _weddingClass),
-              _SummaryRow(label: 'Guests', value: guests),
-              _SummaryRow(label: 'Location', value: location),
-              _SummaryRow(label: 'Date', value: dateStr),
-              _VendorsNeededRow(
-                categories: categories,
-                onCategoryTap: _scrollToCategory,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
         WizardSectionLabel(
-          icon: Icons.auto_awesome_rounded,
+          icon: Icons.auto_awesome,
           label: 'AI-matched vendors',
         ),
         const SizedBox(height: 4),
@@ -742,7 +724,12 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                     label: category,
                   ),
                   const SizedBox(height: 10),
-                  if ((rankedByCategory[category]?.isNotEmpty ?? false))
+                  // A category the couple already committed to is answered by
+                  // that request — it deliberately never reaches the matcher,
+                  // so it's rendered before every other branch here.
+                  if (lockedCategories[category] != null)
+                    _RequestedVendorCard(locked: lockedCategories[category]!)
+                  else if ((rankedByCategory[category]?.isNotEmpty ?? false))
                     for (final match in rankedByCategory[category]!.take(3)) ...[
                       _PlanVendorCard(
                         match: match,
@@ -761,7 +748,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Icon(
-                            Icons.money_off_rounded,
+                            Icons.money_off,
                             size: 16,
                             color: AppColors.error,
                           ),
@@ -788,7 +775,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Icon(
-                            Icons.people_outline_rounded,
+                            Icons.people_outlined,
                             size: 16,
                             color: AppColors.warning,
                           ),
@@ -815,6 +802,46 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                   const SizedBox(height: 18),
                 ],
                 const SizedBox(height: 20),
+                // ── Wedding details recap ─────────────────────────────────────
+                // Sits below the matched vendors, not above — there's nothing
+                // to recap yet until the AI has actually aligned vendors, so
+                // it's skipped entirely when matching came back empty.
+                if (matches.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: Column(
+                      children: [
+                        _SummaryRow(label: 'Budget', value: budget),
+                        if (hasRealUsage) ...[
+                          _SummaryRow(
+                              label: 'Budget used',
+                              value: fmtCurrency(usedAmount)),
+                          _SummaryRow(
+                            label: 'Remaining',
+                            value: remainingAmount! > 0
+                                ? fmtCurrency(remainingAmount)
+                                : remainingAmount < 0
+                                    ? 'Over by ${fmtCurrency(remainingAmount.abs())}'
+                                    : 'All budget used',
+                          ),
+                        ],
+                        _SummaryRow(label: 'Wedding type', value: _weddingType),
+                        _SummaryRow(label: 'Wedding class', value: _weddingClass),
+                        _SummaryRow(label: 'Guests', value: guests),
+                        _SummaryRow(label: 'Location', value: location),
+                        _SummaryRow(label: 'Date', value: dateStr),
+                        _VendorsNeededRow(
+                          categories: categories,
+                          onCategoryTap: _scrollToCategory,
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             );
           },
@@ -834,7 +861,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           ),
           data: (bytes) => WedButton(
             label: 'Download PDF',
-            icon: Icons.download_rounded,
+            icon: const Icon(Icons.download),
             variant: WedButtonVariant.secondary,
             onPressed: () async {
               if (bytes.isEmpty) return;
@@ -850,7 +877,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        WizardContinueButton(
+        WedButton(
           onPressed: () => context.go('/couple/dashboard'),
           label: 'Go to Dashboard',
         ),
@@ -887,23 +914,23 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
 IconData categoryIcon(String category) {
   switch (category) {
     case 'Venue':
-      return Icons.location_city_rounded;
+      return Icons.location_city;
     case 'Catering':
-      return Icons.restaurant_rounded;
+      return Icons.restaurant;
     case 'Photography':
-      return Icons.camera_alt_rounded;
+      return Icons.camera_alt;
     case 'Decor & flowers':
-      return Icons.local_florist_rounded;
+      return Icons.local_florist;
     case 'DJ & MC':
-      return Icons.music_note_rounded;
+      return Icons.music_note;
     case 'Transport':
-      return Icons.directions_car_rounded;
+      return Icons.directions_car;
     case 'Wedding attire':
-      return Icons.checkroom_rounded;
+      return Icons.checkroom;
     case 'Cake & sweets':
-      return Icons.cake_rounded;
+      return Icons.cake;
     default:
-      return Icons.storefront_rounded;
+      return Icons.storefront;
   }
 }
 
@@ -946,7 +973,7 @@ class _AiRankingCardState extends State<_AiRankingCard>
               RotationTransition(
                 turns: _controller,
                 child: const Icon(
-                  Icons.auto_awesome_rounded,
+                  Icons.auto_awesome,
                   color: AppColors.forestGreen,
                   size: 22,
                 ),
@@ -997,7 +1024,7 @@ class _NoBudgetCard extends StatelessWidget {
             children: [
               const Icon(
                 Icons.savings_outlined,
-                color: AppColors.amber,
+                color: AppColors.goldDeep,
                 size: 22,
               ),
               const SizedBox(width: 12),
@@ -1060,8 +1087,8 @@ class _VendorValidationFailureCard extends StatelessWidget {
           Row(
             children: [
               const Icon(
-                Icons.warning_amber_rounded,
-                color: AppColors.amber,
+                Icons.warning_amber,
+                color: AppColors.goldDeep,
                 size: 22,
               ),
               const SizedBox(width: 12),
@@ -1097,6 +1124,95 @@ class _VendorValidationFailureCard extends StatelessWidget {
 }
 
 // ── Plan vendor card — the AI's top pick, with contact details ─────────────
+
+/// A category the couple already sent a booking request for.
+///
+/// Shown in place of an AI pick, because the request *is* the decision for
+/// that category — re-running the plan must not re-propose the same vendor or
+/// quietly swap them for someone else. Cancelling here hands the category back
+/// to the matcher on the next run.
+class _RequestedVendorCard extends ConsumerWidget {
+  final LockedCategoryRequest locked;
+
+  const _RequestedVendorCard({required this.locked});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final vendor = locked.vendor;
+    final display = InquiryStatusDisplay.of(locked.inquiry.status);
+    final price = vendor.priceForClass(ref.watch(budgetClassProvider));
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: display.color.withAlpha(90)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              WedAvatar(imageUrl: vendor.logoUrl, name: vendor.businessName, radius: 16),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  vendor.businessName,
+                  style: AppTextStyles.titleMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              _Badge(label: display.label, color: display.color),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.lock_outlined, size: 14, color: AppColors.goldDeep),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  "You've already requested this vendor, so WedPilot AI left "
+                  '${vendor.category} as you decided it.',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (price > 0) ...[
+            const SizedBox(height: 8),
+            _ContactChip(
+              icon: Icons.sell_outlined,
+              text: 'Package price ${fmtCurrency(price)}',
+            ),
+          ],
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () =>
+                  confirmAndCancelBooking(context, ref, locked.inquiry),
+              child: Text(
+                locked.inquiry.status == InquiryStatus.booked
+                    ? 'Cancel booking'
+                    : 'Cancel request',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _PlanVendorCard extends StatelessWidget {
   final VendorMatch match;
@@ -1194,6 +1310,11 @@ class _PlanVendorCard extends StatelessWidget {
                 ),
               if (priceText != null)
                 _ContactChip(icon: Icons.sell_outlined, text: priceText),
+              if (v.maxGuestCapacity != null)
+                _ContactChip(
+                  icon: Icons.groups_outlined,
+                  text: 'Can serve up to: ${v.maxGuestCapacity} guests',
+                ),
             ],
           ),
           if (packageInclusions.isNotEmpty) ...[
@@ -1219,8 +1340,8 @@ class _PlanVendorCard extends StatelessWidget {
                 children: [
                   Icon(
                     match.isBudgetUnrealistic
-                        ? Icons.error_outline_rounded
-                        : Icons.info_outline_rounded,
+                        ? Icons.error_outlined
+                        : Icons.info_outlined,
                     size: 14,
                     color: match.isBudgetUnrealistic ? AppColors.error : AppColors.warning,
                   ),
@@ -1251,7 +1372,7 @@ class _PlanVendorCard extends StatelessWidget {
                         Icon(
                           _reasoningStepIcon(step.label),
                           size: 13,
-                          color: AppColors.amber,
+                          color: AppColors.goldDeep,
                         ),
                         const SizedBox(width: 6),
                         Expanded(
@@ -1283,9 +1404,9 @@ class _PlanVendorCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(
-                  Icons.auto_awesome_rounded,
+                  Icons.auto_awesome,
                   size: 14,
-                  color: AppColors.amber,
+                  color: AppColors.goldDeep,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -1299,6 +1420,8 @@ class _PlanVendorCard extends StatelessWidget {
               ],
             ),
           ],
+          const SizedBox(height: 12),
+          BookingActionButton(vendor: v),
         ],
       ),
     );
@@ -1338,7 +1461,7 @@ class _ClassPackageSection extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: isLuxury
             ? const LinearGradient(
-                colors: [AppColors.forestGreen, AppColors.coupleMagenta],
+                colors: [AppColors.forestGreen, AppColors.gradientAccentGreen],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               )
@@ -1356,7 +1479,7 @@ class _ClassPackageSection extends StatelessWidget {
           Row(
             children: [
               Icon(
-                isLuxury ? Icons.workspace_premium_rounded : Icons.card_giftcard_rounded,
+                isLuxury ? Icons.workspace_premium : Icons.card_giftcard,
                 size: 15,
                 color: isLuxury ? AppColors.amber : AppColors.budgetGreen,
               ),
@@ -1403,7 +1526,7 @@ class _ClassPackageSection extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    isLuxury ? Icons.diamond_outlined : Icons.check_rounded,
+                    isLuxury ? Icons.diamond_outlined : Icons.check,
                     size: 13,
                     color: isLuxury ? AppColors.amber : AppColors.budgetGreen,
                   ),
@@ -1460,12 +1583,13 @@ List<ReasoningStep> _visibleReasoningSteps(VendorMatch match) => match
     .toList();
 
 IconData _reasoningStepIcon(String label) => switch (label) {
+  ReasoningStep.guestCapacity => Icons.groups_outlined,
   ReasoningStep.budgetFit => Icons.payments_outlined,
-  ReasoningStep.reputation => Icons.star_rate_rounded,
+  ReasoningStep.reputation => Icons.star_rate,
   ReasoningStep.availability => Icons.event_available_outlined,
   ReasoningStep.styleMatch => Icons.palette_outlined,
-  ReasoningStep.verdict => Icons.auto_awesome_rounded,
-  _ => Icons.auto_awesome_rounded,
+  ReasoningStep.verdict => Icons.auto_awesome,
+  _ => Icons.auto_awesome,
 };
 
 class _Badge extends StatelessWidget {
@@ -1536,50 +1660,14 @@ class _BudgetField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: const BoxDecoration(
-              border: Border(right: BorderSide(color: AppColors.divider)),
-            ),
-            child: Text(
-              'ZMW',
-              style: AppTextStyles.bodyMedium.copyWith(
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[\d,]')),
-              ],
-              style: AppTextStyles.displaySmall.copyWith(
-                color: AppColors.textPrimary,
-                fontSize: 20,
-              ),
-              decoration: InputDecoration(
-                hintText: '85,000',
-                hintStyle: AppTextStyles.bodyLarge.copyWith(
-                  color: AppColors.textHint,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return WedTextField(
+      controller: controller,
+      hint: '85,000',
+      prefixText: 'ZMW  ',
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'[\d,]')),
+      ],
     );
   }
 }
@@ -1601,33 +1689,11 @@ class _PlanField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return WedTextField(
       controller: controller,
+      hint: hint,
       keyboardType: inputType,
       inputFormatters: formatters,
-      style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: AppTextStyles.bodyLarge.copyWith(color: AppColors.textHint),
-        filled: true,
-        fillColor: AppColors.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.amber, width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 17,
-        ),
-      ),
     );
   }
 }
@@ -1702,8 +1768,8 @@ class _WeddingClassCards extends StatelessWidget {
   Widget build(BuildContext context) {
     const classes = [
       ('Low class', 'Budget-smart', Icons.wb_sunny_outlined),
-      ('Flexible', 'Mix & match', Icons.trending_up_rounded),
-      ('High class', 'Premium only', Icons.star_outline_rounded),
+      ('Flexible', 'Mix & match', Icons.trending_up),
+      ('High class', 'Premium only', Icons.star_outlined),
     ];
     return Row(
       children: classes.map((c) {
@@ -1838,9 +1904,9 @@ class _CategoryChecklistState extends State<_CategoryChecklist> {
                   child: Row(
                     children: [
                       const Icon(
-                        Icons.checklist_rounded,
+                        Icons.checklist,
                         size: 20,
-                        color: AppColors.amber,
+                        color: AppColors.goldDeep,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -1858,7 +1924,7 @@ class _CategoryChecklistState extends State<_CategoryChecklist> {
                         turns: _expanded ? 0.5 : 0,
                         duration: const Duration(milliseconds: 200),
                         child: const Icon(
-                          Icons.keyboard_arrow_down_rounded,
+                          Icons.keyboard_arrow_down,
                           size: 22,
                           color: AppColors.textSecondary,
                         ),
@@ -1901,7 +1967,7 @@ class _CategoryChecklistState extends State<_CategoryChecklist> {
                                       children: [
                                         Icon(
                                           isTicked
-                                              ? Icons.check_box_rounded
+                                              ? Icons.check_box
                                               : Icons
                                                   .check_box_outline_blank_rounded,
                                           size: 22,
@@ -2065,7 +2131,7 @@ class _AiDisclaimer extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.info_outline_rounded, size: 13, color: color),
+        Icon(Icons.info_outlined, size: 13, color: color),
         const SizedBox(width: 6),
         Expanded(
           child: Text(

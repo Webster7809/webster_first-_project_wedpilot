@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -8,7 +9,10 @@ import '../../../models/invitation.dart';
 import '../../../providers/invitation_provider.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/typeahead_field.dart';
+import '../../../widgets/wed_button.dart';
+import '../../../widgets/wed_empty_state.dart';
 import '../../../widgets/wed_snack_bar.dart';
+import '../../../widgets/wed_text_field.dart';
 
 /// Soft, flat shadowed container used throughout this screen instead of
 /// Material's default [Card] elevation, matching the rest of the app's
@@ -474,48 +478,13 @@ class _GuestListTabState extends State<_GuestListTab> {
     final guests = widget.guests;
     final responses = widget.responses;
     if (guests.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: AppColors.forestGreen.withAlpha(12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(
-                  child: Text('👥', style: TextStyle(fontSize: 34)),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text('No guests yet', style: AppTextStyles.headlineMedium),
-              const SizedBox(height: 8),
-              Text('Add guests to track their RSVPs.',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.textSecondary)),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: widget.onAddGuest,
-                icon: const Icon(Icons.person_add_outlined, color: Colors.white),
-                label: const Text('Add Guest'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.amber,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30)),
-                ),
-              ),
-            ],
-          ),
-        ),
+      return WedEmptyState(
+        icon: Icons.people_outlined,
+        title: 'No guests yet',
+        message: 'Add guests to track their RSVPs.',
+        ctaLabel: 'Add Guest',
+        onCtaTap: widget.onAddGuest,
+        imageUrl: VendorCategoryImages.galleryFor('DJ & MC')[0],
       );
     }
 
@@ -720,7 +689,7 @@ class _GuestCard extends StatelessWidget {
                 ),
                 Expanded(
                   child: _GuestAction(
-                    icon: Icons.delete_outline,
+                    icon: Icons.delete_outlined,
                     label: 'Remove',
                     color: AppColors.error,
                     onTap: onDelete,
@@ -1042,23 +1011,11 @@ class _GuestFormSheetState extends State<_GuestFormSheet> {
             _field(_phoneCtrl, 'Phone (optional)',
                 type: TextInputType.phone),
             const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
+            WedButton(
+              label: widget.existing != null ? 'Save Changes' : 'Add Guest',
+              variant: WedButtonVariant.accent,
               height: 50,
-              child: ElevatedButton(
-                onPressed: _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.secondary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                child: Text(
-                  widget.existing != null ? 'Save Changes' : 'Add Guest',
-                  style: AppTextStyles.titleMedium
-                      .copyWith(color: Colors.white, fontWeight: FontWeight.w600),
-                ),
-              ),
+              onPressed: _save,
             ),
           ],
         ),
@@ -1073,19 +1030,13 @@ class _GuestFormSheetState extends State<_GuestFormSheet> {
     TextInputType type = TextInputType.text,
     ValueChanged<String>? onChanged,
   }) =>
-      TextField(
+      WedTextField(
         controller: ctrl,
+        label: label,
+        errorText: error,
         keyboardType: type,
         textCapitalization: TextCapitalization.words,
         onChanged: onChanged,
-        decoration: InputDecoration(
-          labelText: label,
-          errorText: error,
-          border:
-              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
       );
 }
 
@@ -1255,8 +1206,8 @@ class _RsvpFormSheetState extends State<_RsvpFormSheet> {
                       tooltip: 'Decrease guest count',
                       onPressed: () =>
                           setState(() => _count = (_count - 1).clamp(1, 20)),
-                      icon: const Icon(Icons.remove_circle_outline),
-                      color: AppColors.secondary,
+                      icon: const Icon(Icons.remove_circle_outlined),
+                      color: AppColors.goldDeep,
                     ),
                     Expanded(
                       child: Container(
@@ -1280,8 +1231,8 @@ class _RsvpFormSheetState extends State<_RsvpFormSheet> {
                       tooltip: 'Increase guest count',
                       onPressed: () =>
                           setState(() => _count = (_count + 1).clamp(1, 20)),
-                      icon: const Icon(Icons.add_circle_outline),
-                      color: AppColors.secondary,
+                      icon: const Icon(Icons.add_circle_outlined),
+                      color: AppColors.goldDeep,
                     ),
                   ],
                 ),
@@ -1299,25 +1250,11 @@ class _RsvpFormSheetState extends State<_RsvpFormSheet> {
               _field(_messageCtrl, 'Message (optional)', maxLines: 2),
               const SizedBox(height: 24),
 
-              SizedBox(
-                width: double.infinity,
+              WedButton(
+                label: widget.existing != null ? 'Update RSVP' : 'Record RSVP',
+                variant: WedButtonVariant.accent,
                 height: 50,
-                child: ElevatedButton(
-                  onPressed: _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.secondary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Text(
-                    widget.existing != null
-                        ? 'Update RSVP'
-                        : 'Record RSVP',
-                    style: AppTextStyles.titleMedium.copyWith(
-                        color: Colors.white, fontWeight: FontWeight.w600),
-                  ),
-                ),
+                onPressed: _save,
               ),
               if (widget.existing != null && widget.onReset != null) ...[
                 const SizedBox(height: 8),
@@ -1347,16 +1284,10 @@ class _RsvpFormSheetState extends State<_RsvpFormSheet> {
   }
 
   Widget _field(TextEditingController ctrl, String label, {int maxLines = 1}) =>
-      TextField(
+      WedTextField(
         controller: ctrl,
+        label: label,
         maxLines: maxLines,
         textCapitalization: TextCapitalization.sentences,
-        decoration: InputDecoration(
-          labelText: label,
-          border:
-              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
       );
 }

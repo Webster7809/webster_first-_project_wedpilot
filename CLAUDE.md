@@ -49,7 +49,16 @@ The three shell widgets live in `lib/shell/`. `CoupleShell` is a `StatefulWidget
 
 ### Theming
 
-`lib/core/theme/app_theme.dart` defines both light and dark `ThemeData` (Material 3). `lib/core/theme/app_colors.dart` is the single source of truth for all colors — do not inline color literals. `lib/core/theme/app_text_styles.dart` exposes static getters (`AppTextStyles.headlineLarge`, `.bodySmall`, etc.) using Google Fonts Playfair Display (headings) and Inter (body).
+`lib/core/theme/app_theme.dart` defines both light and dark `ThemeData` (Material 3). `lib/core/theme/app_colors.dart` is the single source of truth for all colors — do not inline color literals. `lib/core/theme/app_text_styles.dart` is the single source of truth for type; `AppTheme` *derives* its `TextTheme` from those getters rather than restating them, so a size or weight changes in one place only.
+
+Playfair Display (display + `headlineLarge`, floor 20px) and Inter (everything else, including all numerics) are **bundled font assets** declared in `pubspec.yaml`, not runtime `google_fonts` fetches — an offline first launch would otherwise fall back to Roboto silently. `google_fonts` remains a dependency solely for the user-selectable invitation template faces.
+
+Color rules that are easy to break by accident, all enforced by `test/design_system_test.dart`:
+
+- **Gold is not a text color in light theme** (2.12:1 on cream). Use `AppColors.primary` for emphasis, `textPrimary` for values, `goldDeep` for icons. On the *dark* theme and on forest surfaces gold is legitimate (7.73:1 and 4.99:1) — the gold eyebrow over a forest `SliverAppBar` is the canonical use.
+- **A gold fill never takes a white foreground** (2.42:1). Use `AppColors.textOnSecondary`.
+- Primary CTAs are forest with white text (12.08:1). Gold is the accent, not the button color.
+- Icons come from two Material families only: `_outlined` for outline glyphs, base/filled for solid ones. No `_rounded` or `_sharp` — Flutter's bundled rounded set has gaps for 83 of the icons this app uses.
 
 `AppSettings.fontSize` drives a `textScaler` multiplier in `lib/app.dart` so all text scales with user preference. High-contrast and reduced-motion flags are also read here.
 
