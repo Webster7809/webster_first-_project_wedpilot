@@ -1,0 +1,30 @@
+# Rebuilt inside the image by `npm ci`. Copying the host's tree in would also
+# copy host-compiled native binaries for bcrypt/mysql2 — built against Windows
+# or macOS here, useless in a Linux container, and silently shadowing the
+# correct ones the build stage produced.
+node_modules/
+
+# Real secrets. Configuration reaches the container through the environment
+# (see docker-compose.yml), never baked into an image layer — a layer is
+# readable by anyone who can pull the image, and deleting the file in a later
+# layer does not remove it from the earlier one.
+.env
+.env.*
+!.env.example
+
+# Runtime state. Uploads live in a mounted volume so they outlive the
+# container; a copy of the developer's local uploads has no business in the
+# image, and logs even less.
+uploads/
+*.log
+dev-server.err.log
+dev-server.log
+
+# Local-only tooling and test material.
+test/
+scripts/dev-up.ps1
+nodemon.json
+Dockerfile
+.dockerignore
+.git/
+.gitignore

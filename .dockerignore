@@ -1,7 +1,53 @@
-.git
-build
-.dart_tool
-.idea
-android/.gradle
-android/local.properties
-backend/node_modules
+# Build context for Dockerfile.web (context is the repo root, since a Flutter
+# web build needs pubspec, lib/, assets/ and web/ together).
+#
+# Everything excluded here would otherwise be uploaded to the Docker daemon on
+# every build. The Gradle and Dart caches alone run to several GB and are
+# useless to a web build — they are the difference between a context that
+# transfers in seconds and one that takes minutes before the first layer runs.
+
+# ── Secrets ──────────────────────────────────────────────────────────────────
+# The compose .env holds the database password, JWT secret and SMTP
+# credentials. It reaches containers as environment variables and must never
+# be copied into an image layer, where anyone able to pull the image can read
+# it — including from an earlier layer after a later one deletes the file.
+.env
+.env.*
+!.env.docker.example
+**/key.properties
+**/*.jks
+**/*.keystore
+
+# ── Build output and caches ──────────────────────────────────────────────────
+build/
+.dart_tool/
+.pub-cache/
+.pub/
+**/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+# ── Platform targets a web build never reads ─────────────────────────────────
+android/
+ios/
+linux/
+macos/
+windows/
+
+# ── The backend, which has its own image and its own .dockerignore ───────────
+backend/
+
+# ── Repository and tooling metadata ──────────────────────────────────────────
+.git/
+.github/
+.idea/
+.vscode/
+*.iml
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# ── Tests and docs: not part of a production bundle ──────────────────────────
+test/
+*.md

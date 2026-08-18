@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1
+
+# ── Build stage ───────────────────────────────────────────────────────────────
+# Pinned to the exact SDK this project is developed against (Flutter 3.44.0 /
+# Dart 3.12.0, matching pubspec's `sdk: ^3.12.0`). Floating on :stable would
+# make the image rebuild differently over time for the same commit.
+FROM ghcr.io/cirruslabs/flutter:3.44.0 AS build
+
+WORKDIR /app
+
+# ApiConfig reads these through String.fromEnvironment, which is resolved at
+# compile time — they are baked into the JS bundle and cannot be changed by
+# setting an environment variable on the running container. That makes the
+# built image specific to one backend origin, so it is a build argument.
+#
+# API_BASE_URL must be https: the browser refuses plaintext requests made from
+# an https page as mixed content, and ApiConfig throws on a release build with
+# no value at all rather than quietly falling back to localhost.
+ARG API_BASE_URL
+ARG GOOGLE_SERVER_CLIENT_ID=""
+
+# Caught here rather than at runtime — a web bundle built without it would
+# deploy cleanly and fail on the user's first API call.
+RUN test -n "$API_BASE_URL" \
+    || (echo "ERROR: --build-arg API_BASE_URL=https://your-api-host is required." && exit 1)
+
+# Dependencies resolve before the source is copied, so editing a Dart file
+# does not re-run pub get.
+COPY pubspec.yaml pubspec.lock ./
+RUN flutter pub get
+
+COPY . .
+
+# Re-run after the full copy: the cached layer above resolved against the
+# manifest alone, and pub verifies the package config against real sources.
+RUN flutter pub get \
+    && flutter build web --release \
+        --dart-define=API_BASE_URL="$API_BASE_URL" \
+        --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+
+# ── Runtime stage ─────────────────────────────────────────────────────────────
+# Static output only — nothing from the Flutter toolchain (several GB) ships.
+FROM nginx:1.27-alpine AS runtime
+
+COPY --from=build /app/build/web /usr/share/nginx/html
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]
