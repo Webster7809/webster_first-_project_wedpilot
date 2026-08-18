@@ -2,3 +2,6 @@ node_modules/
 .env
 uploads/*
 !uploads/*/.gitkeep
+
+# Written by scripts/dev-up.ps1 (nodemon already ignores *.log for restarts).
+*.log

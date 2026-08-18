@@ -5,6 +5,7 @@ import '../core/services/task_api_service.dart';
 import '../core/constants/app_constants.dart';
 import '../core/state/resource.dart';
 import 'auth_provider.dart';
+import '../core/services/api_error.dart';
 
 export '../core/services/task_service.dart' show TaskReportData;
 
@@ -30,10 +31,10 @@ class TaskNotifier extends StateNotifier<Resource<List<ChecklistItem>>> {
       state = state.copyWith(status: ResourceStatus.ready, data: tasks);
     } on TaskApiException catch (e) {
       state = state.copyWith(status: ResourceStatus.error, errorMessage: e.message);
-    } catch (_) {
+    } catch (e) {
       state = state.copyWith(
         status: ResourceStatus.error,
-        errorMessage: 'Could not reach the server. Please try again.',
+        errorMessage: describeError(e),
       );
     }
   }
@@ -55,8 +56,8 @@ class TaskNotifier extends StateNotifier<Resource<List<ChecklistItem>>> {
       return null;
     } on TaskApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -93,8 +94,8 @@ class TaskNotifier extends StateNotifier<Resource<List<ChecklistItem>>> {
       return null;
     } on TaskApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -134,8 +135,8 @@ class TaskNotifier extends StateNotifier<Resource<List<ChecklistItem>>> {
       return null;
     } on TaskApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -150,8 +151,8 @@ class TaskNotifier extends StateNotifier<Resource<List<ChecklistItem>>> {
       return null;
     } on TaskApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -168,8 +169,8 @@ class TaskNotifier extends StateNotifier<Resource<List<ChecklistItem>>> {
       return null;
     } on TaskApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 }

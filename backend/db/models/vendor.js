@@ -54,11 +54,8 @@ const Vendor = sequelize.define('Vendor', {
     allowNull: false,
     defaultValue: false,
   },
-  style_tags: {
-    type: DataTypes.JSON,
-    allowNull: false,
-    defaultValue: [],
-  },
+  // style_tags moved to the vendor_style_tags table in migration 006 — a JSON
+  // array of tags was a repeating group. Use services/styleTags.js.
   logo_url: {
     type: DataTypes.STRING,
     allowNull: true,
@@ -87,18 +84,12 @@ const Vendor = sequelize.define('Vendor', {
     type: DataTypes.STRING,
     allowNull: true,
   },
-  blocked_dates: {
-    type: DataTypes.JSON,
-    allowNull: false,
-    defaultValue: [],
-  },
-  // Wedding-class packages the vendor registers themselves:
-  // [{ package_id, tier: 'luxury'|'starter', title, inclusions: [..], price }]
-  packages: {
-    type: DataTypes.JSON,
-    allowNull: false,
-    defaultValue: [],
-  },
+  // blocked_dates moved to the vendor_blocked_dates table in migration 005 —
+  // a JSON array of dates was a repeating group, and it kept availability
+  // filtering out of reach of the database. Use services/vendorAvailability.js.
+  // packages moved to vendor_packages + vendor_package_inclusions in
+  // migration 007 — an array of objects each holding its own nested array was
+  // a repeating group inside a repeating group. Use services/vendorPackages.js.
   is_custom_entry: {
     type: DataTypes.BOOLEAN,
     allowNull: false,

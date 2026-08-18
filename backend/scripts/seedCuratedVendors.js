@@ -23,6 +23,8 @@ const bcrypt = require('bcrypt');
 const sequelize = require('../db/sequelize');
 const User = require('../db/models/user');
 const Vendor = require('../db/models/vendor');
+const { setVendorStyleTags } = require('../services/styleTags');
+const { setPackages } = require('../services/vendorPackages');
 const VendorService = require('../db/models/vendorService');
 const VendorStats = require('../db/models/vendorStats');
 
@@ -115,10 +117,20 @@ async function main() {
       longitude: v.longitude,
       tier: v.tier,
       verification_status: v.verification_status,
-      style_tags: v.style_tags,
       phone: v.phone,
-      packages: v.packages,
     });
+    // style_tags and packages are rows now — Vendor.create would silently
+    // drop both fields, leaving every seeded vendor untagged and packageless.
+    await setVendorStyleTags(vendor.vendor_id, v.style_tags ?? []);
+    if (v.packages?.length) {
+      await setPackages(vendor.vendor_id, v.packages.map((p) => ({
+        package_id: p.package_id ?? require('crypto').randomUUID(),
+        tier: p.tier,
+        title: p.title,
+        price: p.price ?? null,
+        inclusions: p.inclusions ?? [],
+      })));
+    }
 
     for (const s of v.services) {
       await VendorService.create({

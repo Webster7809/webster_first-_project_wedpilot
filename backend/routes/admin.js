@@ -7,11 +7,11 @@ const CoupleProfile = require('../db/models/coupleProfile');
 const VendorFeedback = require('../db/models/vendorFeedback');
 const VendorMedia = require('../db/models/vendorMedia');
 const Inquiry = require('../db/models/inquiry');
-const Notification = require('../db/models/notification');
 const verifyJwt = require('../middleware/verifyJwt');
 const { requireAdmin } = require('../middleware/roles');
 const { recalculateVendorStats } = require('../services/vendorStats');
 const { validateMaxGuests } = require('../services/guestCapacity');
+const { notifyUser } = require('../services/notify');
 
 const router = express.Router();
 router.use(verifyJwt, requireAdmin);
@@ -129,16 +129,21 @@ router.patch('/vendors/:id/verification', async (req, res) => {
     // is_verified_business feeds directly into the CRS weighting.
     await recalculateVendorStats(vendor.vendor_id);
 
-    await Notification.create({
-      user_id: vendor.user_id,
-      type: 'vendor_verification',
-      title: status === 'verified' ? 'Profile verified' : 'Verification update',
-      body: status === 'verified'
-        ? 'Your vendor profile has been verified and is now visible to couples.'
-        : `Your vendor profile was not approved.${note ? ` Reason: ${note}` : ''}`,
-      entity_id: vendor.vendor_id,
-      entity_type: 'vendor',
-    });
+    const verificationTitle = status === 'verified' ? 'Profile verified' : 'Verification update';
+    const verificationBody = status === 'verified'
+      ? 'Your vendor profile has been verified and is now visible to couples.'
+      : `Your vendor profile was not approved.${note ? ` Reason: ${note}` : ''}`;
+    await notifyUser(
+      vendor.user_id,
+      {
+        type: 'vendor_verification',
+        title: verificationTitle,
+        body: verificationBody,
+        entity_id: vendor.vendor_id,
+        entity_type: 'vendor',
+      },
+      { subject: verificationTitle, heading: verificationTitle, bodyHtml: verificationBody },
+    );
 
     res.json({ vendor_id: vendor.vendor_id, verification_status: vendor.verification_status });
   } catch (err) {

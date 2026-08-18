@@ -139,6 +139,11 @@ class AppColors {
   static const teal = Color(0xFF2A9D8F);
   static const adminPinkLight = Color(0xFFF06292);
   static const inputFillAlt = Color(0xFFF7F7F7);
+
+  /// Soft green wash behind a small icon tile, e.g. the vendor dashboard's
+  /// quick-action glyphs. Background only — it is far too light to carry text,
+  /// and the forest-green icon sitting on it is what supplies the contrast.
+  static const iconTint = Color(0xFFE7EEE9);
   static const sageGold = Color(0xFFD4A854); // matches invitation "Sage Gold" swatch
 
   // ── Admin panel ─────────────────────────────────────────────────────────────

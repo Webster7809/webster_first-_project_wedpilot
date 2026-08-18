@@ -353,7 +353,8 @@ Future<void> _pumpWizardToReviewStep(
   await tester.tap(find.text('Continue'));
   await tester.pump();
 
-  // ── Step 1: Date (skip picking — not required to continue) ─────────────
+  // ── Step 1: Date ────────────────────────────────────────────────────────
+  await _pickWeddingDate(tester);
   await _scrollTo(tester, find.text('Continue'));
   await tester.tap(find.text('Continue'));
   await tester.pump();
@@ -445,7 +446,8 @@ Future<void> _runWizardFlow(WidgetTester tester) async {
   await tester.tap(find.text('Continue'));
   await tester.pump();
 
-  // ── Step 1: Date (skip picking — not required to continue) ─────────────
+  // ── Step 1: Date ────────────────────────────────────────────────────────
+  await _pickWeddingDate(tester);
   await _scrollTo(tester, find.text('Continue'));
   await tester.tap(find.text('Continue'));
   await tester.pump();
@@ -521,7 +523,8 @@ Future<void> _reachStyleStep(WidgetTester tester) async {
   await tester.tap(find.text('Continue'));
   await tester.pump();
 
-  // ── Step 1: Date (skip picking — not required to continue) ─────────────
+  // ── Step 1: Date ────────────────────────────────────────────────────────
+  await _pickWeddingDate(tester);
   await _scrollTo(tester, find.text('Continue'));
   await tester.tap(find.text('Continue'));
   await tester.pump();
@@ -533,6 +536,32 @@ Future<void> _reachStyleStep(WidgetTester tester) async {
 /// PRIMARY/2ND badge Text when selected, so this lets a test check a given
 /// pill's selection state independent of the others.
 Finder _stylePill(String style) => find.widgetWithText(InkWell, style);
+
+/// Opens the step-1 date picker and accepts its initial date.
+///
+/// The wizard refuses to advance without a wedding date — it decides which
+/// vendors are actually free, so a plan built without one is matching against
+/// availability it never checked. These helpers used to skip this step, which
+/// is exactly why nothing caught that it was skippable.
+/// Explicit pumps rather than `pumpAndSettle`: something on this screen
+/// animates continuously, so settling never completes — which is why every
+/// other helper in this file pumps fixed durations too.
+Future<void> _pickWeddingDate(WidgetTester tester) async {
+  await _scrollTo(tester, find.text('Tap to pick your date'));
+  await tester.tap(find.text('Tap to pick your date'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+
+  await tester.tap(find.text('OK'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+
+  expect(
+    find.text('Tap to pick your date'),
+    findsNothing,
+    reason: 'date picker closed without setting a date',
+  );
+}
 
 void main() {
   testWidgets('Style step — primary/secondary selection', (tester) async {

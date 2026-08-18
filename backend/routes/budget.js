@@ -4,8 +4,9 @@ const BudgetCategory = require('../db/models/budgetCategory');
 const BudgetCustomItem = require('../db/models/budgetCustomItem');
 const Expense = require('../db/models/expense');
 const CoupleProfile = require('../db/models/coupleProfile');
-const Notification = require('../db/models/notification');
+const { coupleStyleTags } = require('../services/styleTags');
 const verifyJwt = require('../middleware/verifyJwt');
+const { notifyUser } = require('../services/notify');
 const { requireCouple } = require('../middleware/roles');
 const { makeUploader, relativeUploadUrl } = require('../middleware/upload');
 const { buildCategoriesFor } = require('../constants/budgetTemplate');
@@ -199,7 +200,11 @@ router.get('/', verifyJwt, requireCouple, async (req, res) => {
         currency: profile.currency || 'ZMW',
         is_ai_generated: true,
       });
-      const categories = buildCategoriesFor(Number(profile.total_budget), profile.style_tags, []);
+      // Tags are rows now, not a column on the profile — reading
+      // profile.style_tags here would silently pass undefined and generate a
+      // budget with no style weighting at all.
+      const styleTags = await coupleStyleTags(profile.user_id);
+      const categories = buildCategoriesFor(Number(profile.total_budget), styleTags, []);
       await BudgetCategory.bulkCreate(categories.map((c) => ({ ...c, budget_id: budget.budget_id })));
     }
     res.json({ budget: await serializeBudget(budget) });
@@ -277,14 +282,18 @@ router.post('/expenses', verifyJwt, requireCouple, receiptUploader.single('recei
     // Only fire the moment a category first crosses 90%, not on every
     // subsequent expense once it's already over.
     if (previousRatio < 0.9 && newRatio >= 0.9) {
-      await Notification.create({
-        user_id: req.user.user_id,
-        type: 'budget_alert',
-        title: 'Budget alert',
-        body: `${category.category_name} category is at ${Math.round(newRatio * 100)}% of your allocation.`,
-        entity_id: category.id,
-        entity_type: 'budget_category',
-      });
+      const alertBody = `${category.category_name} category is at ${Math.round(newRatio * 100)}% of your allocation.`;
+      await notifyUser(
+        req.user.user_id,
+        {
+          type: 'budget_alert',
+          title: 'Budget alert',
+          body: alertBody,
+          entity_id: category.id,
+          entity_type: 'budget_category',
+        },
+        { subject: 'Budget alert', heading: 'Budget alert', bodyHtml: alertBody },
+      );
     }
 
     res.status(201).json({ expense: serializeExpense(expense) });

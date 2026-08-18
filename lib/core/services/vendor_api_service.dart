@@ -7,6 +7,7 @@ import '../utils/json_utils.dart';
 import '../../models/vendor_profile.dart';
 import '../../models/vendor_feedback.dart';
 import '../../models/messaging.dart' show Inquiry;
+import 'api_error.dart';
 import 'authenticated_dio.dart';
 
 /// Resolves a stored relative upload path (e.g. '/uploads/vendors/x.jpg') to
@@ -88,6 +89,24 @@ class VendorApiService {
   /// about the whole vendor pool (e.g. the vendor-matching AI, which must
   /// see every category's vendors to score them) has to go through this
   /// instead, or it silently starves whichever categories fall past page 1.
+  ///
+  /// The total page count isn't known ahead of time, so this can't just fire
+  /// every request at once — but
+  /// waiting for each page to fully return before starting the next (a plain
+  /// `while` loop) turns what should be one round-trip's worth of latency
+  /// into N of them stacked end to end. With ~337 vendors on file today
+  /// that's 4 sequential round-trips for a query that only needs the *count*
+  /// of pages to be sequential, not the fetching.
+  ///
+  /// So: fetch page 1 alone (required — it's the only way to learn whether a
+  /// page 2 exists at all). If it came back full, the rest are fetched in
+  /// growing parallel batches — 2 pages at once, then 4, then 8 — via
+  /// [Future.wait], stopping the moment a batch returns a page short of a
+  /// full page (the true end). Doubling the batch size keeps this at O(log
+  /// pages) sequential *rounds* instead of O(pages) sequential *requests*,
+  /// without hard-coding an assumed maximum vendor count or a fixed
+  /// lookahead that either wastes requests when the list is short or falls
+  /// back to one-at-a-time once it's not.
   Future<List<VendorProfile>> fetchAllVendors(
     String accessToken, {
     String? category,
@@ -96,21 +115,38 @@ class VendorApiService {
     bool? verifiedOnly,
   }) async {
     const pageSize = 100; // backend's hard cap, see routes/vendors.js
-    final all = <VendorProfile>[];
-    var offset = 0;
+
+    Future<List<VendorProfile>> page(int offset) => fetchVendors(
+          accessToken,
+          category: category,
+          categories: categories,
+          location: location,
+          verifiedOnly: verifiedOnly,
+          limit: pageSize,
+          offset: offset,
+        );
+
+    final first = await page(0);
+    if (first.length < pageSize) return first;
+
+    final all = <VendorProfile>[...first];
+    var nextOffset = pageSize;
+    var batchSize = 2;
     while (true) {
-      final page = await fetchVendors(
-        accessToken,
-        category: category,
-        categories: categories,
-        location: location,
-        verifiedOnly: verifiedOnly,
-        limit: pageSize,
-        offset: offset,
+      final batch = await Future.wait(
+        List.generate(batchSize, (i) => page(nextOffset + i * pageSize)),
       );
-      all.addAll(page);
-      if (page.length < pageSize) break;
-      offset += pageSize;
+      var reachedEnd = false;
+      for (final result in batch) {
+        all.addAll(result);
+        if (result.length < pageSize) {
+          reachedEnd = true;
+          break; // a short page means every page after it is empty
+        }
+      }
+      if (reachedEnd) break;
+      nextOffset += batchSize * pageSize;
+      batchSize *= 2;
     }
     return all;
   }
@@ -438,6 +474,21 @@ class VendorApiService {
     }
   }
 
+  /// Removes a declined/cancelled booking from the couple's own list. The
+  /// backend keeps the row (the vendor's history and stats still depend on
+  /// it) — this only flips the visibility flag, but from the couple's side
+  /// it behaves exactly like a delete.
+  Future<void> hideInquiry(String accessToken, String inquiryId) async {
+    try {
+      await _dio.delete(
+        '/api/vendors/inquiries/$inquiryId',
+        options: _auth(accessToken),
+      );
+    } on DioException catch (e) {
+      throw VendorApiException(_extractError(e));
+    }
+  }
+
   Future<Inquiry> sendInquiry(
     String accessToken,
     String vendorId, {
@@ -574,9 +625,5 @@ class VendorApiService {
     }
   }
 
-  String _extractError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['error'] is String) return data['error'] as String;
-    return 'Could not reach the server. Please try again.';
-  }
+  String _extractError(DioException e) => describeDioError(e);
 }

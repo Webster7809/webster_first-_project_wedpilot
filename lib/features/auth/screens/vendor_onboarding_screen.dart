@@ -81,17 +81,30 @@ class _VendorOnboardingScreenState
   void initState() {
     super.initState();
     final profile = ref.read(authProvider).vendorProfile;
-    if (profile == null) return;
-    _isEditMode = true;
-    _selectedCategory = profile.category;
-    _locationCtrl.text = profile.location ?? '';
-    _titleCtrl.text = profile.businessName;
-    _descCtrl.text = profile.description ?? '';
-    _phoneCtrl.text = profile.phone ?? '';
-    _whatsappCtrl.text = profile.whatsapp ?? '';
-    _emailCtrl.text = profile.contactEmail ?? '';
-    _addressCtrl.text = profile.address ?? '';
-    _instagramCtrl.text = profile.instagramHandle ?? '';
+    if (profile != null) {
+      _isEditMode = true;
+      _selectedCategory = profile.category;
+      _locationCtrl.text = profile.location ?? '';
+      _titleCtrl.text = profile.businessName;
+      _descCtrl.text = profile.description ?? '';
+      _phoneCtrl.text = profile.phone ?? '';
+      _whatsappCtrl.text = profile.whatsapp ?? '';
+      _emailCtrl.text = profile.contactEmail ?? '';
+      _addressCtrl.text = profile.address ?? '';
+      _instagramCtrl.text = profile.instagramHandle ?? '';
+      return;
+    }
+
+    // Brand-new vendor, nothing saved yet — but the account itself already
+    // holds the business name, email and phone typed one screen ago at
+    // registration. Prefilling from it (still editable — this is a starting
+    // point, not a lock) is the difference between "asked once" and "asked
+    // twice for the same three things in ninety seconds."
+    final user = ref.read(authProvider).user;
+    if (user == null) return;
+    _titleCtrl.text = user.name ?? '';
+    _emailCtrl.text = user.email;
+    _phoneCtrl.text = user.phone ?? '';
   }
 
   bool get _isCustomCategorySelected =>
@@ -129,32 +142,78 @@ class _VendorOnboardingScreenState
     super.dispose();
   }
 
+  /// Required-field check for [step] — gates both "Continue" and the final
+  /// "Submit for verification" so a vendor can no longer tap through three
+  /// blank steps and only find out something was missing after the last one,
+  /// which used to bounce them all the way back to step 0 or 1 with nothing
+  /// on screen explaining why. Only fields without a "(optional)" suffix on
+  /// their own label are required — Social links (step 2) is the one field
+  /// in this wizard explicitly marked optional. Portfolio photos are
+  /// deliberately exempt from step 1: a failed upload is already treated as
+  /// non-blocking later in [_submit], so requiring one here would contradict
+  /// that.
+  String? _stepError(int step) {
+    switch (step) {
+      case 0:
+        if (_selectedCategory == null || _selectedCategory!.isEmpty) {
+          return 'Select a vendor category to continue.';
+        }
+        if (_locationCtrl.text.trim().isEmpty) {
+          return "Add where you're based to continue.";
+        }
+        return null;
+      case 1:
+        if (_titleCtrl.text.trim().isEmpty) {
+          return 'Add a listing title to continue.';
+        }
+        if (_descCtrl.text.trim().isEmpty) {
+          return 'Add a short description to continue.';
+        }
+        return null;
+      case 2:
+        if (_phoneCtrl.text.trim().isEmpty) {
+          return 'Add a phone number to continue.';
+        }
+        if (_whatsappCtrl.text.trim().isEmpty) {
+          return 'Add a WhatsApp number to continue.';
+        }
+        if (_emailCtrl.text.trim().isEmpty) {
+          return 'Add an email address to continue.';
+        }
+        if (_addressCtrl.text.trim().isEmpty) {
+          return 'Add your physical address to continue.';
+        }
+        return null;
+      default:
+        return null;
+    }
+  }
+
   void _next() {
+    final error = _stepError(_step);
+    if (error != null) {
+      showWedSnackBar(context, error, type: SnackType.error);
+      return;
+    }
     if (_step < _totalSteps - 1) {
       setState(() => _step++);
     }
   }
 
   Future<void> _submit() async {
-    if (_selectedCategory == null || _selectedCategory!.isEmpty) {
-      showWedSnackBar(
-        context,
-        'Select a vendor category to continue.',
-        type: SnackType.error,
-      );
-      setState(() => _step = 0);
-      return;
+    // _next() already gates steps 0 and 1 on the way here, so in practice
+    // this only ever catches step 2 — swept as a loop rather than duplicating
+    // the same jump-back logic three times, and left in place as cheap
+    // insurance against a future change to how _step advances.
+    for (final step in [0, 1, 2]) {
+      final error = _stepError(step);
+      if (error != null) {
+        showWedSnackBar(context, error, type: SnackType.error);
+        setState(() => _step = step);
+        return;
+      }
     }
     final businessName = _titleCtrl.text.trim();
-    if (businessName.isEmpty) {
-      showWedSnackBar(
-        context,
-        'Add a listing title to continue.',
-        type: SnackType.error,
-      );
-      setState(() => _step = 1);
-      return;
-    }
 
     setState(() => _isSubmitting = true);
     final notifier = ref.read(vendorOwnProvider.notifier);
@@ -246,7 +305,7 @@ class _VendorOnboardingScreenState
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: AppColors.cream,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Column(
           children: [
             WizardHeader(
@@ -304,71 +363,40 @@ class _VendorOnboardingScreenState
           label: 'Vendor category',
         ),
         const SizedBox(height: 12),
-        GridView.count(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          children: _categories.map((cat) {
-            final (name, icon) = cat;
-            final isSelected = _selectedCategory == name;
-            return Material(
-              color: Colors.transparent,
-              child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () => setState(() => _selectedCategory = name),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.amber.withAlpha(30)
-                      : AppColors.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isSelected ? AppColors.amber : AppColors.divider,
-                    width: isSelected ? 1.5 : 1,
+        // Keyed on the current selection so it re-seeds its displayed value
+        // whenever _selectedCategory changes from outside this widget (e.g.
+        // the "clear custom category" chip below) — a DropdownButtonFormField
+        // only reads `initialValue` on its own first build, so without this
+        // key an external clear would leave the dropdown still showing the
+        // category that was just removed.
+        DropdownButtonFormField<String>(
+          key: ValueKey('category-$_selectedCategory-$_isCustomCategorySelected'),
+          initialValue: _isCustomCategorySelected ? null : _selectedCategory,
+          isExpanded: true,
+          hint: const Text('Select a category'),
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          items: _categories
+              .map(
+                (cat) => DropdownMenuItem(
+                  value: cat.$1,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(cat.$2, size: 18, color: AppColors.forestGreen),
+                      const SizedBox(width: 10),
+                      Text(cat.$1),
+                    ],
                   ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.amber
-                            : AppColors.creamDark,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        icon,
-                        size: 22,
-                        color: isSelected
-                            ? Colors.white
-                            : AppColors.forestGreen,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      name,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: isSelected
-                            ? AppColors.amber
-                            : AppColors.textPrimary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-              ),
-            );
-          }).toList(),
+              )
+              .toList(),
+          onChanged: (value) => setState(() => _selectedCategory = value),
         ),
         const SizedBox(height: 12),
         if (_isCustomCategorySelected) ...[
@@ -599,7 +627,7 @@ class _VendorOnboardingScreenState
                 child: AspectRatio(
                   aspectRatio: 1,
                   child: Material(
-                    color: AppColors.surface,
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(10),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(10),

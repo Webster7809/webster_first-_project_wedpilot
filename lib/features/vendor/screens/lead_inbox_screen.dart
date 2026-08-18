@@ -60,7 +60,7 @@ class _LeadInboxScreenState extends ConsumerState<LeadInboxScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── Header ────────────────────────────────────────────────────────
@@ -110,12 +110,17 @@ class _LeadInboxScreenState extends ConsumerState<LeadInboxScreen> {
             child: Container(
               color: AppColors.cream,
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
+              // Wrap, not Row: four fixed-width pills overflowed by 27px on a
+              // 412pt phone, and a filter you cannot see is a filter you
+              // cannot use. Wrapping to a second line keeps every one of them
+              // reachable at any width or text scale.
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: List.generate(filters.length, (i) {
                   final active = i == _filterIndex;
                   return Padding(
-                    padding: EdgeInsets.only(
-                        right: i < filters.length - 1 ? 8 : 0),
+                    padding: EdgeInsets.zero,
                     child: Material(
                       animationDuration: const Duration(milliseconds: 200),
                       color: active ? AppColors.forestGreen : Colors.transparent,
@@ -185,7 +190,90 @@ class _LeadInboxScreenState extends ConsumerState<LeadInboxScreen> {
 
 // ── Lead card ─────────────────────────────────────────────────────────────────
 
-class _LeadCard extends StatelessWidget {
+/// Still awaiting the vendor's answer — the only state where accept/decline
+/// mean anything.
+bool _isPendingLead(Inquiry i) =>
+    i.status != InquiryStatus.booked &&
+    i.status != InquiryStatus.declined &&
+    i.status != InquiryStatus.cancelled;
+
+/// Accept in one tap, with a 6-second UNDO in place of a confirmation dialog.
+///
+/// Confirming a booking used to cost four taps through a dialog stacked on
+/// top of the lead sheet. A vendor works through leads all day, so the happy
+/// path is now immediate and the safety net is the undo — the same shape the
+/// couple's own booking button already uses.
+///
+/// Undo is safe rather than cosmetic: moving an inquiry back out of 'booked'
+/// makes the backend release the calendar hold that accepting placed and
+/// delete the "confirmed!" notification the couple was just sent.
+Future<void> acceptLead(
+  BuildContext context,
+  WidgetRef ref,
+  Inquiry inquiry,
+) async {
+  // A lead that had never been opened goes back as 'viewed', not
+  // 'newInquiry' — by the time you can undo, you have certainly seen it.
+  final revertTo = inquiry.status == InquiryStatus.newInquiry
+      ? InquiryStatus.viewed
+      : inquiry.status;
+
+  final error = await ref
+      .read(vendorOwnProvider.notifier)
+      .markInquiryStatus(inquiry.id, InquiryStatus.booked);
+  if (!context.mounted) return;
+  if (error != null) {
+    showWedSnackBar(context, error, type: SnackType.error);
+    return;
+  }
+
+  showWedSnackBar(
+    context,
+    'Booked with ${inquiry.coupleName ?? 'this couple'}.',
+    type: SnackType.success,
+    actionLabel: 'UNDO',
+    onAction: () async {
+      final undoError = await ref
+          .read(vendorOwnProvider.notifier)
+          .markInquiryStatus(inquiry.id, revertTo);
+      if (!context.mounted) return;
+      showWedSnackBar(
+        context,
+        undoError ?? 'Undone — the lead is back in your inbox.',
+        type: undoError != null ? SnackType.error : SnackType.info,
+      );
+    },
+  );
+}
+
+/// Decline keeps its confirmation, unlike accept: it is final for the couple,
+/// they are notified straight away, and nothing on their side can reverse it.
+Future<void> declineLead(
+  BuildContext context,
+  WidgetRef ref,
+  Inquiry inquiry,
+) async {
+  final reason = await showDialog<String>(
+    context: context,
+    builder: (_) =>
+        _DeclineConfirmDialog(coupleName: inquiry.coupleName ?? 'this couple'),
+  );
+  if (reason == null || !context.mounted) return;
+
+  final error = await ref.read(vendorOwnProvider.notifier).markInquiryStatus(
+        inquiry.id,
+        InquiryStatus.declined,
+        declineReason: reason.trim(),
+      );
+  if (!context.mounted) return;
+  showWedSnackBar(
+    context,
+    error ?? 'Declined. ${inquiry.coupleName ?? 'The couple'} has been told.',
+    type: error != null ? SnackType.error : SnackType.info,
+  );
+}
+
+class _LeadCard extends ConsumerWidget {
   final Inquiry inquiry;
   final VoidCallback onTap;
 
@@ -211,7 +299,7 @@ class _LeadCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isUnread = inquiry.status == InquiryStatus.newInquiry;
     final isBooked = inquiry.status == InquiryStatus.booked;
     final isDeclined = inquiry.status == InquiryStatus.declined;
@@ -339,6 +427,38 @@ class _LeadCard extends StatelessWidget {
                   ),
               ],
             ),
+
+            // Answering a lead is the whole job of this screen, so both
+            // answers sit on the card itself. Opening the detail sheet is now
+            // for reading the couple's message, not for reaching the buttons.
+            if (_isPendingLead(inquiry)) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: WedButton(
+                      label: 'Decline',
+                      variant: WedButtonVariant.secondary,
+                      height: 42,
+                      borderRadius: 12,
+                      fontSize: 14,
+                      onPressed: () => declineLead(context, ref, inquiry),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: WedButton(
+                      label: 'Accept',
+                      variant: WedButtonVariant.success,
+                      height: 42,
+                      borderRadius: 12,
+                      fontSize: 14,
+                      onPressed: () => acceptLead(context, ref, inquiry),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
         ),
@@ -386,73 +506,25 @@ class _LeadDetailSheet extends ConsumerStatefulWidget {
 class _LeadDetailSheetState extends ConsumerState<_LeadDetailSheet> {
   bool _isBusy = false;
 
+  // Both answers go through the same shared helpers the lead card uses, so
+  // accepting from the sheet and accepting from the card behave identically —
+  // one tap, undo on the accept, confirmation only on the decline. The sheet
+  // closes first: leaving it open would put the undo snack bar behind it.
+  // The sheet closes first, so the snack bar and its undo aren't buried
+  // behind it. That means handing the helpers the navigator's context rather
+  // than this sheet's: the sheet's is unmounted the moment it pops, and
+  // every `context.mounted` guard downstream would bail out, leaving the
+  // vendor with a silent accept and no undo at all.
   Future<void> _accept(Inquiry inquiry) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Accept this booking?'),
-        content: Text(
-          inquiry.weddingDate != null
-              ? 'This confirms the booking with ${inquiry.coupleName ?? 'this couple'} and blocks ${DateFormat('MMM d, y').format(inquiry.weddingDate!)} on your calendar.'
-              : 'This confirms the booking with ${inquiry.coupleName ?? 'this couple'}.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          WedButton(
-            label: 'Accept',
-            variant: WedButtonVariant.success,
-            shrinkWrap: true,
-            height: 40,
-            onPressed: () => Navigator.pop(ctx, true),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    setState(() => _isBusy = true);
-    final error = await ref
-        .read(vendorOwnProvider.notifier)
-        .markInquiryStatus(inquiry.id, InquiryStatus.booked);
-    if (!mounted) return;
-    setState(() => _isBusy = false);
-    if (error != null) {
-      showWedSnackBar(context, error, type: SnackType.error);
-    } else {
-      showWedSnackBar(context, 'Booking confirmed!', type: SnackType.success);
-    }
+    final host = Navigator.of(context).context;
+    Navigator.pop(context);
+    await acceptLead(host, ref, inquiry);
   }
 
   Future<void> _decline(Inquiry inquiry) async {
-    // Confirm first — declining is final for the couple and, unlike accepting,
-    // there's no way for them to undo it from their side. The reason is
-    // optional: a vendor should be able to answer a lead as easily as they
-    // accept one, and forcing a reason out of them was the whole cost of the
-    // old flow.
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (_) => _DeclineConfirmDialog(
-        coupleName: inquiry.coupleName ?? 'this couple',
-      ),
-    );
-    if (reason == null) return;
-
-    setState(() => _isBusy = true);
-    final error = await ref.read(vendorOwnProvider.notifier).markInquiryStatus(
-          inquiry.id,
-          InquiryStatus.declined,
-          declineReason: reason.trim(),
-        );
-    if (!mounted) return;
-    setState(() => _isBusy = false);
-    if (error != null) {
-      showWedSnackBar(context, error, type: SnackType.error);
-    } else {
-      showWedSnackBar(context, 'Inquiry declined.', type: SnackType.info);
-    }
+    final host = Navigator.of(context).context;
+    Navigator.pop(context);
+    await declineLead(host, ref, inquiry);
   }
 
   Future<void> _notifyToRate(Inquiry inquiry) async {
@@ -470,9 +542,18 @@ class _LeadDetailSheetState extends ConsumerState<_LeadDetailSheet> {
   }
 
   void _messageCouple(Inquiry inquiry) {
-    ref
-        .read(vendorOwnProvider.notifier)
-        .markInquiryStatus(inquiry.id, InquiryStatus.viewed);
+    // Only a lead that has never been opened gets marked as read here.
+    //
+    // This used to write `viewed` unconditionally, which meant messaging a
+    // couple you had already booked *un-booked them*: the backend treats any
+    // move out of 'booked' as an undo, so it released the wedding date from
+    // the calendar and deleted the couple's "confirmed!" notification. A
+    // vendor sending a friendly message silently cancelled the booking.
+    if (inquiry.status == InquiryStatus.newInquiry) {
+      ref
+          .read(vendorOwnProvider.notifier)
+          .markInquiryStatus(inquiry.id, InquiryStatus.viewed);
+    }
     Navigator.pop(context);
     context.push(AppRoutes.vendorMessages);
   }
@@ -689,7 +770,7 @@ class _ServiceDoneSection extends StatelessWidget {
       );
     }
 
-    if (inquiry.ratingReminderCount >= 2) {
+    if (inquiry.ratingReminderCount >= 1) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(14),
@@ -698,20 +779,17 @@ class _ServiceDoneSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
-          'Reminder limit reached (2/2 sent) — waiting on the couple to rate you.',
+          "Reminder sent — waiting on the couple to rate you.",
           style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
         ),
       );
     }
 
-    final isFirst = inquiry.ratingReminderCount == 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          isFirst
-              ? 'Once the wedding/service is done, let the couple know so they can rate you.'
-              : "The couple hasn't rated you yet. You have one final reminder left.",
+          'Once the wedding/service is done, let the couple know so they can rate you.',
           style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: 8),
@@ -720,7 +798,7 @@ class _ServiceDoneSection extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: isBusy ? null : onNotify,
             icon: const Icon(Icons.notifications_active_outlined, size: 16),
-            label: Text(isFirst ? 'Notify Couple to Rate' : 'Send Reminder (Final Chance)'),
+            label: const Text('Notify Couple to Rate'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: const BorderSide(color: AppColors.primary),

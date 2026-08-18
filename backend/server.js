@@ -2,7 +2,11 @@ require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const sequelize = require('./db/sequelize');
+const verifyJwt = require('./middleware/verifyJwt');
+const { assertProductionConfig } = require('./config/requireEnv');
 require('./db/models/user');
 require('./db/models/coupleProfile');
 require('./db/models/task');
@@ -36,10 +40,100 @@ const invitationRoutes = require('./routes/invitations');
 const messagingRoutes = require('./routes/messaging');
 const notificationRoutes = require('./routes/notifications');
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+// Before anything binds a port: every misconfiguration that would otherwise
+// present as a working server with a quietly broken feature (mail that never
+// sends, verification links pointing at localhost, an unusable signing key)
+// becomes a refused start here. See config/requireEnv.js.
+assertProductionConfig();
+
 const app = express();
-app.use(cors());
+
+// Behind a PaaS load balancer every request arrives from the proxy, so
+// express-rate-limit keys every caller to the same address and the auth /
+// password-reset limiters throttle all users as if they were one. Trusting a
+// single hop lets it read the real client IP from X-Forwarded-For. Left off
+// outside production, where there is no proxy and trusting the header would
+// let a caller spoof their own IP past the limiter.
+if (IS_PRODUCTION) app.set('trust proxy', 1);
+
+// Comma-separated list of origins allowed to call this API, e.g.
+// "https://wedpilot.app,https://www.wedpilot.app". Required in production —
+// a wide-open API is not something to fall back to silently. That requirement
+// is enforced by assertProductionConfig above, alongside every other piece of
+// config whose absence would otherwise present as a working server.
+const allowedOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    // No Origin header at all: native app builds, curl, server-to-server.
+    // CORS is a browser mechanism — these were never subject to it, and
+    // rejecting them here would break the Android and iOS clients.
+    if (!origin) return callback(null, true);
+    if (!IS_PRODUCTION || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`Origin ${origin} is not allowed by CORS.`));
+  },
+}));
+// Baseline response headers: nosniff, no-referrer, frame denial, and (in
+// production) HSTS. Two defaults are overridden below because this origin is
+// a cross-origin API rather than a website.
+app.use(helmet({
+  // This process serves JSON and user-uploaded images — never HTML of its
+  // own — so a global CSP would have no document to protect. The policy that
+  // does matter is the hardened per-response one on /uploads below.
+  contentSecurityPolicy: false,
+  // The Flutter web build runs on its own origin (PUBLIC_WEB_BASE_URL) and
+  // renders vendor/invitation images served from this one. helmet's default
+  // same-origin CORP would make the browser block every one of those <img>
+  // loads, so resources here are explicitly marked cross-origin readable.
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  // Only meaningful once TLS terminates in front of this process; sending it
+  // over plain http in development would pin localhost to https in the
+  // developer's browser and is genuinely annoying to undo.
+  hsts: IS_PRODUCTION
+    ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+    : false,
+}));
+
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Everything under here is user-supplied content. The uploader already
+// rejects SVG and anything not matching an image/* mimetype (see
+// middleware/upload.js), but that is one check against a hostile file and
+// this is the path where a miss would be served straight back to a browser.
+// The sandbox policy means that even if a file ever were rendered as a
+// document it would run with no script, no plugins, and no same-origin
+// identity of its own; helmet's nosniff (above) stops the browser
+// re-interpreting a mislabelled file as HTML in the first place.
+app.use(
+  '/uploads',
+  (_req, res, next) => {
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    next();
+  },
+  express.static(path.join(__dirname, 'uploads')),
+);
+
+// Backstop ceiling for the whole API. Auth, password-reset and AI endpoints
+// each carry their own much tighter limiter; every other route — vendor
+// search, messaging, budget writes, notification polling — had no ceiling at
+// all before this, so a single scripted caller could saturate the database
+// connection pool unopposed. Keyed on IP, which is coarse (a mobile carrier
+// NAT shares one), so the limit is set well above what an app session can
+// generate: a dashboard fanning out to a dozen endpoints on open still uses
+// a tiny fraction of it, while a scripted loop hits it in seconds.
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please slow down and try again shortly.' },
+});
+app.use('/api', apiLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/couple', coupleProfileRoutes);
@@ -55,6 +149,26 @@ app.use('/api/notifications', notificationRoutes);
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = 'nvidia/nemotron-3-ultra-550b-a55b:free';
+
+// Every call here spends OpenRouter quota on our own key, so it is capped per
+// account on top of requiring a session. The ceiling is deliberately generous
+// against normal use — the matcher fires once per planning run, in the
+// background — and only bites on a loop or a scripted caller.
+const aiLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Per account rather than per IP: couples sharing a mobile NAT would
+  // otherwise burn through each other's allowance. verifyJwt runs first so
+  // req.user is always set; the IP fallback is belt-and-braces, and goes
+  // through ipKeyGenerator so IPv6 callers are grouped by prefix rather than
+  // getting a fresh bucket per address.
+  keyGenerator: (req, res) => (req.user?.user_id
+    ? `user:${req.user.user_id}`
+    : ipKeyGenerator(req, res)),
+  message: { error: 'Too many AI requests. Please try again later.' },
+});
 
 // Persona shared by every planning/matching call — this is what makes the
 // output read like expert judgement instead of generic AI filler. The couple
@@ -331,7 +445,7 @@ function groundVendorMatch(json, picks, categoryBudgets, budgetClass) {
 // searches, filters, scores, or chooses between candidates. Flutter calls
 // this in the background, after the couple already sees their matches, so a
 // slow or failed AI response never blocks or delays a result.
-app.post('/api/vendor-match', async (req, res) => {
+app.post('/api/vendor-match', verifyJwt, aiLimiter, async (req, res) => {
   const t0 = Date.now();
   const {
     budgetClass = 'flexible', location = null, styles = [], picks = {}, categoryBudgets = {},
@@ -512,15 +626,21 @@ function startServer(retriesLeft = 5) {
   });
 }
 
+// Production schema is owned by backend/migrations, applied by
+// `npm run migrate` as a release step — never by the server on boot.
+// `sync({ alter: true })` rewrites live tables to match the models every
+// restart, and on MySQL a column type change is a drop-and-recreate, so it
+// would quietly destroy production data. It stays on in development, where
+// the convenience is worth it and the database is disposable.
 sequelize
   .authenticate()
-  // alter: true reconciles existing tables with the current models (adds
-  // missing columns etc.) — there's no migrations setup yet, so a plain
-  // sync() would silently leave older tables out of date with new model
-  // fields and every write against them would fail.
-  .then(() => sequelize.sync({ alter: true }))
+  .then(() => (IS_PRODUCTION ? Promise.resolve() : sequelize.sync({ alter: true })))
   .then(() => {
-    console.log('Database connected and synced.');
+    console.log(
+      IS_PRODUCTION
+        ? 'Database connected (schema managed by migrations).'
+        : 'Database connected and synced.',
+    );
     startServer();
   })
   .catch((err) => {

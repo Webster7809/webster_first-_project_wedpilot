@@ -17,6 +17,9 @@ class AppRoutes {
   static const settings = '/settings';
   static const help = '/help';
   static const coupleReports = '/couple/reports';
+  static const privacyPolicy = '/privacy-policy';
+  static const termsOfService = '/terms-of-service';
+  static const cookiePreferences = '/cookie-preferences';
 
   // ── Couple ───────────────────────────────────────────────────────────────
   static const coupleDashboard = '/couple/dashboard';

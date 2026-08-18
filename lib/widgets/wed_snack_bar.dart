@@ -10,8 +10,14 @@ void showWedSnackBar(
   SnackType type = SnackType.info,
   String? actionLabel,
   VoidCallback? onAction,
-  Duration duration = const Duration(seconds: 3),
+  /// Defaults to 3s, or 6s when there's an action — an UNDO the user has to
+  /// read, aim at and tap needs longer on screen than a bar they only read.
+  Duration? duration,
 }) {
+  final hasAction = actionLabel != null && onAction != null;
+  final effectiveDuration =
+      duration ?? Duration(seconds: hasAction ? 6 : 3);
+
   final colors = {
     SnackType.success: AppColors.success,
     SnackType.error: AppColors.error,
@@ -48,8 +54,14 @@ void showWedSnackBar(
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       margin: const EdgeInsets.all(16),
-      duration: duration,
-      action: actionLabel != null && onAction != null
+      duration: effectiveDuration,
+      // Flutter defaults `persist` to `action != null`, so any bar with an
+      // action sits on screen indefinitely: its timer fires on schedule, sees
+      // persist, and returns without dismissing. That left the booking UNDO
+      // bar covering the vendor list until the next snack bar replaced it.
+      // These bars are transient by design — `duration` is the contract.
+      persist: false,
+      action: hasAction
           ? SnackBarAction(
               label: actionLabel,
               textColor: Colors.white,

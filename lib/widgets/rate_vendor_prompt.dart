@@ -11,6 +11,7 @@ import '../providers/booking_provider.dart';
 import 'vendor_hero_image.dart';
 import 'wed_button.dart';
 import 'wed_snack_bar.dart';
+import '../core/services/api_error.dart';
 
 /// Opens automatically once a booking's service is marked done — not
 /// something the couple has to go hunting for. Deliberately just a star tap
@@ -63,10 +64,10 @@ class _RateVendorSheetState extends ConsumerState<_RateVendorSheet> {
       if (!mounted) return;
       setState(() => _submitting = false);
       showWedSnackBar(context, e.message, type: SnackType.error);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      showWedSnackBar(context, 'Could not reach the server. Please try again.',
+      showWedSnackBar(context, describeError(e),
           type: SnackType.error);
     }
   }

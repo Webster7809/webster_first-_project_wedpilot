@@ -63,7 +63,7 @@ class _VendorProfileManagementScreenState
     final notificationsEnabled = ownState?.notificationsEnabled ?? true;
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── Dark green header ────────────────────────────────────────────

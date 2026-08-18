@@ -91,18 +91,26 @@ class WizardHeader extends StatelessWidget {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Text(
-                    stepLabel,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      // Gold, not forest: this header fills its own Container
-                      // with forestGreen (4.99:1). Forest on forest is invisible.
-                      color: AppColors.gold,
-                      letterSpacing: 1.4,
+                  // Expanded, not a bare Text with a Spacer: a long step label
+                  // ("STYLE & PREFERENCES") at a large text scale on a 320pt
+                  // phone is wider than the space left beside the flourish,
+                  // and overflowed by 46px. Wrapping to a second line keeps
+                  // the whole label readable rather than clipping it.
+                  Expanded(
+                    child: Text(
+                      stepLabel,
+                      maxLines: 2,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        // Gold, not forest: this header fills its own Container
+                        // with forestGreen (4.99:1). Forest on forest is invisible.
+                        color: AppColors.gold,
+                        letterSpacing: 1.4,
+                      ),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 12),
                   // Rings + flowers pop in fresh on every step change — a
                   // small celebratory flourish, not something that competes
                   // with the real step copy for attention.

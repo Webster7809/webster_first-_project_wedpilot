@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../core/constants/vendor_category_images.dart';
+import '../../../core/router/app_routes.dart';
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -19,6 +20,7 @@ import '../../../providers/invitation_provider.dart';
 import '../../../providers/notification_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../providers/vendor_provider.dart';
+import '../../../widgets/action_menu.dart';
 import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/rate_vendor_prompt.dart';
 import '../../../widgets/section_header.dart';
@@ -54,23 +56,35 @@ class CoupleDashboardScreen extends ConsumerWidget {
     }
 
     // Pops up automatically once a booking is marked complete — once per
-    // app session, so it doesn't nag on every dashboard rebuild — instead of
-    // making the couple go find a "rate this vendor" button themselves.
+    // vendor per app session, so it doesn't nag on every dashboard rebuild —
+    // instead of making the couple go find a "rate this vendor" button
+    // themselves. Scoped per vendor id (not a single session-wide flag) so a
+    // second vendor becoming rateable later in the same session still gets
+    // its own prompt instead of silently never surfacing one.
     ref.listen<AsyncValue<List<VendorProfile>>>(rateableVendorsProvider,
         (previous, next) {
-      if (ref.read(ratePromptShownProvider)) return;
       final vendors = next.valueOrNull;
       if (vendors == null || vendors.isEmpty) return;
-      ref.read(ratePromptShownProvider.notifier).state = true;
+      final shown = ref.read(ratePromptShownProvider);
+      VendorProfile? pending;
+      for (final v in vendors) {
+        if (!shown.contains(v.id)) {
+          pending = v;
+          break;
+        }
+      }
+      if (pending == null) return;
+      final vendor = pending;
+      ref.read(ratePromptShownProvider.notifier).state = {...shown, vendor.id};
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) showRateVendorPrompt(context, ref, vendors.first);
+        if (context.mounted) showRateVendorPrompt(context, ref, vendor);
       });
     });
 
     final shortlisted = ref.watch(wishlistedVendorsProvider).valueOrNull ?? [];
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── App Bar ──────────────────────────────────────────────────────────
@@ -179,6 +193,18 @@ class CoupleDashboardScreen extends ConsumerWidget {
                             context.push('/couple/invitations'),
                       ),
                       const SizedBox(height: 24),
+
+                      // ── Planning tools ────────────────────────────────────────
+                      // One collapsible list rather than tools scattered across
+                      // the dashboard and the drawer: everything a couple can
+                      // *do* sits in one place, and folds away so the shortlist
+                      // and checklist below get the room.
+                      _PlanningToolsMenu(
+                        tasksDone: tasks.where((t) => t.isCompleted).length,
+                        tasksTotal: tasks.length,
+                        hasBudget: couple?.hasBudget == true,
+                      ),
+                      const SizedBox(height: 28),
 
                       // ── Shortlist ─────────────────────────────────────────────
                       WedSectionHeader(
@@ -634,7 +660,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                 child: Text(
                   'Budget overview',
                   style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.forestGreen,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -668,13 +694,13 @@ class _BudgetOverviewCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.forestGreen,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 TextSpan(
                   text: 'spent of ZMW ${total.toStringAsFixed(0)}',
                   style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -705,7 +731,7 @@ class _BudgetOverviewCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               'Planned split — switches to actual spending once you log an expense',
-              style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+              style: AppTextStyles.caption.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
           const SizedBox(height: 12),
@@ -727,6 +753,79 @@ class _BudgetOverviewCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The couple's planning tools, collapsed into one card.
+///
+/// Stateful only to own the expanded flag — the dashboard itself is a
+/// ConsumerWidget, and converting the whole screen to hold one bool would be
+/// a much larger change than this wrapper.
+class _PlanningToolsMenu extends StatefulWidget {
+  final int tasksDone;
+  final int tasksTotal;
+  final bool hasBudget;
+
+  const _PlanningToolsMenu({
+    required this.tasksDone,
+    required this.tasksTotal,
+    required this.hasBudget,
+  });
+
+  @override
+  State<_PlanningToolsMenu> createState() => _PlanningToolsMenuState();
+}
+
+class _PlanningToolsMenuState extends State<_PlanningToolsMenu> {
+  // Open on arrival: these are the dashboard's primary actions, not an
+  // overflow menu.
+  bool _open = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = widget.tasksTotal - widget.tasksDone;
+
+    return ActionMenu(
+      noun: 'planning tools',
+      icon: Icons.checklist_rounded,
+      expanded: _open,
+      onToggle: () => setState(() => _open = !_open),
+      items: [
+        ActionMenuItem(
+          icon: Icons.checklist_outlined,
+          label: 'Planning checklist',
+          trailing: widget.tasksTotal == 0
+              ? 'Not started'
+              : '$remaining left',
+          badge: remaining > 0 ? '$remaining to do' : null,
+          onTap: () => context.push('/couple/checklist'),
+        ),
+        ActionMenuItem(
+          icon: Icons.account_balance_wallet_outlined,
+          label: 'Budget',
+          trailing: widget.hasBudget ? 'Track spending' : 'Set it up',
+          onTap: () => context.go('/couple/budget'),
+        ),
+        ActionMenuItem(
+          icon: Icons.storefront_outlined,
+          label: 'Find vendors',
+          trailing: 'Browse',
+          onTap: () => context.go('/couple/vendors'),
+        ),
+        ActionMenuItem(
+          icon: Icons.mail_outlined,
+          label: 'Invitations',
+          trailing: 'Create & share',
+          onTap: () => context.go('/couple/invitations'),
+        ),
+        ActionMenuItem(
+          icon: Icons.event_available_outlined,
+          label: 'My bookings',
+          trailing: 'View',
+          onTap: () => context.push(AppRoutes.coupleBookings),
+        ),
+      ],
     );
   }
 }
@@ -784,7 +883,7 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+          style: AppTextStyles.caption.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ],
     );
@@ -836,14 +935,14 @@ class _SetupBudgetPrompt extends StatelessWidget {
                       Text(
                         'Set up your budget',
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: AppColors.forestGreen,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Let AI allocate across all categories',
                         style: AppTextStyles.caption.copyWith(
-                          color: AppColors.textSecondary,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -911,14 +1010,14 @@ class _RsvpCard extends StatelessWidget {
                         Text(
                           'Add your guest list',
                           style: AppTextStyles.titleMedium.copyWith(
-                            color: AppColors.forestGreen,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           'Track RSVPs once you invite guests',
                           style: AppTextStyles.caption.copyWith(
-                            color: AppColors.textSecondary,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -973,7 +1072,7 @@ class _RsvpCard extends StatelessWidget {
                   style: AppTextStyles.caption.copyWith(
                     fontWeight: FontWeight.w800,
                     fontSize: 10,
-                    color: AppColors.forestGreen,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ],
@@ -987,14 +1086,14 @@ class _RsvpCard extends StatelessWidget {
                 Text(
                   '$confirmed of $total confirmed',
                   style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.forestGreen,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   "Guests have RSVP'd to your invitation",
                   style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -1051,7 +1150,7 @@ class _ShortlistScroll extends StatelessWidget {
                     'Add vendors to your shortlist',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -1218,7 +1317,7 @@ class _DiscoverMoreCard extends StatelessWidget {
               Text(
                 'Discover more',
                 style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1267,9 +1366,9 @@ class _ChecklistPreview extends StatelessWidget {
                           color: AppColors.forestGreen.withAlpha(15),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.checklist,
-                          color: AppColors.forestGreen,
+                          color: Theme.of(context).colorScheme.primary,
                           size: 22,
                         ),
                       ),
@@ -1278,7 +1377,7 @@ class _ChecklistPreview extends StatelessWidget {
                         'No tasks yet',
                         style: AppTextStyles.bodyMedium.copyWith(
                           fontWeight: FontWeight.w700,
-                          color: AppColors.forestGreen,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -1287,7 +1386,7 @@ class _ChecklistPreview extends StatelessWidget {
                         'builds it around your wedding date.',
                         textAlign: TextAlign.center,
                         style: AppTextStyles.caption.copyWith(
-                          color: AppColors.textSecondary,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -1332,7 +1431,7 @@ class _ChecklistRow extends StatelessWidget {
             child: Text(
               task.task as String,
               style: AppTextStyles.bodySmall.copyWith(
-                color: done ? AppColors.textSecondary : AppColors.textPrimary,
+                color: done ? Theme.of(context).colorScheme.onSurfaceVariant : AppColors.textPrimary,
                 decoration: done
                     ? TextDecoration.lineThrough
                     : TextDecoration.none,

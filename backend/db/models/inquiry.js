@@ -57,6 +57,14 @@ const Inquiry = sequelize.define('Inquiry', {
     type: DataTypes.DATE,
     allowNull: true,
   },
+  // Removes a closed-out request from the couple's own "My Bookings" list
+  // without deleting the row — the vendor side still needs it for their own
+  // history and for recalculateVendorStats. See migrations/008.
+  hidden_by_couple: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  },
 }, {
   tableName: 'inquiries',
   createdAt: 'created_at',

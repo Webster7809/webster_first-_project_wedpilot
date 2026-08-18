@@ -25,7 +25,7 @@ class WishlistScreen extends ConsumerWidget {
     final wishlistIds = ref.watch(wishlistProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('My Wishlist')),
       body: wishlistIds.isEmpty
           ? WedEmptyState(

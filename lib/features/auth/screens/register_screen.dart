@@ -1,16 +1,45 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_text_styles.dart';
 import '../../../models/user.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/auth_shell.dart';
 import '../../../widgets/google_signin_button.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
+
+const TextStyle _legalLink = TextStyle(
+  color: AppColors.forestGreen,
+  fontWeight: FontWeight.w600,
+  decoration: TextDecoration.underline,
+  decorationColor: AppColors.forestGreen,
+);
+
+/// What signing up actually buys — shown only on the split layout, where the
+/// photo pane has room to spare and would otherwise read as a large empty
+/// rectangle with a headline in the corner.
+const List<AuthBenefit> _benefits = [
+  AuthBenefit(
+    Icons.verified_outlined,
+    'Vetted vendors',
+    'Venues, caterers and photographers matched to your budget.',
+  ),
+  AuthBenefit(
+    Icons.savings_outlined,
+    'A budget that adds up',
+    'Every allocation and expense tracked in one place.',
+  ),
+  AuthBenefit(
+    Icons.mail_outlined,
+    'Invites and RSVPs',
+    'Send your invitation and watch the replies land live.',
+  ),
+];
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -19,10 +48,10 @@ class RegisterScreen extends ConsumerStatefulWidget {
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends ConsumerState<RegisterScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tab;
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  UserRole _role = UserRole.couple;
 
   final _partner1Ctrl = TextEditingController();
   final _partner2Ctrl = TextEditingController();
@@ -31,18 +60,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
 
-  UserRole get _role => _tab.index == 0 ? UserRole.couple : UserRole.vendor;
-
-  @override
-  void initState() {
-    super.initState();
-    _tab = TabController(length: 2, vsync: this);
-    _tab.addListener(() => setState(() {}));
-  }
-
   @override
   void dispose() {
-    _tab.dispose();
     _partner1Ctrl.dispose();
     _partner2Ctrl.dispose();
     _businessNameCtrl.dispose();
@@ -53,8 +72,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    final name = _role == UserRole.couple
+    // The password field submits on "done" as well as the button, so this can
+    // be entered twice in a row — a second register call would hit the backend
+    // with the same payload.
+    if (ref.read(authProvider).isLoading) return;
+    FocusScope.of(context).unfocus();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final isCouple = _role == UserRole.couple;
+    final name = isCouple
         ? _partner1Ctrl.text.trim()
         : _businessNameCtrl.text.trim();
     await ref
@@ -64,9 +90,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
           _emailCtrl.text.trim(),
           _passCtrl.text,
           _role,
-          partner2Name: _role == UserRole.couple
-              ? _partner2Ctrl.text.trim()
-              : null,
+          partner2Name: isCouple ? _partner2Ctrl.text.trim() : null,
           phone: _phoneCtrl.text.trim(),
         );
     if (!mounted) return;
@@ -80,389 +104,283 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
   String? _required(String? v) => (v == null || v.isEmpty) ? 'Required' : null;
 
+  String get _roleBlurb => _role == UserRole.couple
+      ? 'Set a budget, match with vendors and manage your guest list together.'
+      : 'List your services, show your work and get booked by couples nearby.';
+
   @override
   Widget build(BuildContext context) {
-    final auth = ref.watch(authProvider);
+    final isLoading = ref.watch(authProvider.select((s) => s.isLoading));
 
-    return Scaffold(
-      backgroundColor: AppColors.forestGreen,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final w = constraints.maxWidth;
-            final isPhone = w < 600;
-            final isDesktop = w >= 900;
+    return AuthShell(
+      imageUrl: VendorCategoryImages.authHero(width: 1600)[1],
+      eyebrow: 'GET STARTED',
+      headline: 'Plan the wedding you both deserve',
+      benefits: _benefits,
+      crossLinkPrompt: 'Already planning with us?',
+      crossLinkAction: 'Log in',
+      crossLinkRoute: '/login',
+      formBuilder: (context, sideBySide) =>
+          _form(isLoading: isLoading, sideBySide: sideBySide),
+    );
+  }
 
-            // Responsive card max-width
-            final cardMaxWidth = isDesktop
-                ? 650.0
-                : (!isPhone ? 550.0 : w * 0.9);
+  Widget _form({required bool isLoading, required bool sideBySide}) {
+    final isCouple = _role == UserRole.couple;
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: cardMaxWidth),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // ── Brand header ──────────────────────────────────────
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: CachedNetworkImage(
-                                imageUrl: VendorCategoryImages.authHero()[1],
-                                fit: BoxFit.cover,
-                                fadeInDuration: const Duration(milliseconds: 300),
-                                placeholder: (_, _) =>
-                                    Container(color: AppColors.forestGreen),
-                                errorWidget: (_, _, _) =>
-                                    Container(color: AppColors.forestGreen),
-                              ),
-                            ),
-                            Positioned.fill(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      AppColors.forestGreen.withAlpha(215),
-                                      AppColors.forestGreen.withAlpha(170),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        width: 44,
-                                        height: 44,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.amber,
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: const Icon(
-                                          Icons.favorite,
-                                          color: AppColors.textOnSecondary,
-                                          size: 22,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Text(
-                                        'WedPilot',
-                                        style: TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 20),
-                                  Text(
-                                    'GET STARTED',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      // Gold, not forest: this eyebrow sits on
-                                      // the forest-tinted photo scrim. Forest
-                                      // on forest is invisible.
-                                      color: AppColors.gold,
-                                      letterSpacing: 1.6,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Plan the wedding\nyou both deserve',
-                                    style: TextStyle(
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      height: 1.25,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 28),
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Create your account',
+            style: AppTextStyles.displaySmall.copyWith(
+              color: AppColors.forestGreen,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'About a minute to set up. Everything after that is the fun part.',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 22),
 
-                      // ── Form card ─────────────────────────────────────────
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: AppShadows.xl,
-                        ),
-                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // ── Role tabs ──────────────────────────────────
-                              Container(
-                                decoration: const BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: AppColors.divider,
-                                    ),
-                                  ),
-                                ),
-                                child: TabBar(
-                                  controller: _tab,
-                                  isScrollable: false,
-                                  dividerColor: Colors.transparent,
-                                  indicator: const UnderlineTabIndicator(
-                                    borderSide: BorderSide(
-                                      color: AppColors.forestGreen,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  labelColor: AppColors.forestGreen,
-                                  unselectedLabelColor: AppColors.textHint,
-                                  labelStyle: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  unselectedLabelStyle: TextStyle(
-                                    fontSize: 14,
-                                  ),
-                                  tabs: const [
-                                    Tab(text: 'Couple'),
-                                    Tab(text: 'Vendor'),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 24),
+          _RoleSelector(
+            role: _role,
+            onChanged: (role) => setState(() => _role = role),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _roleBlurb,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 22),
 
-                              // ── Name field(s) ──────────────────────────────
-                              if (_role == UserRole.couple) ...[
-                                if (isPhone) ...[
-                                  WedTextField(
-                                    borderRadius: 16,
-                                    hint: 'Partner 1',
-                                    controller: _partner1Ctrl,
-                                    validator: _required,
-                                    prefixIcon: Icons.person_outlined,
-                                  ),
-                                  const SizedBox(height: 20),
-                                  WedTextField(
-                                    borderRadius: 16,
-                                    hint: 'Partner 2',
-                                    controller: _partner2Ctrl,
-                                    validator: _required,
-                                    prefixIcon: Icons.person_outlined,
-                                  ),
-                                ] else ...[
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: WedTextField(
-                                          borderRadius: 16,
-                                          hint: 'Partner 1',
-                                          controller: _partner1Ctrl,
-                                          validator: _required,
-                                          prefixIcon: Icons.person_outlined,
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          top: 18,
-                                          left: 10,
-                                          right: 10,
-                                        ),
-                                        child: Text(
-                                          '&',
-                                          style: TextStyle(
-                                            fontSize: 20,
-                                            color: AppColors.primary,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: WedTextField(
-                                          borderRadius: 16,
-                                          hint: 'Partner 2',
-                                          controller: _partner2Ctrl,
-                                          validator: _required,
-                                          prefixIcon: Icons.person_outlined,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ] else ...[
-                                WedTextField(
-                                  borderRadius: 16,
-                                  hint: 'Business name',
-                                  controller: _businessNameCtrl,
-                                  validator: _required,
-                                  prefixIcon: Icons.store_outlined,
-                                ),
-                              ],
-                              const SizedBox(height: 20),
+          if (isCouple) ...[
+            if (sideBySide)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _partnerField(1, _partner1Ctrl)),
+                  const SizedBox(width: 14),
+                  Expanded(child: _partnerField(2, _partner2Ctrl)),
+                ],
+              )
+            else ...[
+              _partnerField(1, _partner1Ctrl),
+              const SizedBox(height: 18),
+              _partnerField(2, _partner2Ctrl),
+            ],
+          ] else
+            WedTextField(
+              label: 'Business name',
+              hint: 'e.g. Amara Events',
+              controller: _businessNameCtrl,
+              validator: _required,
+              prefixIcon: Icons.storefront_outlined,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+            ),
+          const SizedBox(height: 18),
 
-                              WedTextField(
-                                borderRadius: 16,
-                                hint: 'Phone number',
-                                controller: _phoneCtrl,
-                                keyboardType: TextInputType.phone,
-                                prefixIcon: Icons.phone_outlined,
-                                validator: _required,
-                              ),
-                              const SizedBox(height: 20),
+          WedTextField(
+            label: 'Phone number',
+            hint: '+260 97 000 0000',
+            controller: _phoneCtrl,
+            keyboardType: TextInputType.phone,
+            prefixIcon: Icons.phone_outlined,
+            textInputAction: TextInputAction.next,
+            validator: _required,
+          ),
+          const SizedBox(height: 18),
 
-                              WedTextField(
-                                borderRadius: 16,
-                                hint: 'Email address',
-                                controller: _emailCtrl,
-                                keyboardType: TextInputType.emailAddress,
-                                prefixIcon: Icons.mail_outlined,
-                                validator: (v) {
-                                  if (v == null || v.isEmpty) return 'Required';
-                                  if (!v.contains('@')) return 'Invalid email';
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 20),
+          WedTextField(
+            label: 'Email address',
+            hint: 'you@email.com',
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            prefixIcon: Icons.mail_outlined,
+            textInputAction: TextInputAction.next,
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Required';
+              if (!v.contains('@')) return 'Invalid email';
+              return null;
+            },
+          ),
+          const SizedBox(height: 18),
 
-                              WedTextField(
-                                borderRadius: 16,
-                                hint: 'Password',
-                                controller: _passCtrl,
-                                isPassword: true,
-                                prefixIcon: Icons.lock_outlined,
-                                validator: (v) {
-                                  if (v == null || v.isEmpty) return 'Required';
-                                  if (v.length < 8) return 'Min 8 characters';
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 28),
+          WedTextField(
+            label: 'Password',
+            // The rule lives in the hint rather than a helperText: helperText
+            // is swapped out for the error slot the moment validation fails,
+            // which moves every control below it by a line.
+            hint: 'At least 8 characters',
+            controller: _passCtrl,
+            isPassword: true,
+            prefixIcon: Icons.lock_outlined,
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (_) => _submit(),
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Required';
+              if (v.length < 8) return 'Min 8 characters';
+              return null;
+            },
+          ),
+          const SizedBox(height: 26),
 
-                              // ── CTA button ─────────────────────────────────
-                              WedButton(
-                                label: _role == UserRole.couple
-                                    ? 'Create our account'
-                                    : 'Create account',
-                                onPressed: _submit,
-                                variant: WedButtonVariant.primaryDark,
-                                isLoading: auth.isLoading,
-                                height: 56,
-                                borderRadius: 16,
-                              ),
-                              const SizedBox(height: 20),
-                              const OrDivider(),
-                              const SizedBox(height: 20),
-                              GoogleSignInButton(role: _role, isLoading: auth.isLoading),
-                              const SizedBox(height: 16),
+          WedButton(
+            label: isCouple ? 'Create our account' : 'Create account',
+            onPressed: _submit,
+            variant: WedButtonVariant.primaryDark,
+            isLoading: isLoading,
+            borderRadius: 28,
+          ),
+          const SizedBox(height: 18),
+          const OrDivider(),
+          const SizedBox(height: 18),
+          GoogleSignInButton(role: _role, isLoading: isLoading),
+          const SizedBox(height: 22),
 
-                              // ── Legal ──────────────────────────────────────
-                              Center(
-                                child: RichText(
-                                  textAlign: TextAlign.center,
-                                  text: TextSpan(
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textHint,
-                                    ),
-                                    children: const [
-                                      TextSpan(
-                                        text:
-                                            "By continuing you agree to WedPilot's ",
-                                      ),
-                                      TextSpan(
-                                        text: 'Terms of Service',
-                                        style: TextStyle(
-                                          color: AppColors.forestGreen,
-                                          decoration: TextDecoration.underline,
-                                          decorationColor:
-                                              AppColors.forestGreen,
-                                        ),
-                                      ),
-                                      TextSpan(text: ' and '),
-                                      TextSpan(
-                                        text: 'Privacy Policy',
-                                        style: TextStyle(
-                                          color: AppColors.forestGreen,
-                                          decoration: TextDecoration.underline,
-                                          decorationColor:
-                                              AppColors.forestGreen,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ── Login link ────────────────────────────────────────
-                      Center(
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(6),
-                            onTap: () => context.go('/login'),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                              child: RichText(
-                                text: TextSpan(
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white60,
-                                  ),
-                                  children: const [
-                                    TextSpan(text: 'Already planning with us? '),
-                                    TextSpan(
-                                      text: 'Log in',
-                                      style: TextStyle(
-                                        // Gold, not forest: this link sits
-                                        // below the form card, directly on
-                                        // the forest scaffold (its sibling
-                                        // span is Colors.white60).
-                                        color: AppColors.gold,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
+          Center(
+            child: RichText(
+              textAlign: TextAlign.center,
+              text: TextSpan(
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textHint,
+                  height: 1.6,
                 ),
+                children: const [
+                  TextSpan(text: "By continuing you agree to WedPilot's "),
+                  TextSpan(text: 'Terms of Service', style: _legalLink),
+                  TextSpan(text: ' and '),
+                  TextSpan(text: 'Privacy Policy', style: _legalLink),
+                  TextSpan(text: '.'),
+                ],
               ),
-            );
-          },
-        ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _partnerField(int index, TextEditingController controller) {
+    return WedTextField(
+      label: 'Partner $index',
+      hint: 'First name',
+      controller: controller,
+      validator: _required,
+      prefixIcon: Icons.person_outlined,
+      textCapitalization: TextCapitalization.words,
+      textInputAction: TextInputAction.next,
+    );
+  }
+}
+
+// ── Role selector ─────────────────────────────────────────────────────────────
+
+/// Couple / Vendor, as a segmented control rather than a `TabBar`.
+///
+/// A tab bar promises a swipeable page underneath it; this only swaps two
+/// fields, so a segmented control describes what actually happens — and leaves
+/// room for the icon and the blurb that tell a first-time visitor which side
+/// they are on.
+class _RoleSelector extends StatelessWidget {
+  final UserRole role;
+  final ValueChanged<UserRole> onChanged;
+
+  const _RoleSelector({required this.role, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppRadius.r16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _RoleTab(
+              icon: Icons.favorite_outlined,
+              label: 'Couple',
+              selected: role == UserRole.couple,
+              onTap: () => onChanged(UserRole.couple),
+            ),
+          ),
+          Expanded(
+            child: _RoleTab(
+              icon: Icons.storefront_outlined,
+              label: 'Vendor',
+              selected: role == UserRole.vendor,
+              onTap: () => onChanged(UserRole.vendor),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── Text field ────────────────────────────────────────────────────────────────
+class _RoleTab extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RoleTab({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = selected ? AppColors.forestGreen : AppColors.textSecondary;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? AppColors.surface : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        elevation: selected ? 1 : 0,
+        shadowColor: AppColors.cardShadow,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.r12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: foreground),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: foreground,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

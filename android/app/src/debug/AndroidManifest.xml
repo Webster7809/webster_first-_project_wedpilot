@@ -4,4 +4,16 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Debug builds talk to the backend over plain HTTP on a LAN address
+         (see the API_HOST dart define in ApiConfig). Android blocks cleartext
+         from API 28 onwards, so without this every request from a physical
+         device fails with a bare connection error that looks like the server
+         is down.
+
+         Debug source set only, deliberately: release builds must reach the
+         hosted API over https (see API_BASE_URL in ApiConfig), and this
+         attribute must never merge into a shipped APK.
+    -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

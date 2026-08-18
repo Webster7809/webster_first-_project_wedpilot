@@ -25,8 +25,14 @@ class BudgetValidationService {
         final where = (location != null && location.trim().isNotEmpty)
             ? location.trim()
             : 'your selected location';
-        excluded[entry.key] = 'No ${entry.key} vendors are currently available in '
-            '$where. Please remove this service or select another location.';
+        // Leads with "try another town" — the couple's real next step —
+        // rather than burying it after "remove this service". Vendors are
+        // never pulled in from outside the couple's chosen town to fill this
+        // silently: the couple decides whether to widen their search, not
+        // the matcher.
+        excluded[entry.key] = 'No ${entry.key} vendors are currently registered in '
+            '$where. Try a different town, or remove this service to continue with '
+            'what\'s already matched.';
       } else {
         covered[entry.key] = entry.value;
       }

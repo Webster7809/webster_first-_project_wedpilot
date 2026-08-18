@@ -65,14 +65,78 @@ Once running, **Hot Reload** applies on save automatically in most editors/IDEs 
 See `android/app/build.gradle.kts` for the release signing setup. Summary:
 
 ```bash
-flutter build apk --release
+flutter build apk --release --dart-define=API_BASE_URL=https://your-api-host
 ```
 
-Requires a local `android/key.properties` (gitignored) pointing at an upload keystore — see comments in `build.gradle.kts` for the one-time `keytool` command. Without `key.properties` present, release builds fall back to debug signing so `flutter run --release` still works during development.
+`API_BASE_URL` is **required** for any release artifact and must be `https`. A release build without it throws at the first API call rather than silently trying to reach `localhost` — which on a user's handset is the handset itself (see `lib/core/config/api_config.dart`). Add `--dart-define=GOOGLE_SERVER_CLIENT_ID=...` too if Google Sign-In is configured.
+
+Requires a local `android/key.properties` (gitignored) pointing at an upload keystore — see comments in `build.gradle.kts` for the one-time `keytool` command. Without `key.properties` present, release builds fall back to debug signing so `flutter run --release` still works during development. **A Play Store upload needs the real keystore** — an APK signed with the debug key is rejected.
+
+## Deploying the backend
+
+Set `NODE_ENV=production` on the deployed instance. That switches on the startup config gate (`backend/config/requireEnv.js`), HSTS, `trust proxy`, generic error responses, and migration-managed schema.
+
+The gate refuses to start unless the following are set to real values — each one otherwise fails as a working server with a quietly broken feature rather than a failed deploy:
+
+| Variable | Why it is mandatory |
+| --- | --- |
+| `JWT_SECRET` | Min 32 chars (`openssl rand -base64 32`). Unset, every login and authenticated request fails. |
+| `CORS_ORIGINS` | Comma-separated web origins. Absent, the alternative is an open CORS policy. |
+| `PUBLIC_WEB_BASE_URL` | Public `https` origin baked into verification and reset emails. A localhost value sends every recipient to their own machine. |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | Unconfigured, the mailer logs links to the console instead of sending — a silent account-recovery outage, since the API still answers "a reset link has been sent". |
+| `DB_HOST` / `DB_USER` / `DB_NAME` | Database connection. |
+
+Placeholder values copied from `.env.example` count as unset.
+
+Schema is applied as an explicit release step, never on boot — `sequelize.sync({ alter: true })` is development-only because a MySQL column type change is a drop-and-recreate:
+
+```bash
+cd backend
+npm ci
+npm run migrate
+npm start
+```
+
+## Running with Docker
+
+Brings up MySQL, the schema migration, the API, and the Flutter web build together.
+
+```bash
+cp .env.docker.example .env    # then fill it in — see the comments in that file
+docker compose up --build
+```
+
+Web app on `http://localhost:8080`, API on `http://localhost:3000`.
+
+| File | Role |
+| --- | --- |
+| `backend/Dockerfile` | API image — multi-stage, runs as non-root `node`, `/health` healthcheck |
+| `Dockerfile.web` | Flutter web build → nginx (build context is the repo root) |
+| `docker/nginx.conf` | Static serving: gzip, SPA fallback, long-lived asset caching |
+| `docker-compose.yml` | Wires the four services together |
+| `.env.docker.example` | Template for the compose `.env` (gitignored) |
+
+Startup order is enforced, not guessed: `db` must pass its healthcheck before `migrate` runs, and `migrate` must **exit successfully** before `api` starts. Migrations are idempotent, so re-running on every `up` is a no-op once the schema is current.
+
+Two things are compile-time rather than runtime, because `ApiConfig` reads them via `String.fromEnvironment`:
+
+- `API_BASE_URL` and `GOOGLE_SERVER_CLIENT_ID` are baked into the web bundle. Changing either needs `docker compose build web` — a restart alone will not pick them up.
+
+State lives in two named volumes: `db_data` (MySQL) and `uploads` (user-uploaded media, the only application state outside the database). `docker compose down` preserves both; `docker compose down -v` **deletes them**.
+
+Create the first admin account once the stack is up:
+
+```bash
+docker compose exec api node scripts/createAdmin.js
+```
+
+The compose file sets `NODE_ENV=production`, so the startup config gate described above applies — the API will refuse to start on a missing or placeholder value and name it.
 
 ## Analyze & test
 
 ```bash
 flutter analyze
 flutter test
+
+cd backend && npm test
 ```

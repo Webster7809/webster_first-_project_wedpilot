@@ -72,7 +72,7 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
     }
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.forestGreen,
         foregroundColor: Colors.white,

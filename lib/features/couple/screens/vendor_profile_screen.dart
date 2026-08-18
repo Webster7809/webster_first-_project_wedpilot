@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/router/app_routes.dart';
 import '../../../core/services/vendor_api_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_dimensions.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/vendor_profile.dart';
 import '../../../providers/auth_provider.dart';
@@ -31,7 +32,7 @@ class VendorProfileScreen extends ConsumerWidget {
     return vendorAsync.when(
       loading: () => _buildSkeleton(context),
       error: (e, _) => Scaffold(
-        backgroundColor: AppColors.cream,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Center(
           child: Text('Failed to load vendor',
               style: AppTextStyles.bodyMedium
@@ -44,7 +45,7 @@ class VendorProfileScreen extends ConsumerWidget {
 
   Widget _buildSkeleton(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -134,7 +135,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
     final maxGuestCapacity = vendor.maxGuestCapacity;
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── Photo carousel area ──────────────────────────────────────────────
@@ -204,7 +205,16 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+                // Centres the page at AppDimensions.contentMaxWidth. Without
+                // this the whole profile — description, packages, reviews —
+                // ran the full width of a laptop window as one very long
+                // line, which is what made it read as stretched.
+                padding: EdgeInsets.fromLTRB(
+                  AppDimensions.gutter(MediaQuery.sizeOf(context).width),
+                  20,
+                  AppDimensions.gutter(MediaQuery.sizeOf(context).width),
+                  120,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -227,7 +237,7 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: AppColors.surface,
+                              color: Theme.of(context).colorScheme.surface,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(color: AppColors.divider),
                             ),
@@ -662,8 +672,13 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
 
       // Fixed bottom bar
       bottomNavigationBar: Container(
+        // The bar itself stays full-bleed (it's a surface), but its contents
+        // line up with the page above rather than stretching to the edges.
         padding: EdgeInsets.fromLTRB(
-            20, 12, 20, MediaQuery.of(context).padding.bottom + 12),
+            AppDimensions.gutter(MediaQuery.sizeOf(context).width),
+            12,
+            AppDimensions.gutter(MediaQuery.sizeOf(context).width),
+            MediaQuery.of(context).padding.bottom + 12),
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [

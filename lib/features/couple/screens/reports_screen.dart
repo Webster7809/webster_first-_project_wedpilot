@@ -38,7 +38,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
     final reportState = ref.watch(reportProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Reports'),
         centerTitle: true,

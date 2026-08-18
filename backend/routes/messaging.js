@@ -5,8 +5,8 @@ const Message = require('../db/models/message');
 const Vendor = require('../db/models/vendor');
 const User = require('../db/models/user');
 const CoupleProfile = require('../db/models/coupleProfile');
-const Notification = require('../db/models/notification');
 const verifyJwt = require('../middleware/verifyJwt');
+const { notifyUser } = require('../services/notify');
 
 const router = express.Router();
 router.use(verifyJwt);
@@ -213,14 +213,19 @@ router.post('/conversations/:id/messages', async (req, res) => {
       : convo.couple_user_id;
     if (recipientUserId) {
       const sender = await User.findByPk(req.user.user_id, { attributes: ['name'] });
-      await Notification.create({
-        user_id: recipientUserId,
-        type: 'message',
-        title: `New message from ${sender?.name ?? 'someone'}`,
-        body: content.trim().slice(0, 140),
-        entity_id: convo.convo_id,
-        entity_type: 'conversation',
-      });
+      const messageTitle = `New message from ${sender?.name ?? 'someone'}`;
+      const messagePreview = content.trim().slice(0, 140);
+      await notifyUser(
+        recipientUserId,
+        {
+          type: 'message',
+          title: messageTitle,
+          body: messagePreview,
+          entity_id: convo.convo_id,
+          entity_type: 'conversation',
+        },
+        { subject: messageTitle, heading: messageTitle, bodyHtml: messagePreview },
+      );
     }
 
     res.status(201).json({ message: serializeMessage(message) });

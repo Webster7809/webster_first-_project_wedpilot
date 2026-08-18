@@ -67,7 +67,7 @@ class _HelpScreenState extends State<HelpScreen> {
               .toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Help & Support'),
         centerTitle: true,

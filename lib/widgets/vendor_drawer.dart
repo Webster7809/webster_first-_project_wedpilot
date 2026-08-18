@@ -175,6 +175,14 @@ class VendorDrawer extends ConsumerWidget {
                     context.push('/settings');
                   },
                 ),
+                _DrawerItem(
+                  icon: Icons.help_outline,
+                  label: 'Help and support',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.push('/help');
+                  },
+                ),
 
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),

@@ -7,6 +7,7 @@ import '../models/vendor_feedback.dart';
 import '../core/services/vendor_api_service.dart';
 import '../core/state/resource.dart';
 import 'auth_provider.dart';
+import '../core/services/api_error.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -104,10 +105,10 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       state = state.copyWith(status: ResourceStatus.ready, data: data);
     } on VendorApiException catch (e) {
       state = state.copyWith(status: ResourceStatus.error, errorMessage: e.message);
-    } catch (_) {
+    } catch (e) {
       state = state.copyWith(
         status: ResourceStatus.error,
-        errorMessage: 'Could not reach the server. Please try again.',
+        errorMessage: describeError(e),
       );
     }
   }
@@ -151,8 +152,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -203,9 +204,9 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
     } on VendorApiException catch (e) {
       state = state.copyWith(data: state.data!.copyWith(isSaving: false));
       return e.message;
-    } catch (_) {
+    } catch (e) {
       state = state.copyWith(data: state.data!.copyWith(isSaving: false));
-      return 'Could not reach the server. Please try again.';
+      return describeError(e);
     }
   }
 
@@ -218,8 +219,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return saveProfile(logoUrl: media.url);
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -238,8 +239,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -262,8 +263,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -282,8 +283,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -300,8 +301,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -331,8 +332,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -349,8 +350,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -365,8 +366,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -385,8 +386,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -415,8 +416,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -446,8 +447,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 
@@ -466,8 +467,8 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
       return null;
     } on VendorApiException catch (e) {
       return e.message;
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
+    } catch (e) {
+      return describeError(e);
     }
   }
 }

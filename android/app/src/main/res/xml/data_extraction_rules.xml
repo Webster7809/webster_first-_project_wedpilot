@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12+ (API 31+) governs backup and device-to-device transfer through
+    this file rather than the older allowBackup/fullBackupContent attributes,
+    which still apply below 31 (both are set in AndroidManifest.xml).
+
+    Nothing this app stores locally should leave the device. The sharedpref
+    domain is where flutter_secure_storage keeps its EncryptedSharedPreferences
+    blob holding the access and refresh tokens; its decryption key lives in the
+    hardware-backed Android Keystore, which is never included in a backup. So a
+    copied blob is useless on the receiving device — it restores as
+    undecryptable bytes and presents as a corrupt session rather than a clean
+    logged-out state. Excluding it makes the outcome deliberate instead of
+    accidental, and keeps a copy of the ciphertext off Google's servers.
+
+    The `file` domain covers the Hive box (app_settings) and cached vendor
+    imagery — user preferences and PII rather than credentials, but there is no
+    reason for either to ride along either. Every piece of real account data
+    lives server-side and re-syncs on the next login, so a fresh install starts
+    clean rather than losing anything.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

@@ -18,57 +18,79 @@ import 'wed_snack_bar.dart';
 /// Shows a confirmation dialog, then cancels [inquiry] on confirm — shared by
 /// [BookingActionButton] and the My Bookings list so both surfaces cancel the
 /// exact same way and refresh from the exact same provider afterward.
+///
+/// Confirm and in-flight both live in the same dialog (mirroring the Delete
+/// Account dialog in settings_screen.dart) rather than closing immediately on
+/// "Yes, cancel" and leaving the underlying screen to catch up on its own:
+/// that used to mean the booking card sat on stale data for a couple of
+/// seconds with zero feedback, since myBookingsProvider only refetches once
+/// the invalidate below resolves. Awaiting that refetch — not just firing
+/// it — means every screen watching it already shows the new state by the
+/// time this dialog closes.
 Future<void> confirmAndCancelBooking(
   BuildContext context,
   WidgetRef ref,
   Inquiry inquiry,
 ) async {
   final isBooked = inquiry.status == InquiryStatus.booked;
-  final confirmed = await showDialog<bool>(
+  bool submitting = false;
+
+  await showDialog<void>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Cancel this booking?'),
-      content: Text(
-        isBooked
-            ? 'This vendor already confirmed your booking. Are you sure you want to cancel it?'
-            : 'Are you sure you want to cancel this booking request?',
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setState) => AlertDialog(
+        title: const Text('Cancel this booking?'),
+        content: Text(
+          isBooked
+              ? 'This vendor already confirmed your booking. Are you sure you want to cancel it?'
+              : 'Are you sure you want to cancel this booking request?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: submitting ? null : () => Navigator.of(dialogContext).pop(),
+            child: const Text('Keep it'),
+          ),
+          WedButton(
+            label: 'Yes, cancel',
+            variant: WedButtonVariant.danger,
+            isLoading: submitting,
+            shrinkWrap: true,
+            height: 40,
+            onPressed: submitting
+                ? null
+                : () async {
+                    setState(() => submitting = true);
+                    final token = ref.read(authProvider.notifier).accessToken;
+                    if (token == null) return;
+                    try {
+                      await VendorApiService.instance.cancelInquiry(token, inquiry.id);
+                      ref.invalidate(myBookingsProvider);
+                      await ref.read(myBookingsProvider.future);
+                      if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                      if (context.mounted) {
+                        showWedSnackBar(context, 'Booking cancelled.', type: SnackType.info);
+                      }
+                    } on VendorApiException catch (e) {
+                      setState(() => submitting = false);
+                      if (dialogContext.mounted) {
+                        showWedSnackBar(dialogContext, e.message, type: SnackType.error);
+                      }
+                    } catch (_) {
+                      setState(() => submitting = false);
+                      if (dialogContext.mounted) {
+                        showWedSnackBar(
+                          dialogContext,
+                          'Could not cancel this booking. Please try again.',
+                          type: SnackType.error,
+                        );
+                      }
+                    }
+                  },
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('Keep it'),
-        ),
-        WedButton(
-          label: 'Yes, cancel',
-          variant: WedButtonVariant.danger,
-          shrinkWrap: true,
-          height: 40,
-          onPressed: () => Navigator.pop(ctx, true),
-        ),
-      ],
     ),
   );
-  if (confirmed != true) return;
-
-  final token = ref.read(authProvider.notifier).accessToken;
-  if (token == null) return;
-  try {
-    await VendorApiService.instance.cancelInquiry(token, inquiry.id);
-    ref.invalidate(myBookingsProvider);
-    if (context.mounted) {
-      showWedSnackBar(context, 'Booking cancelled.', type: SnackType.info);
-    }
-  } on VendorApiException catch (e) {
-    if (context.mounted) showWedSnackBar(context, e.message, type: SnackType.error);
-  } catch (_) {
-    if (context.mounted) {
-      showWedSnackBar(
-        context,
-        'Could not cancel this booking. Please try again.',
-        type: SnackType.error,
-      );
-    }
-  }
 }
 
 /// Reflects the couple's actual request state for [vendor] instead of always

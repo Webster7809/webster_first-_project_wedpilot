@@ -24,6 +24,13 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  // Collected once at registration (both couple and vendor signup require
+  // it) so it never has to be typed again — a vendor's onboarding contact
+  // step and a couple's profile both prefill from this instead of re-asking.
+  phone: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   role: {
     type: DataTypes.ENUM('couple', 'vendor', 'admin'),
     allowNull: false,
@@ -47,6 +54,29 @@ const User = sequelize.define('User', {
     allowNull: true,
   },
   reset_token_expires: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  // SHA-256 hash of the current email-verification token, same reasoning as
+  // reset_token_hash above. Null once the address is verified, or before the
+  // first verification email goes out.
+  verify_token_hash: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  verify_token_expires: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  email_notifications: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true,
+  },
+  // Set only by POST /api/auth/delete-account, alongside is_suspended=true —
+  // see migration 010 for why this is a scrub-and-flag rather than a real row
+  // delete.
+  deleted_at: {
     type: DataTypes.DATE,
     allowNull: true,
   },

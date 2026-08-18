@@ -64,7 +64,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         isVendorViewer ? conversation?.coupleAvatarUrl : conversation?.vendorAvatarUrl;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Row(
           children: [
@@ -93,7 +93,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               loading: () => const WedListSkeleton(rows: 6, hasLeading: false),
               error: (e, _) => Center(
                 child: Text('Could not load messages.',
-                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                    style: AppTextStyles.bodyMedium.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ),
               data: (messages) => ListView.builder(
                 controller: _scrollCtrl,
@@ -122,16 +122,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         children: [
                           IconButton(
                             tooltip: 'Attach file',
-                            icon: const Icon(Icons.attach_file_outlined, color: AppColors.textSecondary),
+                            icon: Icon(Icons.attach_file_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
                             onPressed: () {},
                           ),
                           Expanded(
-                            child: WedTextField(
-                              controller: _msgCtrl,
-                              hint: 'Type a message...',
-                              borderRadius: 24,
-                              maxLines: null,
-                              textInputAction: TextInputAction.newline,
+                            // maxLines stays null so the field grows with the
+                            // message and Enter inserts a newline (Flutter
+                            // asserts that pairing), but unbounded growth
+                            // inside this Row-in-a-Column resolved to an
+                            // effectively infinite intrinsic height and blew
+                            // the chat layout out by ~99,000px. The cap is a
+                            // height limit rather than a line limit: about
+                            // five lines, after which the field scrolls.
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 140),
+                              child: WedTextField(
+                                controller: _msgCtrl,
+                                hint: 'Type a message...',
+                                borderRadius: 24,
+                                maxLines: null,
+                                // Required with TextInputAction.newline on a
+                                // multi-line field — Flutter asserts on the
+                                // combination, and WedTextField defaults to
+                                // TextInputType.text. Without it the field
+                                // failed to build at all, which is what took
+                                // the whole chat layout down with it.
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.newline,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -177,7 +195,7 @@ class _MessageBubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
         decoration: BoxDecoration(
-          color: isMe ? AppColors.secondary : AppColors.surface,
+          color: isMe ? AppColors.secondary : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -191,15 +209,23 @@ class _MessageBubble extends StatelessWidget {
           children: [
             Text(
               message.content,
+              // Ink on gold, never white: AppColors.secondary is gold, and
+              // white on it is 2.42:1 — the couple's own messages were the
+              // least readable text in the app.
               style: AppTextStyles.bodyMedium.copyWith(
-                color: isMe ? Colors.white : AppColors.textPrimary,
+                color: isMe
+                    ? AppColors.textOnSecondary
+                    : Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               _formatTime(message.sentAt),
               style: AppTextStyles.caption.copyWith(
-                color: isMe ? Colors.white70 : AppColors.textSecondary,
+                // white70 on gold was worse still, at 1.9:1.
+                color: isMe
+                    ? AppColors.textPrimary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 10,
               ),
             ),

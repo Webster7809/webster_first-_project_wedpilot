@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 abstract final class AppDimensions {
   // Layout breakpoints
   static const double mobileMax = 599;
@@ -6,6 +8,21 @@ abstract final class AppDimensions {
   static const double desktopMin = 1024;
   static const double contentMaxWidth = 900;
   static const double formMaxWidth = 480;
+
+  /// Horizontal page padding that keeps content centred and readable instead
+  /// of letting a line of body text run the full width of a laptop window.
+  ///
+  /// Above [maxContent] the surplus is split into equal side gutters; below
+  /// it, this collapses to [minGutter] so phones keep their normal edge
+  /// padding. Use it for the page's own padding rather than wrapping the whole
+  /// scroll view, so full-bleed elements (hero images, sticky bars) can still
+  /// reach the screen edges.
+  static double gutter(
+    double availableWidth, {
+    double minGutter = 20,
+    double maxContent = contentMaxWidth,
+  }) =>
+      math.max(minGutter, (availableWidth - maxContent) / 2);
 
   // App chrome
   static const double appBarHeight = 64;

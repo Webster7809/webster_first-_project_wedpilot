@@ -172,7 +172,7 @@ class _TypeaheadFieldState<T extends Object> extends State<TypeaheadField<T>> {
             child: Container(
               constraints: BoxConstraints(maxHeight: widget.optionsMaxHeight),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(widget.borderRadius),
                 boxShadow: AppShadows.md,
               ),

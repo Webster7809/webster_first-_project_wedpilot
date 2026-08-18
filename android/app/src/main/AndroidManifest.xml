@@ -12,10 +12,17 @@
     <!-- Camera — required for "Take a Photo" option in the picker sheet -->
     <uses-permission android:name="android.permission.CAMERA"/>
 
+    <!-- allowBackup covers API 30 and below; dataExtractionRules covers 31+,
+         where it also governs device-to-device transfer. Both are needed to
+         keep the stored session tokens and local profile data on the device
+         they were issued to — see res/xml/data_extraction_rules.xml. -->
     <application
         android:label="Wedpilot"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"

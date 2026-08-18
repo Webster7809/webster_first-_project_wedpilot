@@ -16,7 +16,7 @@ class CoupleMessagesScreen extends ConsumerWidget {
     final convsAsync = ref.watch(conversationsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('Messages')),
       body: convsAsync.when(
         loading: () => const WedListSkeleton(rows: 6),

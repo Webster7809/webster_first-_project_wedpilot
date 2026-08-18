@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../config/api_config.dart';
 import '../../models/user.dart';
+import 'api_error.dart';
 
 // Flutter never touches the database directly.
 // All auth calls go through the Node/Express backend.
@@ -51,12 +52,14 @@ class AuthService {
     required String email,
     required String password,
     required UserRole role,
+    String? phone,
   }) async {
     return _postAuth('/api/auth/register', {
       'name': name,
       'email': email,
       'password': password,
       'role': role.name,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
     });
   }
 
@@ -100,6 +103,33 @@ class AuthService {
     }
   }
 
+  /// Asks the backend to mail a fresh confirmation link to the signed-in
+  /// account's own address — hence the access token rather than an email
+  /// parameter.
+  Future<void> resendVerificationEmail(String accessToken) async {
+    try {
+      await _dio.post<Map<String, dynamic>>(
+        '/api/auth/resend-verification',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+    } on DioException catch (e) {
+      throw AuthApiException(_extractError(e));
+    }
+  }
+
+  /// Redeems the token from a confirmation link. Unauthenticated: the link is
+  /// opened by whatever browser the user's mail client hands it to.
+  Future<void> verifyEmail(String token) async {
+    try {
+      await _dio.post<Map<String, dynamic>>(
+        '/api/auth/verify-email',
+        data: {'token': token},
+      );
+    } on DioException catch (e) {
+      throw AuthApiException(_extractError(e));
+    }
+  }
+
   Future<void> forgotPassword(String email) async {
     try {
       await _dio.post<Map<String, dynamic>>(
@@ -125,6 +155,61 @@ class AuthService {
     }
   }
 
+  /// Changes the signed-in user's password. Requires the current one — a
+  /// stolen-but-not-yet-expired access token should not be enough on its own
+  /// to lock the real owner out.
+  Future<void> changePassword({
+    required String accessToken,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await _dio.post<Map<String, dynamic>>(
+        '/api/auth/change-password',
+        data: {'currentPassword': currentPassword, 'newPassword': newPassword},
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+    } on DioException catch (e) {
+      throw AuthApiException(_extractError(e));
+    }
+  }
+
+  /// Syncs the Email Notifications toggle server-side so it actually gates
+  /// the notification emails sent from the backend, not just the local copy
+  /// in [SettingsNotifier].
+  Future<void> updateNotificationPreferences({
+    required String accessToken,
+    required bool emailNotifications,
+  }) async {
+    try {
+      await _dio.patch<Map<String, dynamic>>(
+        '/api/auth/notification-preferences',
+        data: {'emailNotifications': emailNotifications},
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+    } on DioException catch (e) {
+      throw AuthApiException(_extractError(e));
+    }
+  }
+
+  /// Permanently deactivates the signed-in account. Requires the current
+  /// password, same reasoning as [changePassword] — an irreversible action
+  /// like this needs more than a still-valid session token.
+  Future<void> deleteAccount({
+    required String accessToken,
+    required String currentPassword,
+  }) async {
+    try {
+      await _dio.post<Map<String, dynamic>>(
+        '/api/auth/delete-account',
+        data: {'currentPassword': currentPassword},
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+    } on DioException catch (e) {
+      throw AuthApiException(_extractError(e));
+    }
+  }
+
   Future<AuthResult> _postAuth(String path, Map<String, dynamic> body) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(path, data: body);
@@ -134,9 +219,5 @@ class AuthService {
     }
   }
 
-  String _extractError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['error'] is String) return data['error'] as String;
-    return 'Could not reach the server. Please try again.';
-  }
+  String _extractError(DioException e) => describeDioError(e);
 }

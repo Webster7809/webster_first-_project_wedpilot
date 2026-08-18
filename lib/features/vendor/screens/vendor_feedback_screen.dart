@@ -36,7 +36,7 @@ class VendorFeedbackScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── Dark green header ────────────────────────────────────────────
@@ -46,6 +46,14 @@ class VendorFeedbackScreen extends ConsumerWidget {
             backgroundColor: AppColors.forestGreen,
             expandedHeight: 120,
             elevation: 0,
+            // This bar is a fixed dark-green brand surface in both app
+            // themes, not something that adapts to light/dark — without an
+            // explicit color the back arrow falls back to the ambient
+            // AppBarTheme (near-black in light mode), which reads as barely
+            // visible against forest green. White clears 7.73:1 here, same
+            // as every other forest-green header in this app (Calendar,
+            // Analytics, Subscription all set this explicitly).
+            iconTheme: const IconThemeData(color: Colors.white),
             flexibleSpace: FlexibleSpaceBar(
               background: SafeArea(
                 bottom: false,

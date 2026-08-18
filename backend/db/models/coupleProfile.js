@@ -31,11 +31,8 @@ const CoupleProfile = sequelize.define('CoupleProfile', {
     // bypasses the route handler's own check.
     validate: { min: 0, max: 20000 },
   },
-  style_tags: {
-    type: DataTypes.JSON,
-    allowNull: false,
-    defaultValue: [],
-  },
+  // style_tags moved to the couple_style_tags table in migration 006 — a JSON
+  // array of tags was a repeating group. Use services/styleTags.js.
   total_budget: {
     type: DataTypes.DECIMAL(12, 2),
     allowNull: true,

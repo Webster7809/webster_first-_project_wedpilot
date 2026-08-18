@@ -9,11 +9,19 @@ const Inquiry = require('../db/models/inquiry');
 const Expense = require('../db/models/expense');
 const User = require('../db/models/user');
 const CoupleProfile = require('../db/models/coupleProfile');
-const Notification = require('../db/models/notification');
 const verifyJwt = require('../middleware/verifyJwt');
 const { requireCouple, requireVendor } = require('../middleware/roles');
 const { makeUploader, relativeUploadUrl } = require('../middleware/upload');
 const { recalculateVendorStats, statsForVendorIds } = require('../services/vendorStats');
+const { applyInquiryStatus, InquiryStatusError } = require('../services/inquiryStatus');
+const { notifyUser } = require('../services/notify');
+const {
+  blockedDatesFor, blockedDatesForVendors, setBlockedDates, releaseDate, isBlocked,
+} = require('../services/vendorAvailability');
+const {
+  vendorStyleTags, vendorStyleTagsFor, setVendorStyleTags,
+} = require('../services/styleTags');
+const { packagesFor, packagesForVendors, setPackages } = require('../services/vendorPackages');
 const { validateMaxGuests } = require('../services/guestCapacity');
 
 const router = express.Router();
@@ -47,6 +55,27 @@ function serializeMedia(media) {
   };
 }
 
+// The vendor-side single-inquiry endpoints (accept/decline, service-done)
+// used to call serializeInquiry(inquiry) bare, leaving couple_name/vendor_name
+// null — harmless for a fresh GET /me/inquiries fetch, but
+// vendor_own_provider.dart's markInquiryStatus/markServiceDone splice this
+// exact response straight into the cached inquiry list rather than
+// refetching, so the lead card's name visibly flipped to "Unknown couple"
+// the instant a vendor accepted or marked a booking done.
+async function serializeOwnInquiry(inquiry, vendor) {
+  const [coupleUser, feedback] = await Promise.all([
+    User.findByPk(inquiry.couple_user_id, { attributes: ['name'] }),
+    VendorFeedback.findOne({
+      where: { couple_user_id: inquiry.couple_user_id, vendor_id: vendor.vendor_id },
+    }),
+  ]);
+  return serializeInquiry(inquiry, {
+    coupleName: coupleUser?.name ?? null,
+    vendorName: vendor.business_name,
+    hasFeedback: !!feedback,
+  });
+}
+
 function serializeInquiry(inquiry, { coupleName = null, vendorName = null, hasFeedback = false } = {}) {
   return {
     inquiry_id: inquiry.inquiry_id,
@@ -69,8 +98,20 @@ function serializeInquiry(inquiry, { coupleName = null, vendorName = null, hasFe
   };
 }
 
-async function serializeVendor(vendor, { includeDetail = false, statsInfo = null, services = null } = {}) {
+async function serializeVendor(
+  vendor,
+  {
+    includeDetail = false, statsInfo = null, services = null,
+    blockedDates = null, styleTags = null, packages = null,
+  } = {},
+) {
   const stats = statsInfo ?? (await statsForVendorIds([vendor.vendor_id]))[vendor.vendor_id];
+  // Passed in by the list endpoint, which batches them — same reason stats are
+  // batched. Falling back to a per-vendor read here would make a page of 20
+  // vendors 20 extra queries.
+  const blocked = blockedDates ?? (await blockedDatesFor(vendor.vendor_id));
+  const tags = styleTags ?? (await vendorStyleTags(vendor.vendor_id));
+  const pkgs = packages ?? (await packagesFor(vendor.vendor_id));
 
   const base = {
     vendor_id: vendor.vendor_id,
@@ -84,7 +125,7 @@ async function serializeVendor(vendor, { includeDetail = false, statsInfo = null
     tier: vendor.tier,
     verification_status: vendor.verification_status,
     is_featured: vendor.is_featured,
-    style_tags: vendor.style_tags,
+    style_tags: tags,
     logo_url: vendor.logo_url,
     phone: vendor.phone,
     website: vendor.website,
@@ -92,8 +133,8 @@ async function serializeVendor(vendor, { includeDetail = false, statsInfo = null
     contact_email: vendor.contact_email,
     address: vendor.address,
     instagram_handle: vendor.instagram_handle,
-    blocked_dates: vendor.blocked_dates,
-    packages: vendor.packages ?? [],
+    blocked_dates: blocked,
+    packages: pkgs,
     // Public CRS + badges only — sourced from vendor_stats, never from raw
     // vendor_feedback (no comments, no reviewer identity ever leave that table).
     rating: stats.avg_star_rating,
@@ -145,6 +186,17 @@ router.get('/', verifyJwt, async (req, res) => {
     const offset = Number(req.query.offset) || 0;
 
     const where = { verification_status: { [Op.ne]: 'rejected' } };
+    // Excludes vendors whose owning account is suspended or self-deleted
+    // (see POST /api/auth/delete-account) — otherwise a "deleted" vendor
+    // stays fully bookable here, which is the one place that matters for
+    // making the deletion actually visible from a couple's side.
+    const suspendedOwners = await User.findAll({
+      where: { is_suspended: true },
+      attributes: ['user_id'],
+    });
+    if (suspendedOwners.length) {
+      where.user_id = { [Op.notIn]: suspendedOwners.map((u) => u.user_id) };
+    }
     if (category) {
       where.category = category;
     } else if (category_in) {
@@ -198,11 +250,14 @@ router.get('/', verifyJwt, async (req, res) => {
     });
     const tVendorsFetched = Date.now();
     const rowVendorIds = rows.map((v) => v.vendor_id);
-    const [statsMap, allServices] = await Promise.all([
+    const [statsMap, allServices, blockedMap, tagsMap, packagesMap] = await Promise.all([
       statsForVendorIds(rowVendorIds),
       rowVendorIds.length
         ? VendorService.findAll({ where: { vendor_id: { [Op.in]: rowVendorIds } } })
         : [],
+      blockedDatesForVendors(rowVendorIds),
+      vendorStyleTagsFor(rowVendorIds),
+      packagesForVendors(rowVendorIds),
     ]);
     const servicesByVendor = {};
     for (const s of allServices) {
@@ -212,6 +267,9 @@ router.get('/', verifyJwt, async (req, res) => {
       rows.map((v) => serializeVendor(v, {
         statsInfo: statsMap[v.vendor_id],
         services: servicesByVendor[v.vendor_id] ?? [],
+        blockedDates: blockedMap[v.vendor_id] ?? [],
+        styleTags: tagsMap[v.vendor_id] ?? [],
+        packages: packagesMap[v.vendor_id] ?? [],
       })),
     );
     if (category_in) {
@@ -258,13 +316,11 @@ router.put('/me', verifyJwt, requireVendor, async (req, res) => {
     return res.status(400).json({ error: 'category is required.' });
   }
 
+  // style_tags is no longer a column — it is written separately below, only
+  // when the caller actually supplied it. A null (sent by callers that don't
+  // set it, like the onboarding wizard) still means "leave alone", not "clear".
   const allFields = {
     business_name, description, category, location, latitude, longitude,
-    // style_tags is NOT NULL with a [] default — an explicit null (sent by
-    // callers that don't set it, like the onboarding wizard) must be treated
-    // as "not provided" rather than passed through, or the insert violates
-    // the column's not-null constraint instead of falling back to the default.
-    style_tags: style_tags ?? undefined,
     logo_url, phone, website, whatsapp, contact_email, address, instagram_handle,
   };
   const fields = Object.fromEntries(Object.entries(allFields).filter(([, v]) => v !== undefined));
@@ -277,6 +333,12 @@ router.put('/me', verifyJwt, requireVendor, async (req, res) => {
     if (!created) {
       vendor.set(fields);
       await vendor.save();
+    }
+    if (style_tags != null) {
+      if (!Array.isArray(style_tags) || !style_tags.every((t) => typeof t === 'string')) {
+        return res.status(400).json({ error: 'style_tags must be an array of strings.' });
+      }
+      await setVendorStyleTags(vendor.vendor_id, style_tags);
     }
     res.json({ vendor: await serializeVendor(vendor, { includeDetail: true }) });
   } catch (err) {
@@ -505,9 +567,8 @@ router.patch('/me/blocked-dates', verifyJwt, requireVendor, async (req, res) => 
     if (!Array.isArray(dates) || !dates.every((d) => typeof d === 'string')) {
       return res.status(400).json({ error: 'dates must be an array of date strings.' });
     }
-    vendor.blocked_dates = dates;
-    await vendor.save();
-    res.json({ blocked_dates: vendor.blocked_dates });
+    const saved = await setBlockedDates(vendor.vendor_id, dates);
+    res.json({ blocked_dates: saved });
   } catch (err) {
     console.error('Update blocked dates error:', err.message);
     res.status(500).json({ error: 'Could not update blocked dates.' });
@@ -563,9 +624,8 @@ router.patch('/me/packages', verifyJwt, requireVendor, async (req, res) => {
       });
     }
 
-    vendor.packages = cleaned;
-    await vendor.save();
-    res.json({ packages: vendor.packages });
+    const saved = await setPackages(vendor.vendor_id, cleaned);
+    res.json({ packages: saved });
   } catch (err) {
     console.error('Update vendor packages error:', err.message);
     res.status(500).json({ error: 'Could not update packages.' });
@@ -607,7 +667,10 @@ router.get('/me/inquiries', verifyJwt, requireVendor, async (req, res) => {
 router.get('/inquiries/mine', verifyJwt, requireCouple, async (req, res) => {
   try {
     const inquiries = await Inquiry.findAll({
-      where: { couple_user_id: req.user.user_id },
+      // hidden_by_couple: rows the couple removed from their own list via
+      // DELETE /inquiries/:id below — still present for the vendor's own
+      // history and stats, just no longer shown here.
+      where: { couple_user_id: req.user.user_id, hidden_by_couple: false },
       order: [['created_at', 'DESC']],
     });
     const vendorIds = [...new Set(inquiries.map((i) => i.vendor_id))];
@@ -654,28 +717,57 @@ router.patch('/inquiries/:id/cancel', verifyJwt, requireCouple, async (req, res)
       // Undo the calendar hold a confirmed booking placed — otherwise the
       // vendor stays blocked out on a date that just freed up.
       if (wasBooked && inquiry.wedding_date) {
-        const blocked = new Set(vendor.blocked_dates || []);
-        if (blocked.delete(inquiry.wedding_date)) {
-          vendor.blocked_dates = [...blocked];
-          await vendor.save();
-        }
+        await releaseDate(vendor.vendor_id, inquiry.wedding_date);
       }
       await recalculateVendorStats(vendor.vendor_id);
       const coupleUser = await User.findByPk(req.user.user_id, { attributes: ['name'] });
-      await Notification.create({
-        user_id: vendor.user_id,
-        type: 'booking_cancelled',
-        title: wasBooked ? 'A couple cancelled their booking' : 'A couple withdrew their inquiry',
-        body: `${coupleUser?.name ?? 'A couple'} cancelled their ${wasBooked ? 'confirmed booking' : 'inquiry'} with you.`,
-        entity_id: inquiry.inquiry_id,
-        entity_type: 'inquiry',
-      });
+      const cancelTitle = wasBooked ? 'A couple cancelled their booking' : 'A couple withdrew their inquiry';
+      const cancelBody = `${coupleUser?.name ?? 'A couple'} cancelled their ${wasBooked ? 'confirmed booking' : 'inquiry'} with you.`;
+      await notifyUser(
+        vendor.user_id,
+        {
+          type: 'booking_cancelled',
+          title: cancelTitle,
+          body: cancelBody,
+          entity_id: inquiry.inquiry_id,
+          entity_type: 'inquiry',
+        },
+        { subject: cancelTitle, heading: cancelTitle, bodyHtml: cancelBody },
+      );
     }
 
     res.json({ inquiry: serializeInquiry(inquiry) });
   } catch (err) {
     console.error('Cancel inquiry error:', err.message);
     res.status(500).json({ error: 'Could not cancel this booking.' });
+  }
+});
+
+// Removes a closed-out request from the couple's own "My Bookings" list —
+// "delete" from the couple's point of view, but the row itself stays: the
+// vendor's own inquiry history and recalculateVendorStats still depend on it,
+// and the cancel/decline notification above points at this same inquiry_id.
+// Only allowed once the request is actually closed (declined/cancelled) —
+// hiding a live request would let a couple lose track of something a vendor
+// is still actively working, with no way to get it back into view.
+router.delete('/inquiries/:id', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const inquiry = await Inquiry.findOne({
+      where: { inquiry_id: req.params.id, couple_user_id: req.user.user_id },
+    });
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
+    if (!['declined', 'cancelled'].includes(inquiry.status)) {
+      return res.status(409).json({
+        error: 'Only a declined or cancelled booking can be removed from your list.',
+      });
+    }
+
+    inquiry.hidden_by_couple = true;
+    await inquiry.save();
+    res.json({ removed: true });
+  } catch (err) {
+    console.error('Hide inquiry error:', err.message);
+    res.status(500).json({ error: 'Could not remove this booking.' });
   }
 });
 
@@ -697,74 +789,26 @@ router.patch('/me/inquiries/:id', verifyJwt, requireVendor, async (req, res) => 
     if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
 
     const { status } = req.body;
-    const validStatuses = ['newInquiry', 'viewed', 'responded', 'quoted', 'booked', 'declined'];
-    if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status.' });
 
-    if (status === 'declined') {
-      const reason = typeof req.body.decline_reason === 'string' ? req.body.decline_reason.trim() : '';
-      if (!reason) return res.status(400).json({ error: 'A decline reason is required.' });
-      if (reason.length > 300) return res.status(400).json({ error: 'Decline reason must be 300 characters or fewer.' });
-      inquiry.decline_reason = reason;
-    }
-
-    // Accepting a booking wires the real date into Vendor.blocked_dates (the
-    // signal the AI matcher already penalizes against) and guards against
-    // double-booking the same date via two still-pending inquiries.
-    if (status === 'booked') {
-      const effectiveDate = await resolveWeddingDate(inquiry);
-      if (effectiveDate) {
-        const conflict = await Inquiry.findOne({
-          where: {
-            vendor_id: vendor.vendor_id,
-            status: 'booked',
-            wedding_date: effectiveDate,
-            inquiry_id: { [Op.ne]: inquiry.inquiry_id },
-          },
-        });
-        if (conflict) {
-          return res.status(409).json({ error: 'You already have a confirmed booking on this date.' });
-        }
-        if (!inquiry.wedding_date) inquiry.wedding_date = effectiveDate;
-        const blocked = new Set(vendor.blocked_dates || []);
-        if (!blocked.has(effectiveDate)) {
-          vendor.blocked_dates = [...blocked, effectiveDate];
-          await vendor.save();
-        }
+    // The transition rules live in services/inquiryStatus.js so they can be
+    // tested directly — this is the only code that decides whether a wedding
+    // date is held on a vendor's calendar.
+    try {
+      await applyInquiryStatus({
+        vendor,
+        inquiry,
+        status,
+        declineReason: req.body.decline_reason,
+        resolveWeddingDate,
+      });
+    } catch (err) {
+      if (err instanceof InquiryStatusError) {
+        return res.status(err.status).json({ error: err.message });
       }
+      throw err;
     }
 
-    inquiry.status = status;
-    if (['responded', 'quoted', 'booked', 'declined'].includes(status) && !inquiry.responded_at) {
-      inquiry.responded_at = new Date();
-    }
-    await inquiry.save();
-    // Response time, booking acceptance rate, and completed-weddings count
-    // all derive from inquiry status/timing.
-    await recalculateVendorStats(vendor.vendor_id);
-
-    if (status === 'booked') {
-      await Notification.create({
-        user_id: inquiry.couple_user_id,
-        type: 'booking_accepted',
-        title: `${vendor.business_name} confirmed your booking!`,
-        body: inquiry.wedding_date
-          ? `Your booking for ${inquiry.wedding_date} is confirmed.`
-          : 'Your booking request has been confirmed.',
-        entity_id: vendor.vendor_id,
-        entity_type: 'vendor',
-      });
-    } else if (status === 'declined') {
-      await Notification.create({
-        user_id: inquiry.couple_user_id,
-        type: 'booking_declined',
-        title: `${vendor.business_name} declined your request`,
-        body: inquiry.decline_reason,
-        entity_id: vendor.vendor_id,
-        entity_type: 'vendor',
-      });
-    }
-
-    res.json({ inquiry: serializeInquiry(inquiry) });
+    res.json({ inquiry: await serializeOwnInquiry(inquiry, vendor) });
   } catch (err) {
     console.error('Update inquiry error:', err.message);
     res.status(500).json({ error: 'Could not update inquiry.' });
@@ -772,10 +816,8 @@ router.patch('/me/inquiries/:id', verifyJwt, requireVendor, async (req, res) => 
 });
 
 // Vendor marks a booked engagement's service as fulfilled — notifies the
-// couple to leave (private) feedback. Capped at 2 reminders: the first sends
-// the initial "please rate" prompt, the second is a final nudge in case the
-// first was ignored; further calls are rejected once the couple has rated or
-// the cap is reached.
+// couple to leave (private) feedback. One reminder only: further calls are
+// rejected once it's been sent, or once the couple has already rated.
 router.post('/me/inquiries/:id/service-done', verifyJwt, requireVendor, async (req, res) => {
   try {
     const vendor = await ownVendorOr404(req, res);
@@ -794,11 +836,10 @@ router.post('/me/inquiries/:id/service-done', verifyJwt, requireVendor, async (r
       return res.status(409).json({ error: 'This couple has already rated you — no reminder needed.' });
     }
 
-    if (inquiry.rating_reminder_count >= 2) {
-      return res.status(409).json({ error: 'You’ve already sent the maximum of 2 rating reminders for this booking.' });
+    if (inquiry.rating_reminder_count >= 1) {
+      return res.status(409).json({ error: 'You’ve already sent your rating reminder for this booking.' });
     }
 
-    const isFirstReminder = inquiry.rating_reminder_count === 0;
     if (!inquiry.service_done_at) inquiry.service_done_at = new Date();
     inquiry.rating_reminder_count += 1;
     inquiry.rating_reminder_last_sent_at = new Date();
@@ -806,18 +847,21 @@ router.post('/me/inquiries/:id/service-done', verifyJwt, requireVendor, async (r
     // completed_weddings_count is now driven by service_done_at.
     await recalculateVendorStats(vendor.vendor_id);
 
-    await Notification.create({
-      user_id: inquiry.couple_user_id,
-      type: 'rate_vendor',
-      title: `How was ${vendor.business_name}?`,
-      body: isFirstReminder
-        ? `${vendor.business_name} marked your booking as complete. Share a quick private rating — it's never shown publicly.`
-        : `Final reminder: rate your experience with ${vendor.business_name}. Your feedback stays private.`,
-      entity_id: vendor.vendor_id,
-      entity_type: 'vendor',
-    });
+    const rateTitle = `How was ${vendor.business_name}?`;
+    const rateBody = `${vendor.business_name} marked your booking as complete. Share a quick private rating — it's never shown publicly.`;
+    await notifyUser(
+      inquiry.couple_user_id,
+      {
+        type: 'rate_vendor',
+        title: rateTitle,
+        body: rateBody,
+        entity_id: vendor.vendor_id,
+        entity_type: 'vendor',
+      },
+      { subject: rateTitle, heading: rateTitle, bodyHtml: rateBody },
+    );
 
-    res.json({ inquiry: serializeInquiry(inquiry) });
+    res.json({ inquiry: await serializeOwnInquiry(inquiry, vendor) });
   } catch (err) {
     console.error('Mark service done error:', err.message);
     res.status(500).json({ error: 'Could not mark service as done.' });
@@ -846,7 +890,7 @@ router.post('/:id/inquiries', verifyJwt, requireCouple, async (req, res) => {
       const profile = await CoupleProfile.findOne({ where: { user_id: req.user.user_id } });
       weddingDate = profile?.wedding_date ?? null;
     }
-    if (weddingDate && (vendor.blocked_dates || []).includes(weddingDate)) {
+    if (weddingDate && await isBlocked(vendor.vendor_id, weddingDate)) {
       return res.status(409).json({ error: 'This vendor isn’t available on your wedding date.' });
     }
 

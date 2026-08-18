@@ -74,11 +74,40 @@ class NotificationsScreen extends ConsumerWidget {
     }
   }
 
+  /// Swipe-to-dismiss on a single row. The tile has already animated itself
+  /// off-screen by the time this runs (Dismissible's contract), so a failure
+  /// here can't just silently no-op — the provider is invalidated either way
+  /// to reconcile the list with whatever the backend actually has, and the
+  /// couple is told if the delete didn't really happen.
+  Future<void> _delete(WidgetRef ref, BuildContext context, String notifId) async {
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    try {
+      await NotificationApiService.instance.deleteNotification(token, notifId);
+    } on NotificationApiException catch (e) {
+      if (context.mounted) showWedSnackBar(context, e.message, type: SnackType.error);
+    } finally {
+      ref.invalidate(notificationsProvider);
+    }
+  }
+
+  Future<void> _clearRead(WidgetRef ref, BuildContext context) async {
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    try {
+      await NotificationApiService.instance.clearRead(token);
+      ref.invalidate(notificationsProvider);
+    } on NotificationApiException catch (e) {
+      if (context.mounted) showWedSnackBar(context, e.message, type: SnackType.error);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notificationsAsync = ref.watch(notificationsProvider);
     final notifications = notificationsAsync.valueOrNull ?? [];
     final unread = notifications.where((n) => !n.isRead).length;
+    final hasRead = notifications.any((n) => n.isRead);
 
     return Scaffold(
       appBar: AppBar(
@@ -87,14 +116,25 @@ class NotificationsScreen extends ConsumerWidget {
         backgroundColor: AppColors.forestGreen,
         foregroundColor: Colors.white,
         actions: [
-          TextButton(
-            onPressed: unread > 0 ? () => _markAllRead(ref, context) : null,
-            child: Text(
-              'Mark all read',
-              style: AppTextStyles.labelMedium.copyWith(
-                color: unread > 0 ? AppColors.amber : Colors.white38,
+          // A single overflow menu rather than two AppBar-level text buttons —
+          // "Mark all read" plus a second label was already close to wrapping
+          // on a narrow phone (see test/messages_overflow_test.dart's 320px
+          // case elsewhere in this app), and a third action here would tip it.
+          PopupMenuButton<VoidCallback>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onSelected: (action) => action(),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                enabled: unread > 0,
+                value: () => _markAllRead(ref, context),
+                child: const Text('Mark all read'),
               ),
-            ),
+              PopupMenuItem(
+                enabled: hasRead,
+                value: () => _clearRead(ref, context),
+                child: const Text('Clear read notifications'),
+              ),
+            ],
           ),
         ],
       ),
@@ -155,10 +195,21 @@ class NotificationsScreen extends ConsumerWidget {
                     final onTap = deepLinks
                         ? () => _handleTap(ref, context, n)
                         : (n.isRead ? null : () => _markRead(ref, context, n.id));
-                    return _NotificationTile(
-                      notification: n,
-                      presentation: _presentation(n.type),
-                      onTap: onTap,
+                    return Dismissible(
+                      key: ValueKey(n.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        color: AppColors.error,
+                        child: const Icon(Icons.delete_outline, color: Colors.white),
+                      ),
+                      onDismissed: (_) => _delete(ref, context, n.id),
+                      child: _NotificationTile(
+                        notification: n,
+                        presentation: _presentation(n.type),
+                        onTap: onTap,
+                      ),
                     );
                   },
                 ),

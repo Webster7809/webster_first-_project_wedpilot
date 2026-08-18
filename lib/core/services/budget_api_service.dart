@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../../models/budget.dart';
+import 'api_error.dart';
 import 'authenticated_dio.dart';
 
 // Flutter never touches the database directly.
@@ -141,9 +142,5 @@ class BudgetApiService {
     }
   }
 
-  String _extractError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['error'] is String) return data['error'] as String;
-    return 'Could not reach the server. Please try again.';
-  }
+  String _extractError(DioException e) => describeDioError(e);
 }

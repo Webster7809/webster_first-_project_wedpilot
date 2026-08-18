@@ -4,14 +4,18 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/router/app_routes.dart';
+import '../../../core/services/api_error.dart';
+import '../../../core/services/vendor_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/inquiry_status_display.dart';
 import '../../../models/messaging.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/booking_provider.dart';
 import '../../../widgets/booking_action_button.dart';
 import '../../../widgets/wed_empty_state.dart';
 import '../../../widgets/wed_skeleton.dart';
+import '../../../widgets/wed_snack_bar.dart';
 
 class MyBookingsScreen extends ConsumerWidget {
   const MyBookingsScreen({super.key});
@@ -21,7 +25,7 @@ class MyBookingsScreen extends ConsumerWidget {
     final bookingsAsync = ref.watch(myBookingsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('My Bookings'),
         centerTitle: true,
@@ -33,7 +37,8 @@ class MyBookingsScreen extends ConsumerWidget {
         error: (error, stack) => Center(
           child: Text(
             'Unable to load your bookings.',
-            style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.bodyLarge
+                .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
         data: (bookings) {
@@ -67,6 +72,42 @@ class _BookingCard extends ConsumerWidget {
   final Inquiry inquiry;
   const _BookingCard({required this.inquiry});
 
+  bool get _canRemove =>
+      inquiry.status == InquiryStatus.declined || inquiry.status == InquiryStatus.cancelled;
+
+  Future<void> _remove(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove this booking?'),
+        content: const Text(
+          "This just clears it from your list — it won't undo anything with the vendor.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    try {
+      await VendorApiService.instance.hideInquiry(token, inquiry.id);
+      ref.invalidate(myBookingsProvider);
+    } catch (e) {
+      if (context.mounted) showWedSnackBar(context, describeError(e), type: SnackType.error);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Wording comes from the shared helper so a booking reads identically
@@ -81,10 +122,11 @@ class _BookingCard extends ConsumerWidget {
         inquiry.serviceDoneAt != null &&
         !inquiry.hasFeedback;
     final canCancel = InquiryStatusDisplay.isActive(inquiry.status);
+    final cs = Theme.of(context).colorScheme;
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -103,7 +145,7 @@ class _BookingCard extends ConsumerWidget {
               Expanded(
                 child: Text(
                   inquiry.vendorName ?? 'Vendor',
-                  style: AppTextStyles.titleMedium.copyWith(color: AppColors.forestGreen),
+                  style: AppTextStyles.titleMedium.copyWith(color: cs.primary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -120,12 +162,19 @@ class _BookingCard extends ConsumerWidget {
                   style: AppTextStyles.caption.copyWith(color: statusColor, fontWeight: FontWeight.w600),
                 ),
               ),
+              if (_canRemove)
+                IconButton(
+                  tooltip: 'Remove from list',
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(Icons.close, size: 18, color: cs.onSurfaceVariant),
+                  onPressed: () => _remove(context, ref),
+                ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             inquiry.message,
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.bodySmall.copyWith(color: cs.onSurfaceVariant),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -133,11 +182,11 @@ class _BookingCard extends ConsumerWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.calendar_today_outlined, size: 14, color: AppColors.textSecondary),
+                Icon(Icons.calendar_today_outlined, size: 14, color: cs.onSurfaceVariant),
                 const SizedBox(width: 6),
                 Text(
                   DateFormat('MMM d, y').format(inquiry.weddingDate!),
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.caption.copyWith(color: cs.onSurfaceVariant),
                 ),
               ],
             ),
@@ -179,7 +228,7 @@ class _BookingCard extends ConsumerWidget {
                 label: const Text('Rate this vendor'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.amber,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.textOnSecondary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   elevation: 0,

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/services/auth_service.dart';
+import '../core/utils/app_logger.dart';
 import '../core/services/session_manager.dart';
 import '../core/services/token_service.dart';
 import 'auth_provider.dart';
@@ -29,9 +30,12 @@ final sessionRestoreProvider = FutureProvider<void>((ref) async {
 
     final user = await AuthService.instance.fetchCurrentUser(token);
     await ref.read(authProvider.notifier).restoreSession(user, accessToken: token);
-  } catch (e) {
-    // ignore: avoid_print
-    print('[sessionRestore] failed, treating as logged out: $e');
+  } catch (e, stackTrace) {
+    // The caught object here is very often a DioException, whose toString
+    // includes the full request — Authorization header included. It must not
+    // reach logcat in a release build; AppLogger keeps it to debug consoles
+    // and crash reporting.
+    AppLogger.error('Session restore failed, treating as logged out', e, stackTrace);
     await tokenService.clearTokens();
   }
 });

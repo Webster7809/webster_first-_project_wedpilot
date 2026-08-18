@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/constants/vendor_category_images.dart';
+import '../../../core/router/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/auth_shell.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
@@ -28,7 +31,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    // Reachable from the field's "done" key, the button, and "Send it again"
+    // on the sent view — all three can land on a request already in flight.
+    if (ref.read(authProvider).isLoading) return;
+    FocusScope.of(context).unfocus();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
     await ref
         .read(authProvider.notifier)
         .forgotPassword(_emailCtrl.text.trim());
@@ -43,137 +51,105 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = ref.watch(authProvider).isLoading;
+    final isLoading = ref.watch(authProvider.select((s) => s.isLoading));
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Reset Password')),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final w = constraints.maxWidth;
-            final isPhone = w < 600;
-            final isDesktop = w >= 900;
-            // Same responsive card width as the register screen, so this
-            // screen's form reads consistently with it at every breakpoint.
-            final maxWidth = isDesktop ? 650.0 : (!isPhone ? 550.0 : w * 0.9);
+    return AuthShell(
+      // The same photograph as the login screen: this flow starts there and
+      // returns there, so the image carries continuity rather than reading as
+      // a different product.
+      imageUrl: VendorCategoryImages.authHero(width: 1600)[0],
+      eyebrow: _sent ? 'CHECK YOUR INBOX' : 'ACCOUNT RECOVERY',
+      headline: _sent ? 'The link is on its way' : "Let's get you back in",
+      supportLine: _sent
+          ? 'The link expires after an hour, so open it while it is fresh.'
+          : 'One email and you can set a new password. Your plans are '
+              'untouched.',
+      crossLinkPrompt: 'Remembered it?',
+      crossLinkAction: 'Log in',
+      crossLinkRoute: AppRoutes.login,
+      onBack: () => context.canPop()
+          ? context.pop()
+          : context.go(AppRoutes.login),
+      formBuilder: (context, _) => _sent
+          ? _sentView(isLoading: isLoading)
+          : _form(isLoading: isLoading),
+    );
+  }
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: _sent
-                      ? _SentView(onBack: () => context.go('/login'))
-                      : Form(
-                          key: _formKey,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 16),
-                              Container(
-                                width: 64,
-                                height: 64,
-                                decoration: BoxDecoration(
-                                  color: AppColors.forestGreen.withAlpha(26),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.lock_reset,
-                                  size: 32,
-                                  color: AppColors.forestGreen,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text('Forgot your password?',
-                                  style: AppTextStyles.displaySmall),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Enter your email address and we\'ll send you a link to reset your password.',
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                    color: AppColors.textSecondary, height: 1.5),
-                              ),
-                              const SizedBox(height: 32),
-                              WedTextField(
-                                label: 'Email address',
-                                hint: 'you@example.com',
-                                controller: _emailCtrl,
-                                keyboardType: TextInputType.emailAddress,
-                                prefixIcon: Icons.email_outlined,
-                                validator: (v) {
-                                  if (v == null || v.isEmpty) {
-                                    return 'Please enter your email';
-                                  }
-                                  if (!v.contains('@')) {
-                                    return 'Please enter a valid email';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 20),
-                              WedButton(
-                                label: 'Send Reset Link',
-                                onPressed: _submit,
-                                isLoading: isLoading,
-                                height: 40,
-                              ),
-                              const SizedBox(height: 12),
-                              Center(
-                                child: TextButton(
-                                  onPressed: () => context.go('/login'),
-                                  child: Text(
-                                    'Back to Login',
-                                    style: AppTextStyles.labelMedium
-                                        .copyWith(color: AppColors.primary),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                ),
-              ),
-            );
-          },
-        ),
+  Widget _form({required bool isLoading}) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Reset your password',
+            style: AppTextStyles.displaySmall.copyWith(
+              color: AppColors.forestGreen,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Enter the email on your account and we'll send a link to choose "
+            'a new password.',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          WedTextField(
+            label: 'Email address',
+            hint: 'you@email.com',
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            prefixIcon: Icons.mail_outlined,
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (_) => _submit(),
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Please enter your email';
+              if (!v.contains('@')) return 'Please enter a valid email';
+              return null;
+            },
+          ),
+          const SizedBox(height: 26),
+
+          WedButton(
+            label: 'Send reset link',
+            onPressed: _submit,
+            variant: WedButtonVariant.primaryDark,
+            isLoading: isLoading,
+            borderRadius: 28,
+          ),
+        ],
       ),
     );
   }
-}
 
-class _SentView extends StatelessWidget {
-  final VoidCallback onBack;
-  const _SentView({required this.onBack});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-                color: AppColors.success.withAlpha(26),
-                shape: BoxShape.circle),
-            child: const Icon(Icons.mark_email_read_outlined,
-                size: 40, color: AppColors.success),
-          ),
-          const SizedBox(height: 24),
-          Text('Check your email', style: AppTextStyles.displaySmall),
-          const SizedBox(height: 12),
-          Text(
-            'We\'ve sent a password reset link. Check your inbox and follow the instructions.',
-            style: AppTextStyles.bodyMedium
-                .copyWith(color: AppColors.textSecondary, height: 1.5),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          WedButton(label: 'Back to Login', onPressed: onBack),
-        ],
-      ),
+  Widget _sentView({required bool isLoading}) {
+    return AuthStatus(
+      icon: Icons.mark_email_read_outlined,
+      tone: AuthStatusTone.success,
+      title: 'Check your email',
+      message: 'We sent a reset link to ${_emailCtrl.text.trim()}. '
+          "If it isn't in your inbox, look in spam.",
+      actions: [
+        WedButton(
+          label: 'Back to log in',
+          onPressed: () => context.go(AppRoutes.login),
+          variant: WedButtonVariant.primaryDark,
+          borderRadius: 28,
+        ),
+        WedButton(
+          label: 'Send it again',
+          onPressed: _submit,
+          variant: WedButtonVariant.ghost,
+          isLoading: isLoading,
+          borderRadius: 28,
+        ),
+      ],
     );
   }
 }

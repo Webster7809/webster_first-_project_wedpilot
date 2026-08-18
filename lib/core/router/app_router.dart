@@ -46,6 +46,9 @@ import '../../features/couple/screens/budget_share_screen.dart';
 import '../../features/shared/screens/notifications_screen.dart';
 import '../../features/shared/screens/settings_screen.dart';
 import '../../features/shared/screens/help_screen.dart';
+import '../../features/shared/screens/privacy_policy_screen.dart';
+import '../../features/shared/screens/terms_of_service_screen.dart';
+import '../../features/shared/screens/cookie_preferences_screen.dart';
 import '../../providers/auth_provider.dart';
 import '../../shell/couple_shell.dart';
 import '../../shell/vendor_shell.dart';
@@ -86,15 +89,28 @@ final routerProvider = Provider<GoRouter>((ref) {
       // authenticated" and "authenticated users get bounced home" rules
       // below (unlike login/register, which intentionally bounce).
       final isPasswordReset = loc == AppRoutes.resetPassword;
+      // A confirmation link is token-identified for the same reason: it opens
+      // in whatever browser the user's mail client hands it to, which may hold
+      // no session or somebody else's. Only when it actually carries a token —
+      // the bare /verify-email screen keeps the normal auth-screen behaviour.
+      final isEmailVerifyLink = loc == AppRoutes.verifyEmail &&
+          (state.uri.queryParameters['token']?.isNotEmpty ?? false);
 
       if (!auth.isAuthenticated &&
           !isAuthScreen &&
           !isPublicInvite &&
-          !isPasswordReset) {
+          !isPasswordReset &&
+          !isEmailVerifyLink) {
         return AppRoutes.login;
       }
 
-      if (auth.isAuthenticated && auth.needsOnboarding) {
+      // Signing up leaves needsOnboarding true, so without this exemption the
+      // "confirm your email" step register sends people to was immediately
+      // redirected to onboarding and could never be seen. It is a soft step —
+      // "I've verified — continue" moves on without checking anything.
+      if (auth.isAuthenticated &&
+          auth.needsOnboarding &&
+          loc != AppRoutes.verifyEmail) {
         final target = auth.isVendor
             ? AppRoutes.vendorOnboarding
             : AppRoutes.couplePlanning;
@@ -137,7 +153,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.verifyEmail,
-        builder: (_, _) => const EmailVerifyScreen(),
+        builder: (_, state) =>
+            EmailVerifyScreen(token: state.uri.queryParameters['token']),
       ),
       GoRoute(
         path: AppRoutes.couplePlanning,
@@ -174,6 +191,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const SettingsScreen(),
       ),
       GoRoute(path: AppRoutes.help, builder: (_, _) => const HelpScreen()),
+      GoRoute(
+        path: AppRoutes.privacyPolicy,
+        builder: (_, _) => const PrivacyPolicyScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.termsOfService,
+        builder: (_, _) => const TermsOfServiceScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.cookiePreferences,
+        builder: (_, _) => const CookiePreferencesScreen(),
+      ),
       GoRoute(
         path: AppRoutes.coupleReports,
         builder: (_, _) => const ReportsScreen(),

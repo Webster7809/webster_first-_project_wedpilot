@@ -373,27 +373,28 @@ final vendorMatchValidationProvider =
   }
 
   var remaining = budgetForOpenCategories;
-  var moneyExhausted = false;
   final ceilings = <String, double>{};
   final committedPrice = <String, double>{};
   final exhaustedMessages = <String, String>{};
-  String? rescueCandidate;
+  final deferred = <String>[];
 
-  // Phase 1 — sequential real-price funding.
+  // Phase 1 — sequential real-price funding. A category whose cheapest real
+  // vendor doesn't currently fit is *deferred*, not treated as fatal for
+  // everyone after it — every other fundable category still gets its normal
+  // shot in Phase 1, regardless of where the expensive one sits in the
+  // requested order. This used to short-circuit: the moment one category
+  // ran out of room, every category after it in iteration order was marked
+  // "money ends here" without ever being tested against what was actually
+  // left — including categories that, funded on their own, would have fit
+  // easily. A couple re-entering their own "budget used" total from a
+  // previous run (less slack, same real prices) was the common way to hit
+  // this: a different category happened to go first, ate the budget
+  // differently, and everything after it got blamed for a shortfall that
+  // was really just funding-order sensitivity.
   for (final cat in fundableCategories) {
-    if (moneyExhausted) {
-      exhaustedMessages[cat] = 'Cannot proceed — your money ends here. Earlier services '
-          'used up your budget before reaching $cat. Add more to your budget to continue matching.';
-      continue;
-    }
-
     final cheapest = cheapestPriceByCategory[cat];
     if (cheapest != null && cheapest - remaining > _kBudgetEpsilon) {
-      moneyExhausted = true;
-      rescueCandidate = cat;
-      exhaustedMessages[cat] = 'Cannot proceed — your money ends here. Even the cheapest real '
-          '$cat vendor costs ${fmtCurrency(cheapest)}, more than the ${fmtCurrency(remaining)} '
-          'you have left. Add more to your budget to continue matching.';
+      deferred.add(cat);
       continue;
     }
 
@@ -403,12 +404,28 @@ final vendorMatchValidationProvider =
     if (price > 0) remaining -= price;
   }
 
-  // Phase 2 — rescue pass. Cascade semantics mean at most one category ever
-  // reaches this provisionally-exhausted state per run — everything after it
-  // is blocked outright until this one is resolved.
-  if (rescueCandidate != null) {
-    final cat = rescueCandidate;
+  // Phase 2 — rescue pass, cheapest-shortfall first. Every category deferred
+  // above gets a real attempt: downgrade already-funded categories to their
+  // own cheapest floor (biggest saving first) until either this one fits or
+  // there is nothing left to downgrade. Processing cheapest-first means a
+  // category that only needed a small saving isn't starved by downgrades
+  // spent rescuing a pricier one ahead of it in the list.
+  final byShortfall = List<String>.from(deferred)
+    ..sort((a, b) => cheapestPriceByCategory[a]!
+        .compareTo(cheapestPriceByCategory[b]!));
+
+  for (final cat in byShortfall) {
     final cheapestE = cheapestPriceByCategory[cat]!;
+    if (cheapestE - remaining <= _kBudgetEpsilon) {
+      // A downgrade made while rescuing an earlier category already freed
+      // enough — no fresh downgrade needed for this one.
+      ceilings[cat] = cheapestE;
+      committedPrice[cat] = cheapestE;
+      remaining -= cheapestE;
+      deferred.remove(cat);
+      continue;
+    }
+
     final ceilingsSnapshot = Map<String, double>.from(ceilings);
     final committedSnapshot = Map<String, double>.from(committedPrice);
     final remainingSnapshot = remaining;
@@ -440,9 +457,11 @@ final vendorMatchValidationProvider =
       ceilings[cat] = cheapestE;
       committedPrice[cat] = cheapestE;
       remaining -= cheapestE;
-      exhaustedMessages.remove(cat);
+      deferred.remove(cat);
     } else {
-      // Rescue didn't work out — undo every downgrade tried for it.
+      // Rescue didn't work out for this one — undo every downgrade tried
+      // for it and leave it deferred; later, cheaper-shortfall categories in
+      // this same pass already succeeded and stay funded.
       ceilings
         ..clear()
         ..addAll(ceilingsSnapshot);
@@ -451,6 +470,16 @@ final vendorMatchValidationProvider =
         ..addAll(committedSnapshot);
       remaining = remainingSnapshot;
     }
+  }
+
+  // Whatever is still deferred after every rescue attempt is genuinely
+  // unaffordable given what every other category actually needed — the
+  // message is only ever shown once that's actually true.
+  for (final cat in deferred) {
+    final cheapest = cheapestPriceByCategory[cat]!;
+    exhaustedMessages[cat] = 'Cannot proceed — your money ends here. Even the cheapest real '
+        '$cat vendor costs ${fmtCurrency(cheapest)}, more than the ${fmtCurrency(remaining)} '
+        'you have left. Add more to your budget to continue matching.';
   }
 
   // Phase 3 — polish pass: spend whatever's left on real, pricier upgrades
@@ -624,6 +653,12 @@ Future<void> _backfillAiExplanations(
   }
   if (picks.isEmpty) return;
 
+  // /api/vendor-match is authenticated now. Without a session there is
+  // nothing to send, and the deterministic reasoning the engine already
+  // produced stays on screen — same outcome as the AI call failing.
+  final accessToken = ref.read(authProvider.notifier).accessToken;
+  if (accessToken == null) return;
+
   final sw = Stopwatch()..start();
   try {
     final suggestions = await WeddingAiService.instance.explainVendorMatches(
@@ -632,6 +667,7 @@ Future<void> _backfillAiExplanations(
       styles: wizardStyles,
       picks: picks,
       categoryBudgets: categoryBudgets,
+      accessToken: accessToken,
     );
     ref.read(vendorMatchExplanationsProvider.notifier).state = {
       ...ref.read(vendorMatchExplanationsProvider),

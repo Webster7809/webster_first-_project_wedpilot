@@ -14,6 +14,7 @@ import '../../../widgets/wed_snack_bar.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/booking_provider.dart';
 import '../../../providers/vendor_provider.dart';
+import '../../../core/services/api_error.dart';
 
 /// Private post-booking feedback — a star rating plus an optional comment.
 /// Never shown to other couples; only aggregate CRS/badges derived from it
@@ -69,9 +70,9 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
     } on VendorApiException catch (e) {
       if (!mounted) return;
       showWedSnackBar(context, e.message, type: SnackType.error);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      showWedSnackBar(context, 'Could not reach the server. Please try again.', type: SnackType.error);
+      showWedSnackBar(context, describeError(e), type: SnackType.error);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -98,7 +99,7 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
     final vendorsAsync = ref.watch(rateableVendorsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('Rate Your Vendor')),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -138,6 +139,89 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
 
                     Text('Select Vendor', style: AppTextStyles.labelLarge),
                     const SizedBox(height: 8),
+                    // Every vendor who's accepted a booking and marked the
+                    // service done lands here automatically — no need to
+                    // remember a name and type it into search first. The
+                    // typical case is one or two vendors, so a plain tappable
+                    // list beats making that the couple's job to discover.
+                    if (vendorsAsync.hasValue && (vendorsAsync.value ?? const []).isNotEmpty) ...[
+                      ...vendorsAsync.value!.map((v) {
+                        final isSelected = _selectedVendor?.id == v.id;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Material(
+                            color: isSelected
+                                ? AppColors.secondary.withAlpha(30)
+                                : Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => setState(() {
+                                _selectedVendor = v;
+                                _vendorSearchCtrl.text = v.businessName;
+                              }),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isSelected ? AppColors.secondary : AppColors.divider,
+                                    width: isSelected ? 2 : 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: AppColors.creamDark,
+                                      backgroundImage: v.logoUrl != null
+                                          ? NetworkImage(resolveMediaUrl(v.logoUrl!))
+                                          : null,
+                                      onBackgroundImageError: v.logoUrl != null ? (_, _) {} : null,
+                                      child: v.logoUrl == null
+                                          ? Text(v.businessName.isNotEmpty
+                                              ? v.businessName[0].toUpperCase()
+                                              : '?')
+                                          : null,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            v.businessName,
+                                            style: AppTextStyles.bodyMedium,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            v.category,
+                                            style: AppTextStyles.bodySmall
+                                                .copyWith(color: AppColors.textSecondary),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      const Icon(Icons.check_circle,
+                                          color: AppColors.secondary, size: 20),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Or search for a different vendor:',
+                        style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     TypeaheadField<VendorProfile>(
                       hint: "Search a vendor you've booked...",
                       controller: _vendorSearchCtrl,
@@ -217,24 +301,38 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
                     const SizedBox(height: 20),
 
                     Text('Your Rating', style: AppTextStyles.labelLarge),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tap a star to set your rating.',
+                      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                    ),
                     const SizedBox(height: 8),
                     Row(
-                      children: List.generate(5, (i) => Material(
-                        color: Colors.transparent,
-                        shape: const CircleBorder(),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: () => setState(() => _rating = i + 1),
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: Icon(
-                              i < _rating ? Icons.star : Icons.star_outlined,
-                              color: AppColors.goldPremium,
-                              size: 36,
-                            ),
+                      children: List.generate(5, (i) {
+                        final filled = i < _rating;
+                        // Plain IconButton — the same widget rate_vendor_prompt.dart's
+                        // quick-rate popup already uses successfully. The
+                        // previous Material(shape: CircleBorder(), clipBehavior:
+                        // Clip.antiAlias) + InkWell combination visually
+                        // rendered fine but silently ate every tap: its hit
+                        // region never actually matched the drawn icon.
+                        return IconButton(
+                          onPressed: () => setState(() => _rating = i + 1),
+                          icon: Icon(
+                            filled ? Icons.star : Icons.star_outlined,
+                            color: AppColors.goldPremium,
+                            size: 32,
                           ),
-                        ),
-                      )),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$_rating of 5 stars',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 20),
 

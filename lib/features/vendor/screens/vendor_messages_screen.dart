@@ -16,7 +16,7 @@ class VendorMessagesScreen extends ConsumerWidget {
     final convsAsync = ref.watch(conversationsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.forestGreen,
         title: Text('Messages',

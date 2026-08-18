@@ -543,7 +543,7 @@ class _InvitationEditorScreenState
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: _buildAppBar(),
       body: LayoutBuilder(
         builder: (_, constraints) {

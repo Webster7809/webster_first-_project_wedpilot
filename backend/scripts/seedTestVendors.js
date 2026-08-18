@@ -15,6 +15,7 @@ const bcrypt = require('bcrypt');
 const sequelize = require('../db/sequelize');
 const User = require('../db/models/user');
 const Vendor = require('../db/models/vendor');
+const { setVendorStyleTags } = require('../services/styleTags');
 const VendorService = require('../db/models/vendorService');
 const Inquiry = require('../db/models/inquiry');
 const VendorFeedback = require('../db/models/vendorFeedback');
@@ -962,8 +963,10 @@ async function main() {
       longitude: v.longitude,
       tier: 'free',
       verification_status: 'verified',
-      style_tags: v.style_tags,
     });
+    // style_tags are rows now — Vendor.create would silently drop the field,
+    // leaving every seeded vendor untagged.
+    await setVendorStyleTags(vendor.vendor_id, v.style_tags ?? []);
 
     await VendorService.create({
       vendor_id: vendor.vendor_id,

@@ -32,7 +32,10 @@ async function main() {
     process.exit(0);
   }
 
-  const password_hash = await bcrypt.hash(password, 10);
+  // Same cost factor routes/auth.js uses for real accounts — this one creates
+  // the most privileged account in the system, so it should not be the
+  // cheapest hash in the database.
+  const password_hash = await bcrypt.hash(password, 12);
   await User.create({
     email: normalisedEmail,
     password_hash,

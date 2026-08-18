@@ -79,7 +79,7 @@ class _VendorDiscoveryScreenState
     final selectedBudget = catBudgets[_selectedCategory];
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── Dark green header with match banner ──────────────────────────────

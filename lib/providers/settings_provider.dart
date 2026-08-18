@@ -27,7 +27,6 @@ class AppSettings {
   final bool reducedMotion;
   final bool pushNotifications;
   final bool emailNotifications;
-  final bool smsNotifications;
 
   const AppSettings({
     this.themeMode = ThemeMode.light,
@@ -36,7 +35,6 @@ class AppSettings {
     this.reducedMotion = false,
     this.pushNotifications = true,
     this.emailNotifications = true,
-    this.smsNotifications = false,
   });
 
   double get fontSizeScale => fontSize.scale;
@@ -48,7 +46,6 @@ class AppSettings {
     bool? reducedMotion,
     bool? pushNotifications,
     bool? emailNotifications,
-    bool? smsNotifications,
   }) =>
       AppSettings(
         themeMode: themeMode ?? this.themeMode,
@@ -57,7 +54,6 @@ class AppSettings {
         reducedMotion: reducedMotion ?? this.reducedMotion,
         pushNotifications: pushNotifications ?? this.pushNotifications,
         emailNotifications: emailNotifications ?? this.emailNotifications,
-        smsNotifications: smsNotifications ?? this.smsNotifications,
       );
 }
 
@@ -76,7 +72,6 @@ class SettingsNotifier extends Notifier<AppSettings> {
       reducedMotion: _box.get('reducedMotion', defaultValue: false) as bool,
       pushNotifications: _box.get('pushNotifications', defaultValue: true) as bool,
       emailNotifications: _box.get('emailNotifications', defaultValue: true) as bool,
-      smsNotifications: _box.get('smsNotifications', defaultValue: false) as bool,
     );
   }
 
@@ -108,11 +103,6 @@ class SettingsNotifier extends Notifier<AppSettings> {
   void setEmailNotifications(bool value) {
     _box.put('emailNotifications', value);
     state = state.copyWith(emailNotifications: value);
-  }
-
-  void setSmsNotifications(bool value) {
-    _box.put('smsNotifications', value);
-    state = state.copyWith(smsNotifications: value);
   }
 }
 

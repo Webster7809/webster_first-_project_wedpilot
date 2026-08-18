@@ -20,7 +20,7 @@ class VendorAnalyticsScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.forestGreen,
         title: Text('Analytics',

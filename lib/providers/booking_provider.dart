@@ -69,8 +69,12 @@ final activeRequestsByVendorProvider =
   return {for (final b in active) b.vendorId: b};
 });
 
-/// Whether the automatic "rate this vendor" popup has already been shown
-/// this app session — so it surfaces once per launch rather than every time
-/// the dashboard rebuilds. Resets naturally on app restart, which is fine:
-/// if there's still something to rate, it's worth surfacing again next time.
-final ratePromptShownProvider = StateProvider<bool>((ref) => false);
+/// Vendor ids the automatic "rate this vendor" popup has already been shown
+/// for this app session — so each one surfaces once per launch rather than
+/// every time the dashboard rebuilds, without a single global flag silently
+/// swallowing every vendor after the first. A couple with two weddings-worth
+/// of vendors wrapping up around the same time still gets one prompt per
+/// vendor, not just one prompt total. Resets naturally on app restart, which
+/// is fine: if there's still something to rate, it's worth surfacing again
+/// next time.
+final ratePromptShownProvider = StateProvider<Set<String>>((ref) => {});

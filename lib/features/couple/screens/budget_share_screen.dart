@@ -19,7 +19,7 @@ class BudgetShareScreen extends ConsumerWidget {
 
     if (!budgetState.hasData) {
       return Scaffold(
-        backgroundColor: AppColors.cream,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           backgroundColor: AppColors.forestGreen,
           leading: IconButton(
@@ -52,7 +52,7 @@ class BudgetShareScreen extends ConsumerWidget {
     final pendingCount = categories.length - bookedCount;
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── Header ──────────────────────────────────────────────────────────
@@ -325,7 +325,7 @@ class BudgetShareScreen extends ConsumerWidget {
                         TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.amber,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.textOnSecondary,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24)),
                   padding: const EdgeInsets.symmetric(vertical: 14),

@@ -98,7 +98,7 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
     final tabIndex = _tabController.index;
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverOverlapAbsorber(
@@ -176,7 +176,7 @@ class _VendorListingsScreenState extends ConsumerState<VendorListingsScreen>
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.amber,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.textOnSecondary,
         onPressed: switch (tabIndex) {
           0 => () => _showAddServiceSheet(),
           1 => () => _showAddPackageSheet(),
@@ -962,7 +962,7 @@ class _PackagesTab extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: AppColors.divider),
                   ),
@@ -1020,7 +1020,7 @@ class _ClassStatusCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.divider),
       ),
@@ -1168,7 +1168,7 @@ class _PackageCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isLuxury ? AppColors.amber.withAlpha(120) : AppColors.divider,

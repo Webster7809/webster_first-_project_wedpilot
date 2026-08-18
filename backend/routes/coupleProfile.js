@@ -1,9 +1,10 @@
 const express = require('express');
 const CoupleProfile = require('../db/models/coupleProfile');
+const { coupleStyleTags, setCoupleStyleTags } = require('../services/styleTags');
 const Vendor = require('../db/models/vendor');
 const VendorMatch = require('../db/models/vendorMatch');
-const Notification = require('../db/models/notification');
 const verifyJwt = require('../middleware/verifyJwt');
+const { notifyUser } = require('../services/notify');
 const { makeUploader, relativeUploadUrl } = require('../middleware/upload');
 
 const router = express.Router();
@@ -22,7 +23,8 @@ function requireCoupleRole(req, res, next) {
   next();
 }
 
-function serializeProfile(profile) {
+async function serializeProfile(profile) {
+  const styleTags = await coupleStyleTags(profile.user_id);
   return {
     profile_id: profile.profile_id,
     user_id: profile.user_id,
@@ -30,7 +32,7 @@ function serializeProfile(profile) {
     wedding_date: profile.wedding_date,
     location: profile.location,
     guest_count: profile.guest_count,
-    style_tags: profile.style_tags,
+    style_tags: styleTags,
     total_budget: profile.total_budget == null ? null : Number(profile.total_budget),
     currency: profile.currency,
     partner_name: profile.partner_name,
@@ -47,7 +49,7 @@ router.get('/profile', verifyJwt, requireCoupleRole, async (req, res) => {
     if (!profile) {
       return res.status(404).json({ error: 'No couple profile yet.' });
     }
-    res.json({ profile: serializeProfile(profile) });
+    res.json({ profile: await serializeProfile(profile) });
   } catch (err) {
     console.error('Get couple profile error:', err.message);
     res.status(500).json({ error: 'Could not load profile.' });
@@ -61,6 +63,8 @@ router.put('/profile', verifyJwt, requireCoupleRole, async (req, res) => {
     wedding_date,
     location,
     guest_count,
+    // Still a request field — it is just no longer a column. Validated below
+    // and written to couple_style_tags after the profile saves.
     style_tags,
     total_budget,
     currency,
@@ -81,19 +85,19 @@ router.put('/profile', verifyJwt, requireCoupleRole, async (req, res) => {
     return res.status(400).json({ error: 'style_tags must be an array of strings.' });
   }
 
+  // style_tags is deliberately absent — it is rows now, written below.
   const allFields = {
     partner_user_id,
     wedding_date,
     location,
     guest_count,
-    style_tags,
     total_budget,
     currency,
     partner_name,
     photo_url,
   };
   // Only carry over fields the client actually sent, so a partial update
-  // doesn't null out NOT NULL columns (style_tags, currency) via `undefined`.
+  // doesn't null out NOT NULL columns (currency) via `undefined`.
   const fields = Object.fromEntries(
     Object.entries(allFields).filter(([, v]) => v !== undefined),
   );
@@ -107,7 +111,12 @@ router.put('/profile', verifyJwt, requireCoupleRole, async (req, res) => {
       profile.set(fields);
       await profile.save();
     }
-    res.json({ profile: serializeProfile(profile) });
+    // Written separately now that tags are rows; null still means "leave
+    // alone" rather than "clear", matching the previous column behaviour.
+    if (style_tags != null) {
+      await setCoupleStyleTags(req.user.user_id, style_tags);
+    }
+    res.json({ profile: await serializeProfile(profile) });
   } catch (err) {
     console.error('Save couple profile error:', err.message);
     res.status(500).json({ error: 'Could not save profile.' });
@@ -127,7 +136,7 @@ router.post('/profile/photo', verifyJwt, requireCoupleRole, photoUploader.single
       profile.set({ photo_url });
       await profile.save();
     }
-    res.json({ profile: serializeProfile(profile) });
+    res.json({ profile: await serializeProfile(profile) });
   } catch (err) {
     console.error('Upload couple photo error:', err.message);
     res.status(500).json({ error: 'Could not upload photo.' });
@@ -141,7 +150,7 @@ router.delete('/profile/photo', verifyJwt, requireCoupleRole, async (req, res) =
     if (!profile) return res.status(404).json({ error: 'No couple profile yet.' });
     profile.set({ photo_url: null });
     await profile.save();
-    res.json({ profile: serializeProfile(profile) });
+    res.json({ profile: await serializeProfile(profile) });
   } catch (err) {
     console.error('Remove couple photo error:', err.message);
     res.status(500).json({ error: 'Could not remove photo.' });
@@ -184,14 +193,18 @@ router.post('/vendor-matches', verifyJwt, requireCoupleRole, async (req, res) =>
       }
 
       const vendor = await Vendor.findByPk(vendor_id);
-      await Notification.create({
-        user_id: req.user.user_id,
-        type: 'vendor_match',
-        title: 'New vendor match',
-        body: `${vendor?.business_name ?? 'A vendor'} is our top pick for ${category}, based on your budget and style.`,
-        entity_id: vendor_id,
-        entity_type: 'vendor',
-      });
+      const matchBody = `${vendor?.business_name ?? 'A vendor'} is our top pick for ${category}, based on your budget and style.`;
+      await notifyUser(
+        req.user.user_id,
+        {
+          type: 'vendor_match',
+          title: 'New vendor match',
+          body: matchBody,
+          entity_id: vendor_id,
+          entity_type: 'vendor',
+        },
+        { subject: 'New vendor match', heading: 'New vendor match', bodyHtml: matchBody },
+      );
       updatedCategories.push(category);
     }
 

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:dio/dio.dart';
 
-import '../config/api_config.dart';
+import 'authenticated_dio.dart';
 import '../utils/json_utils.dart';
 import '../../models/vendor_profile.dart' show ReasoningStep, SelectionBasis;
 
@@ -134,12 +134,13 @@ class WeddingAiService {
   WeddingAiService._();
   static final WeddingAiService instance = WeddingAiService._();
 
-  final Dio _dio = Dio(BaseOptions(
-    baseUrl: ApiConfig.baseUrl,
-    connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 90),
-    headers: {'Content-Type': 'application/json'},
-  ));
+  // buildApiDio, not a bare Dio: /api/vendor-match now requires a bearer
+  // token, so this call needs the same transparent 401-refresh-and-retry
+  // every other authenticated service gets. The receive timeout is raised
+  // over that helper's default because an AI completion legitimately takes
+  // far longer than a database read.
+  final Dio _dio = buildApiDio()
+    ..options.receiveTimeout = const Duration(seconds: 90);
 
   // Every AI call funnels through this queue so two calls fired close
   // together never hit the backend concurrently — the free-tier model
@@ -203,10 +204,16 @@ class WeddingAiService {
     // The couple's allocated spend per category (e.g. 'Venue': 5000), derived
     // from their total wedding budget. Absent categories mean no known cap.
     Map<String, double> categoryBudgets = const {},
+    // Required: the endpoint burns OpenRouter quota on our key, so it is no
+    // longer open to unauthenticated callers.
+    required String accessToken,
   }) => _serialized(() async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         '/api/vendor-match',
+        options: Options(
+          headers: {'Authorization': 'Bearer $accessToken'},
+        ),
         data: {
           'budgetClass': budgetClass,
           'location': location,

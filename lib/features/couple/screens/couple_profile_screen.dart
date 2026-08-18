@@ -12,6 +12,7 @@ import '../../../models/couple_profile.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
+import '../../../core/services/api_error.dart';
 
 class CoupleProfileScreen extends ConsumerWidget {
   const CoupleProfileScreen({super.key});
@@ -27,7 +28,7 @@ class CoupleProfileScreen extends ConsumerWidget {
         : (name2 != null && name2.isNotEmpty ? '$name1 & $name2' : name1);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── Hero header ─────────────────────────────────────────────────
@@ -233,11 +234,11 @@ class _ProfileHero extends ConsumerWidget {
       if (context.mounted) {
         showWedSnackBar(context, e.message, type: SnackType.error);
       }
-    } catch (_) {
+    } catch (e) {
       if (context.mounted) {
         showWedSnackBar(
           context,
-          'Could not reach the server. Please try again.',
+          describeError(e),
           type: SnackType.error,
         );
       }
@@ -594,22 +595,23 @@ class _SettingsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
         children: [
           for (int i = 0; i < items.length; i++) ...[
             items[i],
             if (i < items.length - 1)
-              const Divider(
+              Divider(
                 height: 1,
                 indent: 52,
                 endIndent: 0,
-                color: AppColors.divider,
+                color: cs.outlineVariant,
               ),
           ],
         ],
@@ -630,21 +632,22 @@ class _SettingItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Material(
-      color: AppColors.surface,
+      color: cs.surface,
       child: ListTile(
         onTap: onTap,
-        leading: Icon(icon, size: 22, color: AppColors.textSecondary),
+        leading: Icon(icon, size: 22, color: cs.onSurfaceVariant),
         title: Text(
           label,
           style: AppTextStyles.bodyMedium.copyWith(
-            color: AppColors.textPrimary,
+            color: cs.onSurface,
           ),
         ),
-        trailing: const Icon(
+        trailing: Icon(
           Icons.chevron_right,
           size: 20,
-          color: AppColors.textHint,
+          color: cs.onSurfaceVariant,
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       ),

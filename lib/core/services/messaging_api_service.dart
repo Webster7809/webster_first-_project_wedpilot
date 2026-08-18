@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../models/messaging.dart';
+import 'api_error.dart';
 import 'authenticated_dio.dart';
 
 class MessagingApiException implements Exception {
@@ -69,9 +70,5 @@ class MessagingApiService {
     }
   }
 
-  String _extractError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['error'] is String) return data['error'] as String;
-    return 'Could not reach the server. Please try again.';
-  }
+  String _extractError(DioException e) => describeDioError(e);
 }

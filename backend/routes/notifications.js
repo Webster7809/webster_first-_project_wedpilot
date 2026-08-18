@@ -61,4 +61,36 @@ router.patch('/:id/read', async (req, res) => {
   }
 });
 
+// A notification row is never read by anyone but the user it belongs to
+// (unlike an inquiry, nothing else references it), so this is a real delete
+// rather than the hide-flag pattern used for bookings.
+router.delete('/:id', async (req, res) => {
+  try {
+    const deleted = await Notification.destroy({
+      where: { notif_id: req.params.id, user_id: req.user.user_id },
+    });
+    if (!deleted) return res.status(404).json({ error: 'Notification not found.' });
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('Delete notification error:', err.message);
+    res.status(500).json({ error: 'Could not delete this notification.' });
+  }
+});
+
+// Clears every already-read notification in one action — the "tidy up" button
+// next to "Mark all read". Unread ones are left alone; deleting something the
+// couple hasn't seen yet would be surprising, and read-then-gone is the same
+// two-step most apps use for this.
+router.delete('/', async (req, res) => {
+  try {
+    const deleted = await Notification.destroy({
+      where: { user_id: req.user.user_id, is_read: true },
+    });
+    res.json({ deletedCount: deleted });
+  } catch (err) {
+    console.error('Clear read notifications error:', err.message);
+    res.status(500).json({ error: 'Could not clear notifications.' });
+  }
+});
+
 module.exports = router;

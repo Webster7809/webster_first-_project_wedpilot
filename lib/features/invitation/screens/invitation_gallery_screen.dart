@@ -85,7 +85,7 @@ class InvitationGalleryScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── Header ──────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ class InvitationGalleryScreen extends ConsumerWidget {
                           fontSize: 13, fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.amber,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.textOnSecondary,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20)),
@@ -242,7 +242,7 @@ class _EmptyState extends StatelessWidget {
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.amber,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.textOnSecondary,
               elevation: 0,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(30)),
@@ -432,7 +432,7 @@ class _InvitationCard extends StatelessWidget {
                             style: TextStyle(fontWeight: FontWeight.w700)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.amber,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.textOnSecondary,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20)),

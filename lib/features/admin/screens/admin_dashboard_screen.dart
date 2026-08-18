@@ -137,9 +137,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     final filteredVendors = _filtered(pendingVendors);
 
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.cream,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,

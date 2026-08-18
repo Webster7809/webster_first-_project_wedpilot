@@ -113,7 +113,14 @@ class WedButton extends StatelessWidget {
     final enabled = onPressed != null && !isLoading;
     final radius = BorderRadius.circular(borderRadius);
     final foreground = enabled ? _foreground : _foreground.withAlpha(110);
-    final background = enabled ? _background : _background.withAlpha(90);
+    // A transparent fill has no alpha to dim: Colors.transparent is
+    // 0x00000000, so withAlpha(90) turns it into 35% *black* — which is how a
+    // disabled secondary/ghost button (e.g. "Resend in 60s" on the verify
+    // screen) rendered as a grey slab. Only fills that are actually painted
+    // get dimmed.
+    final background = enabled || _background == Colors.transparent
+        ? _background
+        : _background.withAlpha(90);
 
     final content = AnimatedSwitcher(
       duration: const Duration(milliseconds: 150),

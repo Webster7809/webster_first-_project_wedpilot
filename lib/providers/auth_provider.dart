@@ -7,9 +7,12 @@ import '../core/services/google_auth_helper.dart';
 import '../core/services/session_manager.dart';
 import '../core/services/token_service.dart';
 import '../core/services/vendor_api_service.dart';
+import '../core/utils/app_logger.dart';
 import '../models/user.dart';
 import '../models/couple_profile.dart';
 import '../models/vendor_profile.dart';
+import 'session_scoped_providers.dart';
+import '../core/services/api_error.dart';
 
 class AuthState {
   final User? user;
@@ -52,7 +55,7 @@ class AuthState {
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._authService) : super(const AuthState()) {
+  AuthNotifier(this._authService, this._ref) : super(const AuthState()) {
     // SessionManager sits below Riverpod (every *ApiService is a plain
     // singleton, refreshed transparently by authenticated_dio.dart's 401
     // interceptor), so it reaches back into app state through these two
@@ -69,6 +72,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   final AuthService _authService;
+
+  /// Used only to drop per-account provider caches when the signed-in
+  /// identity changes — see [invalidateSessionScopedProviders].
+  final Ref _ref;
 
   // Couple profiles are persisted server-side (see couple_profile_service.dart);
   // this map is just a same-session cache to avoid redundant refetches, not the
@@ -99,8 +106,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _applyAuthResult(result);
     } on AuthApiException catch (e) {
       state = state.copyWith(isLoading: false, error: e.message);
-    } catch (_) {
-      state = state.copyWith(isLoading: false, error: 'Could not reach the server. Please try again.');
+    } catch (e, stackTrace) {
+      // Anything reaching here is NOT an AuthApiException (a clean backend
+      // rejection) — it's something describeError can't name specifically
+      // (falls back to "Something went wrong"), so the real cause would
+      // otherwise vanish silently. Logged so it's visible in `adb logcat`
+      // even on a build with no attached debug session.
+      AppLogger.error('Login failed', e, stackTrace);
+      state = state.copyWith(isLoading: false, error: describeError(e));
     }
   }
 
@@ -126,8 +139,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
     } on AuthApiException catch (e) {
       state = state.copyWith(isLoading: false, error: e.message);
-    } catch (_) {
-      state = state.copyWith(isLoading: false, error: 'Could not reach the server. Please try again.');
+    } catch (e, stackTrace) {
+      AppLogger.error('Google sign-in failed', e, stackTrace);
+      state = state.copyWith(isLoading: false, error: describeError(e));
     }
   }
 
@@ -147,12 +161,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
         email: email,
         password: password,
         role: role,
+        // Was accepted here and never forwarded — every phone number typed
+        // at signup was silently discarded, which is exactly why the vendor
+        // onboarding wizard's contact step had nothing to prefill from and
+        // made vendors retype a number they'd just given.
+        phone: phone,
       );
       await _applyAuthResult(result, forceOnboarding: true);
     } on AuthApiException catch (e) {
       state = state.copyWith(isLoading: false, error: e.message);
-    } catch (_) {
-      state = state.copyWith(isLoading: false, error: 'Could not reach the server. Please try again.');
+    } catch (e, stackTrace) {
+      AppLogger.error('Registration failed', e, stackTrace);
+      state = state.copyWith(isLoading: false, error: describeError(e));
     }
   }
 
@@ -164,6 +184,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       refreshExpiry: result.refreshExpiry,
     );
     _accessToken = result.accessToken;
+    // A session can be replaced without an explicit logout — an expired
+    // refresh token bounces straight to the login screen — so the reset has to
+    // happen on the way in as well as on the way out.
+    invalidateSessionScopedProviders(_ref);
 
     final user = result.user;
     CoupleProfile? coupleProfile;
@@ -276,9 +300,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } on CoupleProfileApiException catch (e) {
       _coupleProfiles[userId] = profile;
       state = state.copyWith(coupleProfile: profile, needsOnboarding: false, error: e.message);
-    } catch (e) {
-      // ignore: avoid_print
-      print('[updateCoupleProfile] failed to save, keeping local copy only: $e');
+    } catch (e, stackTrace) {
+      AppLogger.error('Couple profile save failed, keeping local copy only', e, stackTrace);
       _coupleProfiles[userId] = profile;
       state = state.copyWith(
         coupleProfile: profile,
@@ -309,6 +332,54 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(coupleProfile: profile);
   }
 
+  /// Mails a fresh confirmation link to the signed-in address.
+  ///
+  /// Returns whether it actually went out, so the verify screen only starts
+  /// its resend cooldown on success — a failed send that still locked the
+  /// button for a minute would be the worst of both.
+  Future<bool> resendVerificationEmail() async {
+    final token = _accessToken;
+    if (token == null) {
+      state = state.copyWith(error: 'Please log in again to resend that email.');
+      return false;
+    }
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _authService.resendVerificationEmail(token);
+      state = state.copyWith(isLoading: false);
+      return true;
+    } on AuthApiException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+      return false;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: describeError(e));
+      return false;
+    }
+  }
+
+  /// Redeems a confirmation link's token. On success the cached [User] is
+  /// flipped to verified in place rather than refetched — the caller may not
+  /// even be the account holder's session (the link opens wherever their mail
+  /// client sends it), so there is not always a session to refetch with.
+  Future<bool> verifyEmail(String token) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _authService.verifyEmail(token);
+      final user = state.user;
+      state = state.copyWith(
+        isLoading: false,
+        user: user?.copyWith(isVerified: true),
+      );
+      return true;
+    } on AuthApiException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+      return false;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: describeError(e));
+      return false;
+    }
+  }
+
   Future<void> forgotPassword(String email) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -316,8 +387,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(isLoading: false);
     } on AuthApiException catch (e) {
       state = state.copyWith(isLoading: false, error: e.message);
-    } catch (_) {
-      state = state.copyWith(isLoading: false, error: 'Could not reach the server. Please try again.');
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: describeError(e));
     }
   }
 
@@ -328,8 +399,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(isLoading: false);
     } on AuthApiException catch (e) {
       state = state.copyWith(isLoading: false, error: e.message);
-    } catch (_) {
-      state = state.copyWith(isLoading: false, error: 'Could not reach the server. Please try again.');
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: describeError(e));
     }
   }
 
@@ -337,13 +408,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await tokenService.clearTokens();
     _accessToken = null;
     state = const AuthState();
+    // None of the per-account providers auto-dispose, so without this the next
+    // account signed in on this device renders the previous one's bookings,
+    // budget, invitations and profile.
+    invalidateSessionScopedProviders(_ref);
   }
 
   void clearError() => state = state.copyWith(error: null);
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
-  (ref) => AuthNotifier(AuthService.instance),
+  (ref) => AuthNotifier(AuthService.instance, ref),
 );
 
 final currentUserProvider = Provider<User?>((ref) {

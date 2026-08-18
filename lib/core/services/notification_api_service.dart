@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../models/notification_model.dart';
+import 'api_error.dart';
 import 'authenticated_dio.dart';
 
 // Flutter never touches the database directly.
@@ -57,9 +58,30 @@ class NotificationApiService {
     }
   }
 
-  String _extractError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['error'] is String) return data['error'] as String;
-    return 'Could not reach the server. Please try again.';
+  Future<void> deleteNotification(String accessToken, String notifId) async {
+    try {
+      await _dio.delete(
+        '/api/notifications/$notifId',
+        options: _auth(accessToken),
+      );
+    } on DioException catch (e) {
+      throw NotificationApiException(_extractError(e));
+    }
   }
+
+  /// Clears every already-read notification in one action. Unread ones are
+  /// left alone — deleting something the couple hasn't seen yet would be
+  /// surprising.
+  Future<void> clearRead(String accessToken) async {
+    try {
+      await _dio.delete(
+        '/api/notifications',
+        options: _auth(accessToken),
+      );
+    } on DioException catch (e) {
+      throw NotificationApiException(_extractError(e));
+    }
+  }
+
+  String _extractError(DioException e) => describeDioError(e);
 }

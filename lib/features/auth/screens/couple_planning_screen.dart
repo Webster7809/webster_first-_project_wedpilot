@@ -177,14 +177,41 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         );
         return;
       }
+      // Ticking nothing used to fall through _activeCategories()' "no
+      // selection means all of them" default, so a couple who skipped this
+      // silently got a plan covering every category on file — including ones
+      // they had no intention of hiring. Asking is better than guessing.
+      final chosenCategories =
+          _availableCategories().where(_selectedCategories.contains).toList();
+      if (chosenCategories.isEmpty) {
+        showWedSnackBar(
+          context,
+          'Tick the services you need — WedPilot AI plans and budgets for the '
+          'categories you choose, so it needs at least one to work with.',
+          type: SnackType.error,
+        );
+        return;
+      }
+
       ref.read(selectedServiceCategoriesProvider.notifier).state =
-          _activeCategories();
+          chosenCategories;
       ref.read(wizardLocationProvider.notifier).state = _locationCtrl.text
           .trim();
       ref.read(wizardBudgetProvider.notifier).state = budget;
       ref.read(wizardGuestCountProvider.notifier).state =
           int.tryParse(_guestsCtrl.text.trim());
     }
+
+    if (_step == 1 && _weddingDate == null) {
+      showWedSnackBar(
+        context,
+        "You haven't picked your wedding date yet — it decides which vendors "
+        'are actually free, so WedPilot AI needs it before it can match anyone.',
+        type: SnackType.error,
+      );
+      return;
+    }
+
     if (_step < _totalSteps - 1) {
       setState(() => _step++);
     }
@@ -229,6 +256,18 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
       setState(() => _step = 0);
       return;
     }
+    // The last step is a step, not a decoration: style is what separates two
+    // vendors with identical price and rating, and an unanswered style step
+    // quietly drops that signal out of every match.
+    if (_selectedStyles.isEmpty) {
+      showWedSnackBar(
+        context,
+        'Pick the style that fits your day — WedPilot AI uses it to choose '
+        'between vendors that are otherwise an equally good match.',
+        type: SnackType.error,
+      );
+      return;
+    }
     unawaited(_saveProfile());
     // Matching itself always fetches fresh, category-scoped data (see
     // vendorMatchValidationProvider), so this invalidate is only for the
@@ -263,7 +302,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: AppColors.cream,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: SingleChildScrollView(
           key: ValueKey(_step),
           child: Column(
@@ -332,7 +371,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         Text(
           'This helps WedPilot match vendors within your range — you can adjust anytime.',
           style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.textSecondary,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 24),
@@ -367,7 +406,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           Text(
             'Vendors on file can currently serve up to $systemMaxCapacity guests.',
             style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textSecondary,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -419,7 +458,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         Text(
           'Tick every service you need — WedPilot AI will search and rank the best match for each.',
           style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.textSecondary,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 32),
@@ -440,7 +479,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
         ),
         const SizedBox(height: 16),
         Material(
-          color: AppColors.surface,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
           child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -480,7 +519,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                   Icons.calendar_month,
                   color: _weddingDate != null
                       ? AppColors.forestGreen
-                      : AppColors.textHint,
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
                   size: 24,
                 ),
                 const SizedBox(width: 12),
@@ -491,8 +530,8 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                         : 'Tap to pick your date',
                     style: AppTextStyles.bodyLarge.copyWith(
                       color: _weddingDate != null
-                          ? AppColors.textPrimary
-                          : AppColors.textHint,
+                          ? Theme.of(context).colorScheme.onSurface
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -519,7 +558,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           'Pick the vibe that describes your dream wedding — choose a '
           'primary style, and optionally a second.',
           style: AppTextStyles.bodyMedium.copyWith(
-            color: AppColors.textSecondary,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 20),
@@ -554,7 +593,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: selected ? selectedColor : AppColors.surface,
+                    color: selected ? selectedColor : Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
                       color: selected ? selectedColor : AppColors.divider,
@@ -568,7 +607,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: selected ? Colors.white : AppColors.textPrimary,
+                          color: selected ? Colors.white : Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                       if (selected) ...[
@@ -667,13 +706,22 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           'WedPilot AI picks one best-fit vendor per category — based in your entered location and '
           'weighed against your allocated budget for that category.',
           style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.textSecondary,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 6),
-        const _AiDisclaimer(color: AppColors.textHint),
+        _AiDisclaimer(color: Theme.of(context).colorScheme.onSurfaceVariant),
         const SizedBox(height: 14),
         aiAsync.when(
+          // Booking a Top Pick vendor invalidates myBookingsProvider so the
+          // matcher stops re-suggesting it — activeRequestsByVendorProvider
+          // and this provider both cascade-reload as a result. Without this,
+          // that reload flashes the full "AI matching" spinner over the
+          // whole list on every single booking tap, as if a fresh match was
+          // being computed from scratch. skipLoadingOnReload keeps the
+          // already-ranked list on screen while it quietly recomputes in the
+          // background; the spinner stays reserved for the real first match.
+          skipLoadingOnReload: true,
           loading: () => const _AiRankingCard(),
           error: (e, st) {
             if (e is NoBudgetSetException) {
@@ -688,7 +736,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
             return Text(
               "Couldn't reach WedPilot AI right now. Please try again in a moment.",
               style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             );
           },
@@ -757,7 +805,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                             child: Text(
                               budgetExhaustedMessages[category]!,
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textPrimary,
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                           ),
@@ -784,7 +832,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                             child: Text(
                               guestCapacityExcludedMessages[category]!,
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textPrimary,
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                           ),
@@ -796,7 +844,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                       excludedCategoryMessages[category] ??
                           'No available $category vendors matched yet.',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   const SizedBox(height: 18),
@@ -810,7 +858,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: AppColors.divider),
                     ),
@@ -856,7 +904,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
           error: (e, st) => Text(
             'Could not prepare your plan document. Please try again.',
             style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textSecondary,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           data: (bytes) => WedButton(
@@ -984,7 +1032,7 @@ class _AiRankingCardState extends State<_AiRankingCard>
                   'Finding your best matching vendors — checking budget, location, '
                   'guest capacity, and reputation for each category…',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textPrimary,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1032,7 +1080,7 @@ class _NoBudgetCard extends StatelessWidget {
                 child: Text(
                   "You haven't entered a wedding budget yet",
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textPrimary,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1045,7 +1093,7 @@ class _NoBudgetCard extends StatelessWidget {
             "much you intend to spend — price is part of every match it makes. "
             'Please go back and add your total budget.',
             style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textSecondary,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 12),
@@ -1096,7 +1144,7 @@ class _VendorValidationFailureCard extends StatelessWidget {
                 child: Text(
                   "We couldn't build your plan yet",
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textPrimary,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1107,7 +1155,7 @@ class _VendorValidationFailureCard extends StatelessWidget {
           Text(
             failure.message,
             style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textSecondary,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 12),
@@ -1145,7 +1193,7 @@ class _RequestedVendorCard extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: display.color.withAlpha(90)),
       ),
@@ -1178,7 +1226,7 @@ class _RequestedVendorCard extends ConsumerWidget {
                   "You've already requested this vendor, so WedPilot AI left "
                   '${vendor.category} as you decided it.',
                   style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -1256,7 +1304,7 @@ class _PlanVendorCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.divider),
       ),
@@ -1286,7 +1334,7 @@ class _PlanVendorCard extends StatelessWidget {
             Text(
               servicesText,
               style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -1350,7 +1398,7 @@ class _PlanVendorCard extends StatelessWidget {
                     child: Text(
                       match.noteToCouple!,
                       style: AppTextStyles.caption.copyWith(
-                        color: AppColors.textPrimary,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -1379,7 +1427,7 @@ class _PlanVendorCard extends StatelessWidget {
                           child: RichText(
                             text: TextSpan(
                               style: AppTextStyles.caption.copyWith(
-                                color: AppColors.textSecondary,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                               children: [
                                 TextSpan(
@@ -1413,7 +1461,7 @@ class _PlanVendorCard extends StatelessWidget {
                   child: Text(
                     match.reasoning!,
                     style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -1501,7 +1549,7 @@ class _ClassPackageSection extends StatelessWidget {
             Text(
               vendorPackage!.title,
               style: AppTextStyles.titleMedium.copyWith(
-                color: isLuxury ? Colors.white : AppColors.textPrimary,
+                color: isLuxury ? Colors.white : Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -1513,7 +1561,7 @@ class _ClassPackageSection extends StatelessWidget {
               style: AppTextStyles.caption.copyWith(
                 color: isLuxury
                     ? Colors.white.withAlpha(200)
-                    : AppColors.textSecondary,
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
                 fontStyle: FontStyle.italic,
               ),
             ),
@@ -1535,7 +1583,7 @@ class _ClassPackageSection extends StatelessWidget {
                     child: Text(
                       item,
                       style: AppTextStyles.caption.copyWith(
-                        color: isLuxury ? Colors.white : AppColors.textPrimary,
+                        color: isLuxury ? Colors.white : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -1629,11 +1677,11 @@ class _ContactChip extends StatelessWidget {
     final child = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: AppColors.textSecondary),
+        Icon(icon, size: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
         const SizedBox(width: 4),
         Text(
           text,
-          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+          style: AppTextStyles.caption.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ],
     );
@@ -1728,7 +1776,7 @@ class _TypePills extends StatelessWidget {
                   duration: const Duration(milliseconds: 150),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.forestGreen : AppColors.surface,
+                    color: isSelected ? AppColors.forestGreen : Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: isSelected
@@ -1742,7 +1790,7 @@ class _TypePills extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                      color: isSelected ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -1792,7 +1840,7 @@ class _WeddingClassCards extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isSelected
                       ? AppColors.amber.withAlpha(30)
-                      : AppColors.surface,
+                      : Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSelected ? AppColors.amber : AppColors.divider,
@@ -1816,7 +1864,7 @@ class _WeddingClassCards extends StatelessWidget {
                         size: 18,
                         color: isSelected
                             ? Colors.white
-                            : AppColors.textSecondary,
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -1827,7 +1875,7 @@ class _WeddingClassCards extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                         color: isSelected
                             ? AppColors.amber
-                            : AppColors.textPrimary,
+                            : Theme.of(context).colorScheme.onSurface,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -1836,7 +1884,7 @@ class _WeddingClassCards extends StatelessWidget {
                       subtitle,
                       style: TextStyle(
                         fontSize: 10,
-                        color: AppColors.textSecondary,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -1890,7 +1938,7 @@ class _CategoryChecklistState extends State<_CategoryChecklist> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Material(
-          color: AppColors.surface,
+          color: Theme.of(context).colorScheme.surface,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1915,7 +1963,7 @@ class _CategoryChecklistState extends State<_CategoryChecklist> {
                               ? 'Select the services you need'
                               : '$count service${count == 1 ? '' : 's'} selected',
                           style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.textPrimary,
+                            color: Theme.of(context).colorScheme.onSurface,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -1923,10 +1971,10 @@ class _CategoryChecklistState extends State<_CategoryChecklist> {
                       AnimatedRotation(
                         turns: _expanded ? 0.5 : 0,
                         duration: const Duration(milliseconds: 200),
-                        child: const Icon(
+                        child: Icon(
                           Icons.keyboard_arrow_down,
                           size: 22,
-                          color: AppColors.textSecondary,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -1973,7 +2021,7 @@ class _CategoryChecklistState extends State<_CategoryChecklist> {
                                           size: 22,
                                           color: isTicked
                                               ? AppColors.amber
-                                              : AppColors.textHint,
+                                              : Theme.of(context).colorScheme.onSurfaceVariant,
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
@@ -1982,8 +2030,8 @@ class _CategoryChecklistState extends State<_CategoryChecklist> {
                                             style: AppTextStyles.bodyMedium
                                                 .copyWith(
                                               color: isTicked
-                                                  ? AppColors.textPrimary
-                                                  : AppColors.textSecondary,
+                                                  ? Theme.of(context).colorScheme.onSurface
+                                                  : Theme.of(context).colorScheme.onSurfaceVariant,
                                               fontWeight: isTicked
                                                   ? FontWeight.w600
                                                   : FontWeight.normal,
@@ -2030,7 +2078,7 @@ class _VendorsNeededRow extends StatelessWidget {
             child: Text(
               'Vendors needed',
               style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -2095,7 +2143,7 @@ class _SummaryRow extends StatelessWidget {
                 child: Text(
                   label,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -2104,7 +2152,7 @@ class _SummaryRow extends StatelessWidget {
                 child: Text(
                   value,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textPrimary,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w600,
                   ),
                   textAlign: TextAlign.right,

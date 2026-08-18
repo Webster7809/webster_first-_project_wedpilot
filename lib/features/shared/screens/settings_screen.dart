@@ -1,12 +1,227 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/router/app_routes.dart';
+import '../../../core/services/api_error.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../models/user.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/budget_provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
+import '../../../widgets/wed_text_field.dart';
+
+/// Shown for a Settings entry with no real functionality behind it yet
+/// (partner access, data export, in-app rating) — matches the wording already
+/// used elsewhere in the app (vendor_analytics_screen.dart,
+/// subscription_screen.dart) rather than leaving the tap silently do nothing.
+void _showComingSoon(BuildContext context, String feature) {
+  showWedSnackBar(context, '$feature is coming soon.', type: SnackType.info);
+}
+
+/// Updates the local toggle instantly (offline-first, matches every other
+/// setting here), then syncs it to the backend so it actually gates the
+/// notification emails sent from there — see AuthService.updateNotificationPreferences.
+/// Reverts the local toggle and surfaces an error if the sync fails, rather
+/// than leaving the UI silently out of sync with what the server will honor.
+Future<void> _setEmailNotifications(
+  BuildContext context,
+  WidgetRef ref,
+  SettingsNotifier notifier,
+  bool value,
+) async {
+  notifier.setEmailNotifications(value);
+  final token = ref.read(authProvider.notifier).accessToken;
+  if (token == null) return;
+  try {
+    await AuthService.instance.updateNotificationPreferences(
+      accessToken: token,
+      emailNotifications: value,
+    );
+  } on AuthApiException catch (e) {
+    notifier.setEmailNotifications(!value);
+    if (context.mounted) showWedSnackBar(context, e.message, type: SnackType.error);
+  } catch (e) {
+    notifier.setEmailNotifications(!value);
+    if (context.mounted) showWedSnackBar(context, describeError(e), type: SnackType.error);
+  }
+}
+
+/// Change-password dialog. Requires the current password rather than trusting
+/// the signed-in session alone — see backend/routes/auth.js's rationale on
+/// POST /api/auth/change-password.
+Future<void> _showChangePasswordDialog(BuildContext context, WidgetRef ref) async {
+  final formKey = GlobalKey<FormState>();
+  final currentCtrl = TextEditingController();
+  final newCtrl = TextEditingController();
+  bool submitting = false;
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setState) => AlertDialog(
+        title: const Text('Change Password'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              WedTextField(
+                label: 'Current password',
+                controller: currentCtrl,
+                isPassword: true,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? 'Enter your current password' : null,
+              ),
+              const SizedBox(height: 12),
+              WedTextField(
+                label: 'New password',
+                controller: newCtrl,
+                isPassword: true,
+                validator: (v) =>
+                    (v == null || v.length < 8) ? 'Min 8 characters' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: submitting ? null : () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          WedButton(
+            label: 'Update',
+            isLoading: submitting,
+            shrinkWrap: true,
+            height: 40,
+            onPressed: submitting
+                ? null
+                : () async {
+                    if (!(formKey.currentState?.validate() ?? false)) return;
+                    setState(() => submitting = true);
+                    final token = ref.read(authProvider.notifier).accessToken;
+                    if (token == null) return;
+                    try {
+                      await AuthService.instance.changePassword(
+                        accessToken: token,
+                        currentPassword: currentCtrl.text,
+                        newPassword: newCtrl.text,
+                      );
+                      if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                      if (context.mounted) {
+                        showWedSnackBar(context, 'Password updated.', type: SnackType.success);
+                      }
+                    } on AuthApiException catch (e) {
+                      setState(() => submitting = false);
+                      if (dialogContext.mounted) {
+                        showWedSnackBar(dialogContext, e.message, type: SnackType.error);
+                      }
+                    } catch (e) {
+                      setState(() => submitting = false);
+                      if (dialogContext.mounted) {
+                        showWedSnackBar(dialogContext, describeError(e), type: SnackType.error);
+                      }
+                    }
+                  },
+          ),
+        ],
+      ),
+    ),
+  );
+  currentCtrl.dispose();
+  newCtrl.dispose();
+}
+
+/// Permanently deactivates the signed-in account — requires the current
+/// password for the same reason `_showChangePasswordDialog` does (a live
+/// session alone shouldn't be enough for something this irreversible). On
+/// success, scrubs the local session the same way the Sign Out button below
+/// does and returns to the login screen.
+Future<void> _showDeleteAccountDialog(BuildContext context, WidgetRef ref) async {
+  final formKey = GlobalKey<FormState>();
+  final passwordCtrl = TextEditingController();
+  bool submitting = false;
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setState) => AlertDialog(
+        title: const Text('Delete Account'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This permanently deactivates your account and removes your '
+                'access — it can\'t be undone. Enter your password to '
+                'confirm.',
+                style: AppTextStyles.bodySmall.copyWith(height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              WedTextField(
+                label: 'Password',
+                controller: passwordCtrl,
+                isPassword: true,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? 'Enter your password' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: submitting ? null : () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          WedButton(
+            label: 'Delete Account',
+            variant: WedButtonVariant.danger,
+            isLoading: submitting,
+            shrinkWrap: true,
+            height: 40,
+            onPressed: submitting
+                ? null
+                : () async {
+                    if (!(formKey.currentState?.validate() ?? false)) return;
+                    setState(() => submitting = true);
+                    final token = ref.read(authProvider.notifier).accessToken;
+                    if (token == null) return;
+                    try {
+                      await AuthService.instance.deleteAccount(
+                        accessToken: token,
+                        currentPassword: passwordCtrl.text,
+                      );
+                      if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                      ref.read(budgetProvider.notifier).clearBudget();
+                      await ref.read(authProvider.notifier).logout();
+                      if (context.mounted) {
+                        showWedSnackBar(context, 'Account deleted.', type: SnackType.success);
+                        context.go('/login');
+                      }
+                    } on AuthApiException catch (e) {
+                      setState(() => submitting = false);
+                      if (dialogContext.mounted) {
+                        showWedSnackBar(dialogContext, e.message, type: SnackType.error);
+                      }
+                    } catch (e) {
+                      setState(() => submitting = false);
+                      if (dialogContext.mounted) {
+                        showWedSnackBar(dialogContext, describeError(e), type: SnackType.error);
+                      }
+                    }
+                  },
+          ),
+        ],
+      ),
+    ),
+  );
+  passwordCtrl.dispose();
+}
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -87,15 +302,7 @@ class SettingsScreen extends ConsumerWidget {
               title: 'Email Notifications',
               subtitle: 'Updates delivered to your inbox',
               value: settings.emailNotifications,
-              onChanged: notifier.setEmailNotifications,
-            ),
-            const Divider(height: 1, indent: 16, endIndent: 16),
-            _ToggleTile(
-              icon: Icons.sms_outlined,
-              title: 'SMS Notifications',
-              subtitle: 'Important alerts via text message',
-              value: settings.smsNotifications,
-              onChanged: notifier.setSmsNotifications,
+              onChanged: (value) => _setEmailNotifications(context, ref, notifier, value),
             ),
           ]),
 
@@ -105,18 +312,36 @@ class SettingsScreen extends ConsumerWidget {
             title: 'Account',
           ),
           _SectionCard(children: [
-            _NavTile(icon: Icons.person_outlined, title: 'Edit Profile', onTap: () {}),
+            _NavTile(
+              icon: Icons.person_outlined,
+              title: 'Edit Profile',
+              // Couple and vendor each have their own real profile editor —
+              // route to whichever one applies rather than a generic no-op.
+              onTap: () => context.push(
+                user?.role == UserRole.vendor ? '/vendor/account' : '/couple/profile',
+              ),
+            ),
             const Divider(height: 1, indent: 52),
             _NavTile(
               icon: Icons.email_outlined,
               title: 'Email Address',
               subtitle: user?.email ?? '—',
-              onTap: () {},
+              // Display-only: there is no change-email flow yet, and a
+              // tappable row that goes nowhere is worse than a plain one.
+              onTap: null,
             ),
             const Divider(height: 1, indent: 52),
-            _NavTile(icon: Icons.lock_outlined, title: 'Change Password', onTap: () {}),
+            _NavTile(
+              icon: Icons.lock_outlined,
+              title: 'Change Password',
+              onTap: () => _showChangePasswordDialog(context, ref),
+            ),
             const Divider(height: 1, indent: 52),
-            _NavTile(icon: Icons.people_outlined, title: 'Partner Access', onTap: () {}),
+            _NavTile(
+              icon: Icons.people_outlined,
+              title: 'Partner Access',
+              onTap: () => _showComingSoon(context, 'Partner Access'),
+            ),
           ]),
 
           // ── Privacy & Data ────────────────────────────────────────
@@ -128,18 +353,26 @@ class SettingsScreen extends ConsumerWidget {
             _NavTile(
               icon: Icons.download_outlined,
               title: 'Export My Data',
-              onTap: () => showWedSnackBar(
-                context,
-                'Data export requested!',
-                type: SnackType.success,
-              ),
+              onTap: () => _showComingSoon(context, 'Data export'),
             ),
             const Divider(height: 1, indent: 52),
-            _NavTile(icon: Icons.cookie_outlined, title: 'Cookie Preferences', onTap: () {}),
+            _NavTile(
+              icon: Icons.cookie_outlined,
+              title: 'Cookie Preferences',
+              onTap: () => context.push(AppRoutes.cookiePreferences),
+            ),
             const Divider(height: 1, indent: 52),
-            _NavTile(icon: Icons.policy_outlined, title: 'Privacy Policy', onTap: () {}),
+            _NavTile(
+              icon: Icons.policy_outlined,
+              title: 'Privacy Policy',
+              onTap: () => context.push(AppRoutes.privacyPolicy),
+            ),
             const Divider(height: 1, indent: 52),
-            _NavTile(icon: Icons.description_outlined, title: 'Terms of Service', onTap: () {}),
+            _NavTile(
+              icon: Icons.description_outlined,
+              title: 'Terms of Service',
+              onTap: () => context.push(AppRoutes.termsOfService),
+            ),
           ]),
 
           // ── Support ───────────────────────────────────────────────
@@ -157,7 +390,9 @@ class SettingsScreen extends ConsumerWidget {
             _NavTile(
               icon: Icons.star_outlined,
               title: 'Rate the App',
-              onTap: () {},
+              // No store listing exists yet (the app isn't published), so
+              // there is nowhere real for this to link to.
+              onTap: () => _showComingSoon(context, 'App Store rating'),
             ),
             const Divider(height: 1, indent: 52),
             _NavTile(
@@ -198,7 +433,7 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: 8),
           Center(
             child: TextButton(
-              onPressed: () {},
+              onPressed: () => _showDeleteAccountDialog(context, ref),
               child: Text(
                 'Delete Account',
                 style: AppTextStyles.bodySmall
