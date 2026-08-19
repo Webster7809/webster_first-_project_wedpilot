@@ -42,8 +42,7 @@ class VendorDiscoveryScreen extends ConsumerStatefulWidget {
       _VendorDiscoveryScreenState();
 }
 
-class _VendorDiscoveryScreenState
-    extends ConsumerState<VendorDiscoveryScreen> {
+class _VendorDiscoveryScreenState extends ConsumerState<VendorDiscoveryScreen> {
   String _selectedCategory = kAllVendorCategories;
   int _filterIndex = 0;
   String _committedSearch = '';
@@ -51,10 +50,13 @@ class _VendorDiscoveryScreenState
   @override
   Widget build(BuildContext context) {
     if (ref.read(wishlistProvider.notifier).status == ResourceStatus.initial) {
-      Future.microtask(() => ref.read(wishlistProvider.notifier).loadWishlist());
+      Future.microtask(
+        () => ref.read(wishlistProvider.notifier).loadWishlist(),
+      );
     }
     final coupleProfile = ref.watch(coupleProfileProvider);
-    final city = coupleProfile?.location?.split(',').first.trim() ?? 'your city';
+    final city =
+        coupleProfile?.location?.split(',').first.trim() ?? 'your city';
     // 'Fits my guests' is only meaningful once the couple has a guest count
     // on file — a chip that silently does nothing (or filters against a
     // number that doesn't exist) is worse than not offering it.
@@ -67,9 +69,12 @@ class _VendorDiscoveryScreenState
     }
     final vendorAsync = _committedSearch.isEmpty
         ? ref.watch(vendorListProvider(_selectedCategory))
-        : ref.watch(vendorSearchResultsProvider(
-            (category: _selectedCategory, search: _committedSearch),
-          ));
+        : ref.watch(
+            vendorSearchResultsProvider((
+              category: _selectedCategory,
+              search: _committedSearch,
+            )),
+          );
     final totalBudget = coupleProfile?.totalBudget ?? 0.0;
     final catBudgets = Map.fromEntries(
       AppConstants.defaultBudgetAllocation.entries.map(
@@ -82,8 +87,27 @@ class _VendorDiscoveryScreenState
     // the existing 16px edge padding on phone widths. SliverConstrainedCrossAxis
     // only clamps the cross-axis extent, it does not re-center — see the
     // SliverPadding usages below.
-    final gutter =
-        AppDimensions.gutter(MediaQuery.sizeOf(context).width, minGutter: 16);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final gutter = AppDimensions.gutter(screenWidth, minGutter: 16);
+    // One card per row on phone (unchanged from before), 2 on tablet, 3 on
+    // desktop — same breakpoints AppDimensions already uses elsewhere.
+    final crossAxisCount = screenWidth >= AppDimensions.desktopMin
+        ? 3
+        : screenWidth >= AppDimensions.tabletMin
+        ? 2
+        : 1;
+    // Derived (not a fixed constant) so the card keeps its proportions at
+    // any column count: the photo scales with card width via AspectRatio
+    // inside _VendorMatchCard, while the metadata section below it stays a
+    // fixed height — see _kCardContentHeight there.
+    const cardSpacing = 16.0;
+    final contentWidth = screenWidth - gutter * 2;
+    final cardWidth =
+        (contentWidth - cardSpacing * (crossAxisCount - 1)) / crossAxisCount;
+    final cardHeight =
+        cardWidth / _VendorMatchCard.imageAspectRatio +
+        _VendorMatchCard.contentHeight;
+    final cardAspectRatio = cardWidth / cardHeight;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -121,14 +145,16 @@ class _VendorDiscoveryScreenState
                       // couple and the first photograph.
                       Text(
                         '${vendorAsync.valueOrNull?.length ?? 0} vendors matched',
-                        style: AppTextStyles.displaySmall
-                            .copyWith(color: Colors.white),
+                        style: AppTextStyles.displaySmall.copyWith(
+                          color: Colors.white,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Ranked by fit, budget and ratings in $city',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: Colors.white.withAlpha(190)),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: Colors.white.withAlpha(190),
+                        ),
                       ),
                     ],
                   ),
@@ -163,9 +189,10 @@ class _VendorDiscoveryScreenState
                       return <VendorProfile>[];
                     }
                     final results = await ref.read(
-                      vendorSearchResultsProvider(
-                        (category: _selectedCategory, search: query),
-                      ).future,
+                      vendorSearchResultsProvider((
+                        category: _selectedCategory,
+                        search: query,
+                      )).future,
                     );
                     if (mounted) setState(() => _committedSearch = query);
                     return results;
@@ -204,13 +231,16 @@ class _VendorDiscoveryScreenState
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 150),
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 9),
+                                horizontal: 14,
+                                vertical: 9,
+                              ),
                               decoration: BoxDecoration(
                                 color: isSelected
                                     ? AppColors.gold
                                     : Colors.white.withAlpha(20),
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.chip),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.chip,
+                                ),
                               ),
                               child: Text(
                                 cat,
@@ -255,23 +285,27 @@ class _VendorDiscoveryScreenState
                             Text(
                               '${_applyFilter(vendors).length} ${_categoryNoun}vendors in $city',
                               style: AppTextStyles.titleMedium.copyWith(
-                                  color:
-                                      Theme.of(context).colorScheme.onSurface),
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
                             ),
                             if (selectedBudget != null) ...[
                               const SizedBox(height: 2),
                               Text(
                                 'Your $_selectedCategory budget: ${fmtCurrency(selectedBudget)}',
                                 style: AppTextStyles.bodySmall.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant),
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ],
                           ],
                         ),
                         loading: () => const LoadingShimmer(
-                            width: 180, height: 16, borderRadius: 4),
+                          width: 180,
+                          height: 16,
+                          borderRadius: 4,
+                        ),
                         error: (e, st) => const SizedBox.shrink(),
                       ),
                     ),
@@ -296,17 +330,20 @@ class _VendorDiscoveryScreenState
           SliverPadding(
             padding: EdgeInsets.symmetric(horizontal: gutter),
             sliver: vendorAsync.when(
-              loading: () => SliverList(
+              loading: () => SliverGrid(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: cardSpacing,
+                  mainAxisSpacing: cardSpacing,
+                  childAspectRatio: cardAspectRatio,
+                ),
                 delegate: SliverChildBuilderDelegate(
-                  (_, i) => const Padding(
-                    padding: EdgeInsets.only(bottom: 16),
-                    child: LoadingShimmer(
-                      width: double.infinity,
-                      height: 280,
-                      borderRadius: 16,
-                    ),
+                  (_, i) => LoadingShimmer(
+                    width: double.infinity,
+                    height: cardHeight,
+                    borderRadius: 16,
                   ),
-                  childCount: 3,
+                  childCount: crossAxisCount * 2,
                 ),
               ),
               error: (e, st) => SliverToBoxAdapter(
@@ -315,8 +352,9 @@ class _VendorDiscoveryScreenState
                     padding: const EdgeInsets.all(32),
                     child: Text(
                       'Failed to load vendors',
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: AppColors.textSecondary),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ),
@@ -336,12 +374,16 @@ class _VendorDiscoveryScreenState
                       )
                     : SliverPadding(
                         padding: const EdgeInsets.only(bottom: 32),
-                        sliver: SliverList(
+                        sliver: SliverGrid(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: crossAxisCount,
+                                crossAxisSpacing: cardSpacing,
+                                mainAxisSpacing: cardSpacing,
+                                childAspectRatio: cardAspectRatio,
+                              ),
                           delegate: SliverChildBuilderDelegate(
-                            (_, i) => Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: _VendorMatchCard(vendor: vendors[i]),
-                            ),
+                            (_, i) => _VendorMatchCard(vendor: vendors[i]),
                             childCount: vendors.length,
                           ),
                         ),
@@ -370,9 +412,12 @@ class _VendorDiscoveryScreenState
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
-                child: Text('Filter vendors',
-                    style: AppTextStyles.displaySmall
-                        .copyWith(color: colors.onSurface)),
+                child: Text(
+                  'Filter vendors',
+                  style: AppTextStyles.displaySmall.copyWith(
+                    color: colors.onSurface,
+                  ),
+                ),
               ),
               const Padding(
                 padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
@@ -388,8 +433,9 @@ class _VendorDiscoveryScreenState
                     _filterLabel(i, guestCount),
                     style: AppTextStyles.bodyLarge.copyWith(
                       color: colors.onSurface,
-                      fontWeight:
-                          selected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: selected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                     ),
                   ),
                   trailing: selected
@@ -409,8 +455,9 @@ class _VendorDiscoveryScreenState
   /// Singular-ish noun for count text, e.g. "1 venue vendors" or, when
   /// browsing every category at once, plain "4 vendors" instead of the
   /// nonsensical "4 all vendors".
-  String get _categoryNoun =>
-      _selectedCategory == kAllVendorCategories ? '' : '${_selectedCategory.toLowerCase()} ';
+  String get _categoryNoun => _selectedCategory == kAllVendorCategories
+      ? ''
+      : '${_selectedCategory.toLowerCase()} ';
 
   String _filterLabel(int i, int? guestCount) {
     if (i == 0) {
@@ -445,6 +492,18 @@ class _VendorMatchCard extends ConsumerWidget {
 
   const _VendorMatchCard({required this.vendor});
 
+  // Width/height of the photo — the card scales this proportionally at any
+  // grid column count rather than cropping a fixed pixel height. Close to
+  // the original fixed 220px look at typical single-column phone widths.
+  static const double imageAspectRatio = 16 / 10;
+
+  // Fixed height for everything below the photo (price, guest count, the
+  // occasional "Booked on your date" chip) so every card in a grid row
+  // lines up evenly regardless of which optional lines a given vendor has —
+  // shorter cards just leave the extra space blank rather than shrinking
+  // the row to the tallest sibling.
+  static const double contentHeight = 108;
+
   Future<void> _toggleWishlist(BuildContext context, WidgetRef ref) async {
     final error = await ref.read(wishlistProvider.notifier).toggle(vendor.id);
     if (error != null && context.mounted) {
@@ -458,8 +517,11 @@ class _VendorMatchCard extends ConsumerWidget {
         ? '${fmtCurrency(vendor.priceMin.round())} – ${fmtAmount(vendor.priceMax.round())}'
         : null;
     final weddingDate = ref.watch(coupleProfileProvider)?.weddingDate;
-    final isBookedOnWeddingDate = weddingDate != null &&
-        vendor.blockedDates.contains(weddingDate.toIso8601String().split('T').first);
+    final isBookedOnWeddingDate =
+        weddingDate != null &&
+        vendor.blockedDates.contains(
+          weddingDate.toIso8601String().split('T').first,
+        );
 
     final isWishlisted = ref.watch(wishlistProvider).contains(vendor.id);
 
@@ -476,9 +538,8 @@ class _VendorMatchCard extends ConsumerWidget {
           // ── Photograph, doing the selling ──────────────────────────────────
           ClipRRect(
             borderRadius: AppRadius.top(AppRadius.card),
-            child: SizedBox(
-              height: 220,
-              width: double.infinity,
+            child: AspectRatio(
+              aspectRatio: imageAspectRatio,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -509,8 +570,9 @@ class _VendorMatchCard extends ConsumerWidget {
                       children: [
                         Text(
                           vendor.businessName,
-                          style: AppTextStyles.headlineLarge
-                              .copyWith(color: Colors.white),
+                          style: AppTextStyles.headlineLarge.copyWith(
+                            color: Colors.white,
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -520,8 +582,9 @@ class _VendorMatchCard extends ConsumerWidget {
                               .whereType<String>()
                               .where((s) => s.isNotEmpty)
                               .join(' · '),
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: Colors.white.withAlpha(205)),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: Colors.white.withAlpha(205),
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -552,61 +615,75 @@ class _VendorMatchCard extends ConsumerWidget {
           ),
 
           // ── Quiet metadata ─────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (priceMin != null)
-                        Text(priceMin,
+          // Fixed height (see contentHeight above) so every card in a grid
+          // row lines up evenly regardless of which optional lines below
+          // are present for this vendor.
+          SizedBox(
+            height: contentHeight,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (priceMin != null)
+                          Text(
+                            priceMin,
                             style: AppTextStyles.dataMedium.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface))
-                      else
-                        Text('Price on request',
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          )
+                        else
+                          Text(
+                            'Price on request',
                             style: AppTextStyles.bodySmall.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant)),
-                      if (vendor.maxGuestCapacity != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          'Seats up to ${vendor.maxGuestCapacity} guests',
-                          style: AppTextStyles.bodySmall.copyWith(
-                              color:
-                                  Theme.of(context).colorScheme.onSurfaceVariant),
-                        ),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        if (vendor.maxGuestCapacity != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Seats up to ${vendor.maxGuestCapacity} guests',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        if (isBookedOnWeddingDate) ...[
+                          const SizedBox(height: 6),
+                          _TagChip(
+                            label: 'Booked on your date',
+                            icon: Icons.event_busy_outlined,
+                            color: AppColors.warning,
+                            textColor: AppColors.warning,
+                            bgColor: AppColors.warningBg,
+                          ),
+                        ],
                       ],
-                      if (isBookedOnWeddingDate) ...[
-                        const SizedBox(height: 6),
-                        _TagChip(
-                          label: 'Booked on your date',
-                          icon: Icons.event_busy_outlined,
-                          color: AppColors.warning,
-                          textColor: AppColors.warning,
-                          bgColor: AppColors.warningBg,
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
-                ),
-                IconButton(
-                  tooltip: isWishlisted
-                      ? 'Remove ${vendor.businessName} from wishlist'
-                      : 'Save ${vendor.businessName} to wishlist',
-                  icon: Icon(
-                    isWishlisted ? Icons.favorite : Icons.favorite_outlined,
-                    color: isWishlisted
-                        ? AppColors.error
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                    size: 24,
+                  IconButton(
+                    tooltip: isWishlisted
+                        ? 'Remove ${vendor.businessName} from wishlist'
+                        : 'Save ${vendor.businessName} to wishlist',
+                    icon: Icon(
+                      isWishlisted ? Icons.favorite : Icons.favorite_outlined,
+                      color: isWishlisted
+                          ? AppColors.error
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: 24,
+                    ),
+                    onPressed: () => _toggleWishlist(context, ref),
                   ),
-                  onPressed: () => _toggleWishlist(context, ref),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -639,11 +716,13 @@ class _OverlayBadge extends StatelessWidget {
         children: [
           Icon(icon, color: AppColors.gold, size: 13),
           const SizedBox(width: 5),
-          Text(label,
-              style: AppTextStyles.caption.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              )),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -684,9 +763,11 @@ class _FilterButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.tune_outlined,
-                  size: 16,
-                  color: isActive ? Colors.white : colors.onSurfaceVariant),
+              Icon(
+                Icons.tune_outlined,
+                size: 16,
+                color: isActive ? Colors.white : colors.onSurfaceVariant,
+              ),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(

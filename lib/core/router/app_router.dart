@@ -108,9 +108,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       // "confirm your email" step register sends people to was immediately
       // redirected to onboarding and could never be seen. It is a soft step —
       // "I've verified — continue" moves on without checking anything.
+      //
+      // Also exempted: a public invitation link. It's meant to open for
+      // anyone regardless of the opening browser's own session — including
+      // the couple previewing their own still-mid-onboarding account, or a
+      // guest who separately has an unfinished WedPilot signup. Without this,
+      // opening a shared invite link while signed in but not yet through
+      // onboarding silently bounced to the onboarding wizard instead of the
+      // invitation, which read as "the link opens the register screen."
       if (auth.isAuthenticated &&
           auth.needsOnboarding &&
-          loc != AppRoutes.verifyEmail) {
+          loc != AppRoutes.verifyEmail &&
+          !isPublicInvite) {
         final target = auth.isVendor
             ? AppRoutes.vendorOnboarding
             : AppRoutes.couplePlanning;

@@ -320,7 +320,9 @@ class _FeedbackSubmissionScreenState extends ConsumerState<FeedbackSubmissionScr
                           onPressed: () => setState(() => _rating = i + 1),
                           icon: Icon(
                             filled ? Icons.star : Icons.star_outlined,
-                            color: AppColors.goldPremium,
+                            color: filled
+                                ? AppColors.goldPremium
+                                : Theme.of(context).colorScheme.onSurfaceVariant,
                             size: 32,
                           ),
                         );
