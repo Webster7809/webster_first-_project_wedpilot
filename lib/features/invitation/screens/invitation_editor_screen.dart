@@ -569,52 +569,50 @@ class _InvitationEditorScreenState
     );
   }
 
-  // ── Narrow (mobile) — portrait card + tab chips + scrollable content card ──
+  // ── Narrow (mobile) — one scrollable page: card, tab chips, content card ──
   Widget _buildNarrowLayout(ThemeData theme, double screenWidth) {
-    final screenHeight = MediaQuery.sizeOf(context).height;
-    final cardMaxHeight = (screenHeight * 0.40).clamp(180.0, 400.0);
     final cardWidth = screenWidth - 40.0;
-    final cardHeight = (cardWidth * (4 / 3)).clamp(0.0, cardMaxHeight);
+    final cardHeight = cardWidth * (4 / 3);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Card preview — floats on cream background
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-          child: Center(
-            child: Container(
-              width: cardWidth,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(46),
-                    blurRadius: 24,
-                    spreadRadius: 0,
-                    offset: const Offset(0, 8),
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Card preview — floats on cream background
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            child: Center(
+              child: Container(
+                width: cardWidth,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(46),
+                      blurRadius: 24,
+                      spreadRadius: 0,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: SizedBox(
+                    height: cardHeight,
+                    child: _buildPreview(),
                   ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: SizedBox(
-                  height: cardHeight,
-                  child: _buildPreview(),
                 ),
               ),
             ),
           ),
-        ),
-        // Tab chips — individual floating chips on cream background with gaps
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _buildTabBar(theme),
-        ),
-        const SizedBox(height: 10),
-        // Content card — separate white rounded card, cream visible on sides
-        Expanded(
-          child: Padding(
+          // Tab chips — individual floating chips on cream background with gaps
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildTabBar(theme),
+          ),
+          const SizedBox(height: 10),
+          // Content card — separate white rounded card, cream visible on sides
+          Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Container(
               decoration: BoxDecoration(
@@ -629,13 +627,11 @@ class _InvitationEditorScreenState
                 ],
               ),
               clipBehavior: Clip.antiAlias,
-              child: SingleChildScrollView(
-                child: _buildTabContent(theme),
-              ),
+              child: _buildTabContent(theme),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1641,12 +1637,12 @@ class _InvitationPreviewState extends State<_InvitationPreview> {
                       child: widget.backgroundImageBytes != null
                           ? Image.memory(
                               widget.backgroundImageBytes!,
-                              fit: BoxFit.fitWidth,
+                              fit: BoxFit.contain,
                               alignment: Alignment.center,
                             )
                           : CachedNetworkImage(
                               imageUrl: resolveInvitationMediaUrl(widget.backgroundImageUrl!),
-                              fit: BoxFit.fitWidth,
+                              fit: BoxFit.contain,
                               alignment: Alignment.center,
                               memCacheWidth: 800,
                               placeholder: (context, url) => Container(
