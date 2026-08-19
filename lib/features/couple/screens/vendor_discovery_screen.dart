@@ -87,7 +87,11 @@ class _VendorDiscoveryScreenState extends ConsumerState<VendorDiscoveryScreen> {
     // the existing 16px edge padding on phone widths. SliverConstrainedCrossAxis
     // only clamps the cross-axis extent, it does not re-center — see the
     // SliverPadding usages below.
-    final screenWidth = MediaQuery.sizeOf(context).width;
+    // Rounded once here so a window sized at exactly a breakpoint (e.g. a
+    // browser resized or DevTools-emulated to precisely 1024) doesn't miss
+    // it — MediaQuery's logical width is physical pixels ÷ devicePixelRatio,
+    // which can land a hair under a whole number on a fractional DPR display.
+    final screenWidth = MediaQuery.sizeOf(context).width.roundToDouble();
     final gutter = AppDimensions.gutter(screenWidth, minGutter: 16);
     // One card per row on phone (unchanged from before), 2 on tablet, 3 on
     // desktop — same breakpoints AppDimensions already uses elsewhere.
