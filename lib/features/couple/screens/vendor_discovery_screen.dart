@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_dimensions.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -232,109 +233,118 @@ class _VendorDiscoveryScreenState
           // The four filters used to sit here as a permanent second pill row.
           // They now live behind one control that states what is active, so
           // the first vendor photograph is one row closer to the top.
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: vendorAsync.when(
-                      data: (vendors) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${_applyFilter(vendors).length} ${_categoryNoun}vendors in $city',
-                            style: AppTextStyles.titleMedium.copyWith(
-                                color:
-                                    Theme.of(context).colorScheme.onSurface),
-                          ),
-                          if (selectedBudget != null) ...[
-                            const SizedBox(height: 2),
+          SliverConstrainedCrossAxis(
+            maxExtent: AppDimensions.contentMaxWidth,
+            sliver: SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: vendorAsync.when(
+                        data: (vendors) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             Text(
-                              'Your $_selectedCategory budget: ${fmtCurrency(selectedBudget)}',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant),
+                              '${_applyFilter(vendors).length} ${_categoryNoun}vendors in $city',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                  color:
+                                      Theme.of(context).colorScheme.onSurface),
                             ),
+                            if (selectedBudget != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Your $_selectedCategory budget: ${fmtCurrency(selectedBudget)}',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
+                        loading: () => const LoadingShimmer(
+                            width: 180, height: 16, borderRadius: 4),
+                        error: (e, st) => const SizedBox.shrink(),
                       ),
-                      loading: () => const LoadingShimmer(
-                          width: 180, height: 16, borderRadius: 4),
-                      error: (e, st) => const SizedBox.shrink(),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  _FilterButton(
-                    label: _filterIndex == 0
-                        ? 'Filter'
-                        : _filterLabel(_filterIndex, guestCount),
-                    isActive: _filterIndex != 0,
-                    onTap: () => _openFilterSheet(activeFilters, guestCount),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    _FilterButton(
+                      label: _filterIndex == 0
+                          ? 'Filter'
+                          : _filterLabel(_filterIndex, guestCount),
+                      isActive: _filterIndex != 0,
+                      onTap: () => _openFilterSheet(activeFilters, guestCount),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
 
           // ── Vendor cards ─────────────────────────────────────────────────────
-          vendorAsync.when(
-            loading: () => SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (_, i) => const Padding(
-                    padding: EdgeInsets.only(bottom: 16),
-                    child: LoadingShimmer(
-                      width: double.infinity,
-                      height: 280,
-                      borderRadius: 16,
+          // Constrained and centred so cards stay a readable width on a
+          // laptop/desktop window instead of stretching edge to edge — a
+          // no-op on phone widths, which are already under the cap.
+          SliverConstrainedCrossAxis(
+            maxExtent: AppDimensions.contentMaxWidth,
+            sliver: vendorAsync.when(
+              loading: () => SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (_, i) => const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: LoadingShimmer(
+                        width: double.infinity,
+                        height: 280,
+                        borderRadius: 16,
+                      ),
+                    ),
+                    childCount: 3,
+                  ),
+                ),
+              ),
+              error: (e, st) => SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(
+                      'Failed to load vendors',
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: AppColors.textSecondary),
                     ),
                   ),
-                  childCount: 3,
                 ),
               ),
-            ),
-            error: (e, st) => SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Text(
-                    'Failed to load vendors',
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: AppColors.textSecondary),
-                  ),
-                ),
-              ),
-            ),
-            data: (allVendors) {
-              final vendors = _applyFilter(allVendors);
-              return vendors.isEmpty
-                  ? SliverToBoxAdapter(
-                      child: WedEmptyState(
-                        icon: Icons.search_off,
-                        title: 'No vendors found',
-                        message: _selectedCategory == kAllVendorCategories
-                            ? 'No vendors in $city yet'
-                            : 'No $_selectedCategory vendors in $city yet',
-                        imageUrl: VendorCategoryImages.galleryFor('Venue')[0],
-                      ),
-                    )
-                  : SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (_, i) => Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: _VendorMatchCard(vendor: vendors[i]),
-                          ),
-                          childCount: vendors.length,
+              data: (allVendors) {
+                final vendors = _applyFilter(allVendors);
+                return vendors.isEmpty
+                    ? SliverToBoxAdapter(
+                        child: WedEmptyState(
+                          icon: Icons.search_off,
+                          title: 'No vendors found',
+                          message: _selectedCategory == kAllVendorCategories
+                              ? 'No vendors in $city yet'
+                              : 'No $_selectedCategory vendors in $city yet',
+                          imageUrl: VendorCategoryImages.galleryFor('Venue')[0],
                         ),
-                      ),
-                    );
-            },
+                      )
+                    : SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (_, i) => Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: _VendorMatchCard(vendor: vendors[i]),
+                            ),
+                            childCount: vendors.length,
+                          ),
+                        ),
+                      );
+              },
+            ),
           ),
         ],
       ),
