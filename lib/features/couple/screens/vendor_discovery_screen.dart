@@ -78,6 +78,12 @@ class _VendorDiscoveryScreenState
     );
     // Shown once for the category being browsed rather than under every tab.
     final selectedBudget = catBudgets[_selectedCategory];
+    // Centres the count row and card list on a wide window; collapses to
+    // the existing 16px edge padding on phone widths. SliverConstrainedCrossAxis
+    // only clamps the cross-axis extent, it does not re-center — see the
+    // SliverPadding usages below.
+    final gutter =
+        AppDimensions.gutter(MediaQuery.sizeOf(context).width, minGutter: 16);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -233,11 +239,11 @@ class _VendorDiscoveryScreenState
           // The four filters used to sit here as a permanent second pill row.
           // They now live behind one control that states what is active, so
           // the first vendor photograph is one row closer to the top.
-          SliverConstrainedCrossAxis(
-            maxExtent: AppDimensions.contentMaxWidth,
+          SliverPadding(
+            padding: EdgeInsets.symmetric(horizontal: gutter),
             sliver: SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                padding: const EdgeInsets.fromLTRB(0, 16, 0, 10),
                 child: Row(
                   children: [
                     Expanded(
@@ -284,26 +290,23 @@ class _VendorDiscoveryScreenState
           ),
 
           // ── Vendor cards ─────────────────────────────────────────────────────
-          // Constrained and centred so cards stay a readable width on a
+          // Gutter-padded so cards stay a readable, centred width on a
           // laptop/desktop window instead of stretching edge to edge — a
-          // no-op on phone widths, which are already under the cap.
-          SliverConstrainedCrossAxis(
-            maxExtent: AppDimensions.contentMaxWidth,
+          // no-op on phone widths, where gutter collapses to 16px.
+          SliverPadding(
+            padding: EdgeInsets.symmetric(horizontal: gutter),
             sliver: vendorAsync.when(
-              loading: () => SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (_, i) => const Padding(
-                      padding: EdgeInsets.only(bottom: 16),
-                      child: LoadingShimmer(
-                        width: double.infinity,
-                        height: 280,
-                        borderRadius: 16,
-                      ),
+              loading: () => SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) => const Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: LoadingShimmer(
+                      width: double.infinity,
+                      height: 280,
+                      borderRadius: 16,
                     ),
-                    childCount: 3,
                   ),
+                  childCount: 3,
                 ),
               ),
               error: (e, st) => SliverToBoxAdapter(
@@ -332,7 +335,7 @@ class _VendorDiscoveryScreenState
                         ),
                       )
                     : SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                        padding: const EdgeInsets.only(bottom: 32),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (_, i) => Padding(
