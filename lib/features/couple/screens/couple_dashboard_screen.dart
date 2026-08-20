@@ -189,8 +189,12 @@ class CoupleDashboardScreen extends ConsumerWidget {
                         isTablet: isTablet,
                         onBudgetDetails: () => context.go('/couple/budget'),
                         onBudgetSetup: () => context.push('/couple/plan-setup'),
+                        // go(), not push(): invitations is a shell tab, not a
+                        // standalone route (unlike plan-setup above) — pushing
+                        // into a shell branch from outside the shell renders
+                        // blank instead of the tab's content.
                         onGuestsSetup: () =>
-                            context.push('/couple/invitations'),
+                            context.go('/couple/invitations'),
                       ),
                       const SizedBox(height: 24),
 

@@ -317,7 +317,10 @@ class SettingsScreen extends ConsumerWidget {
               title: 'Edit Profile',
               // Couple and vendor each have their own real profile editor —
               // route to whichever one applies rather than a generic no-op.
-              onTap: () => context.push(
+              // go(), not push(): both targets are tabs inside a
+              // StatefulShellRoute, not standalone routes — pushing into a
+              // shell branch from outside the shell renders blank.
+              onTap: () => context.go(
                 user?.role == UserRole.vendor ? '/vendor/account' : '/couple/profile',
               ),
             ),
