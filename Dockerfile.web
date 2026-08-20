@@ -33,8 +33,17 @@ COPY . .
 
 # Re-run after the full copy: the cached layer above resolved against the
 # manifest alone, and pub verifies the package config against real sources.
+#
+# --pwa-strategy=none: the default (offline-first) registers a service worker
+# that caches the app shell independently of the nginx no-cache headers below —
+# a browser that ever visited before a deploy keeps serving the old JS,
+# invisibly, until it happens to re-check and activate the update. That's what
+# made a correctly-redeployed fix (the path-URL invite links) still fail for a
+# guest whose browser had the old build cached. This app has no offline use
+# case that's worth that tradeoff, so every visit just fetches fresh.
 RUN flutter pub get \
     && flutter build web --release \
+        --pwa-strategy=none \
         --dart-define=API_BASE_URL="$API_BASE_URL" \
         --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
 

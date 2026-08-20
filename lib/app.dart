@@ -28,7 +28,19 @@ class WedpilotApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionRestore = ref.watch(sessionRestoreProvider);
 
-    if (sessionRestore.isLoading) {
+    // A public invite link needs no auth state to render — it's the same
+    // page for a logged-in couple previewing their own invite or a signed-out
+    // guest. Gating it behind this loading screen was actively breaking it:
+    // GoRouter only reads the browser's real initial path (e.g. /i/token)
+    // when MaterialApp.router first mounts. Showing this plain, router-less
+    // MaterialApp first "used up" that initial route, so by the time the
+    // real router mounted second, it fell back to initialLocation (register)
+    // instead — sending signed-out guests to registration and signed-in
+    // couples straight to their dashboard, never to the invitation.
+    final isPublicInviteLink =
+        Uri.base.path.startsWith('/i/') || Uri.base.path.startsWith('/g/');
+
+    if (sessionRestore.isLoading && !isPublicInviteLink) {
       return const MaterialApp(
         debugShowCheckedModeBanner: false,
         home: Scaffold(
