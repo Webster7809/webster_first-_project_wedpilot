@@ -28,6 +28,13 @@ class _VendorProfileManagementScreenState
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _websiteCtrl;
 
+  // vendorOwnProvider is reset on every login (see session_scoped_providers),
+  // so it's often still loading when this screen first mounts. Seeding the
+  // controllers only in initState left them permanently blank in that case —
+  // this tracks whether that seeding has happened yet so a listener in
+  // build() can do it as soon as the profile actually arrives, exactly once.
+  bool _seededFromProfile = false;
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +42,7 @@ class _VendorProfileManagementScreenState
     _descCtrl = TextEditingController(text: profile?.description ?? '');
     _phoneCtrl = TextEditingController(text: profile?.phone ?? '');
     _websiteCtrl = TextEditingController(text: profile?.website ?? '');
+    _seededFromProfile = profile != null;
   }
 
   @override
@@ -53,6 +61,17 @@ class _VendorProfileManagementScreenState
         () => ref.read(vendorOwnProvider.notifier).loadOwnVendorData(),
       );
     }
+    // Fires once, the first time a profile shows up after mount — covers the
+    // case where the fetch was still in flight when initState ran.
+    ref.listen<Resource<VendorOwnState>>(vendorOwnProvider, (previous, next) {
+      if (_seededFromProfile) return;
+      final profile = next.data?.profile;
+      if (profile == null) return;
+      _seededFromProfile = true;
+      _descCtrl.text = profile.description ?? '';
+      _phoneCtrl.text = profile.phone ?? '';
+      _websiteCtrl.text = profile.website ?? '';
+    });
     final ownState = ownResource.data;
     final vendor = ownState?.profile ?? ref.watch(vendorProfileProvider);
     final businessName = vendor?.businessName ?? 'My Business';
