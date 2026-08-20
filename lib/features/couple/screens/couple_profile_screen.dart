@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/couple_profile.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../widgets/action_menu.dart';
 import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 import '../../../core/services/api_error.dart';
@@ -75,43 +76,12 @@ class CoupleProfileScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Planning tools
+                  // Planning tools — same collapsible ActionMenu as the
+                  // dashboard's "planning tools" list, instead of the old
+                  // always-expanded icon grid.
                   Text('Planning Tools', style: AppTextStyles.headlineSmall),
                   const SizedBox(height: 14),
-                  _ToolGrid(
-                    items: [
-                      _ToolItem(
-                        icon: Icons.chat_bubble_outlined,
-                        label: 'Messages',
-                        color: AppColors.info,
-                        onTap: () => context.push('/couple/messages'),
-                      ),
-                      _ToolItem(
-                        icon: Icons.checklist,
-                        label: 'Checklist',
-                        color: AppColors.tertiary,
-                        onTap: () => context.push('/couple/checklist'),
-                      ),
-                      _ToolItem(
-                        icon: Icons.favorite_outlined,
-                        label: 'Wishlist',
-                        color: AppColors.secondary,
-                        onTap: () => context.push('/couple/wishlist'),
-                      ),
-                      _ToolItem(
-                        icon: Icons.rate_review_outlined,
-                        label: 'Rate a Vendor',
-                        color: AppColors.goldPremium,
-                        onTap: () => context.push(AppRoutes.coupleFeedbackNew),
-                      ),
-                      _ToolItem(
-                        icon: Icons.event_available_outlined,
-                        label: 'My Bookings',
-                        color: AppColors.info,
-                        onTap: () => context.push(AppRoutes.coupleBookings),
-                      ),
-                    ],
-                  ),
+                  const _PlanningToolsMenu(),
 
                   const SizedBox(height: 28),
 
@@ -501,88 +471,64 @@ class _PhotoOptionTile extends StatelessWidget {
   }
 }
 
-// ── Tool grid (2-column) ──────────────────────────────────────────────────────
+// ── Planning tools menu ────────────────────────────────────────────────────────
 
-class _ToolGrid extends StatelessWidget {
-  final List<_ToolItem> items;
-  const _ToolGrid({required this.items});
+/// The couple's planning tools, collapsed into one card — mirrors
+/// [_PlanningToolsMenu] on the couple dashboard, reusing the shared
+/// [ActionMenu] widget instead of the old always-expanded icon grid.
+class _PlanningToolsMenu extends StatefulWidget {
+  const _PlanningToolsMenu();
 
   @override
-  Widget build(BuildContext context) {
-    // Capped tile size rather than a fixed 4-way split, so tiles stay
-    // compact on tablet/desktop widths instead of growing with the screen.
-    return GridView.extent(
-      maxCrossAxisExtent: 110,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      childAspectRatio: 0.85,
-      children: items,
-    );
-  }
+  State<_PlanningToolsMenu> createState() => _PlanningToolsMenuState();
 }
 
-class _ToolItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  const _ToolItem({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
+class _PlanningToolsMenuState extends State<_PlanningToolsMenu> {
+  // Collapsed on arrival, unlike the dashboard's default-open: the profile
+  // screen already stacks a hero header, this list, an Account section, and
+  // Sign Out below it, so it starts out of the way.
+  bool _open = false;
 
   @override
   Widget build(BuildContext context) {
-    // Tooltip surfaces the tool's purpose on long-press (mobile) or mouse
-    // hover (web/desktop) — recognition over recall for icon-first tiles.
-    return Tooltip(
-      message: label,
-      decoration: BoxDecoration(
-        color: AppColors.forestGreen,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      textStyle: const TextStyle(color: Colors.white, fontSize: 12),
-      child: Material(
-        color: color.withAlpha(26),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withAlpha(60)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                child: Icon(icon, size: 17, color: Colors.white),
-              ),
-              const SizedBox(height: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
-          ),
+    return ActionMenu(
+      noun: 'planning tools',
+      icon: Icons.checklist_rounded,
+      expanded: _open,
+      onToggle: () => setState(() => _open = !_open),
+      items: [
+        ActionMenuItem(
+          icon: Icons.chat_bubble_outlined,
+          label: 'Messages',
+          trailing: 'Chat with vendors',
+          onTap: () => context.push('/couple/messages'),
         ),
+        ActionMenuItem(
+          icon: Icons.checklist_outlined,
+          label: 'Checklist',
+          trailing: 'View tasks',
+          onTap: () => context.push('/couple/checklist'),
         ),
-      ),
+        ActionMenuItem(
+          icon: Icons.favorite_outlined,
+          label: 'Wishlist',
+          trailing: 'Saved items',
+          onTap: () => context.push('/couple/wishlist'),
+        ),
+        ActionMenuItem(
+          icon: Icons.rate_review_outlined,
+          label: 'Rate a Vendor',
+          trailing: 'Leave feedback',
+          promo: true,
+          onTap: () => context.push(AppRoutes.coupleFeedbackNew),
+        ),
+        ActionMenuItem(
+          icon: Icons.event_available_outlined,
+          label: 'My Bookings',
+          trailing: 'View',
+          onTap: () => context.push(AppRoutes.coupleBookings),
+        ),
+      ],
     );
   }
 }
