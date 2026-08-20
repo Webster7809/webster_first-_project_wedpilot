@@ -12,9 +12,11 @@ router.use(verifyJwt, requireCouple);
 
 // ── Serialization ────────────────────────────────────────────────────────────────
 
-// Flutter web has no path URL strategy configured, so it serves routes
-// under a `#/` hash fragment (e.g. https://host:port/#/g/token) — the link
-// must include that or a browser opening it directly will 404.
+// Flutter web now uses a path URL strategy (see usePathUrlStrategy() in
+// lib/main.dart), so links are plain paths — no `#/` hash fragment. A hash
+// fragment is silently dropped by some SMS/messaging apps' auto-linkifiers
+// (they treat `#` as a hashtag boundary), which sent guests to the app's
+// default route instead of their invitation.
 const PUBLIC_WEB_BASE_URL = process.env.PUBLIC_WEB_BASE_URL || 'http://localhost:8080';
 
 function serializeGuest(g) {
@@ -28,7 +30,7 @@ function serializeGuest(g) {
     relation: g.relation,
     is_invited: g.is_invited,
     invite_token: g.invite_token,
-    invite_url: g.invite_token ? `${PUBLIC_WEB_BASE_URL}/#/g/${g.invite_token}` : null,
+    invite_url: g.invite_token ? `${PUBLIC_WEB_BASE_URL}/g/${g.invite_token}` : null,
   };
 }
 

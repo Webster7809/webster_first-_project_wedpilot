@@ -13,9 +13,11 @@ const photoUploader = makeUploader('invitations', { allowedMimePrefixes: ['image
 
 // ── Serialization ────────────────────────────────────────────────────────────────
 
-// Flutter web has no path URL strategy configured, so it serves routes
-// under a `#/` hash fragment (e.g. https://host:port/#/i/token) — the link
-// must include that or a browser opening it directly will 404.
+// Flutter web now uses a path URL strategy (see usePathUrlStrategy() in
+// lib/main.dart), so links are plain paths — no `#/` hash fragment. A hash
+// fragment is silently dropped by some SMS/messaging apps' auto-linkifiers
+// (they treat `#` as a hashtag boundary), which sent guests to the app's
+// default route instead of their invitation.
 const PUBLIC_WEB_BASE_URL = process.env.PUBLIC_WEB_BASE_URL || 'http://localhost:8080';
 
 function serializeInvitation(inv) {
@@ -26,7 +28,7 @@ function serializeInvitation(inv) {
     title: inv.title,
     custom_data: inv.custom_data,
     share_token: inv.share_token,
-    share_url: inv.status === 'published' ? `${PUBLIC_WEB_BASE_URL}/#/i/${inv.share_token}` : null,
+    share_url: inv.status === 'published' ? `${PUBLIC_WEB_BASE_URL}/i/${inv.share_token}` : null,
     thumbnail_url: null,
     status: inv.status,
     view_count: inv.view_count,

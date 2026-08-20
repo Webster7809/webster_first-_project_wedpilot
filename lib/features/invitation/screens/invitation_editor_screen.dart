@@ -258,7 +258,7 @@ class _InvitationEditorScreenState
     // this app instance is actually being served, rather than guessing a
     // domain that may not exist.
     final shareUrl = updated?.shareUrl ??
-        '${Uri.base.origin}/#/i/${updated?.shareToken ?? ''}';
+        '${Uri.base.origin}/i/${updated?.shareToken ?? ''}';
 
     await shareWithFallback(
       context,
