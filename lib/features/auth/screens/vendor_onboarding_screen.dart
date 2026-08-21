@@ -313,6 +313,10 @@ class _VendorOnboardingScreenState
               totalSteps: _totalSteps,
               stepLabel: _stepLabels[_step],
               stepTitle: _stepTitles[_step],
+              backgroundAssets: const [
+                'assets/images/onboarding/vendor_1.jpg',
+                'assets/images/onboarding/vendor_2.jpg',
+              ],
               onBack: _step > 0 && _step < 3
                   ? () => setState(() => _step--)
                   : null,

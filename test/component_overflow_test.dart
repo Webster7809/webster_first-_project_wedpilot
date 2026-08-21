@@ -228,6 +228,9 @@ void main() {
                     totalSteps: 4,
                     stepLabel: 'STYLE & PREFERENCES',
                     stepTitle: "What's your\nwedding style?",
+                    backgroundAssets: [
+                      'assets/images/onboarding/couple_1.jpg',
+                    ],
                   ),
                 ),
               ),

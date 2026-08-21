@@ -3,14 +3,17 @@ import '../core/inherited/shell_scaffold.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import 'dash_progress_bar.dart';
-import 'ring_flourish.dart';
+import 'onboarding_photo_background.dart';
 
-/// Green header used at the top of multi-step onboarding wizards.
+/// Header used at the top of multi-step onboarding wizards, backed by a
+/// slow-cross-fading photo slideshow ([backgroundAssets]) with a dark scrim
+/// so the step copy stays legible over any photo.
 class WizardHeader extends StatelessWidget {
   final int step;
   final int totalSteps;
   final String stepLabel;
   final String stepTitle;
+  final List<String> backgroundAssets;
   final VoidCallback? onBack;
 
   const WizardHeader({
@@ -19,121 +22,112 @@ class WizardHeader extends StatelessWidget {
     required this.totalSteps,
     required this.stepLabel,
     required this.stepTitle,
+    required this.backgroundAssets,
     this.onBack,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.forestGreen,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  if (onBack != null)
-                    Material(
-                      color: Colors.white.withAlpha(30),
-                      shape: const CircleBorder(),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: onBack,
-                        child: const SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: Icon(Icons.chevron_left,
-                              color: Colors.white, size: 22),
-                        ),
-                      ),
-                    )
-                  else
-                    Builder(builder: (context) {
-                      // Only the couple shell's Budget tab renders this inside
-                      // a ShellScaffold — the same wizard header used for
-                      // standalone onboarding (couple + vendor) has no drawer
-                      // to open, so it keeps the plain spacer there.
-                      final shell = ShellScaffold.of(context);
-                      if (shell == null) return const SizedBox(width: 36);
-                      return Material(
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: OnboardingPhotoBackground(assetPaths: backgroundAssets),
+        ),
+        SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (onBack != null)
+                      Material(
                         color: Colors.white.withAlpha(30),
                         shape: const CircleBorder(),
                         clipBehavior: Clip.antiAlias,
                         child: InkWell(
-                          onTap: () => shell.scaffoldKey.currentState?.openDrawer(),
+                          onTap: onBack,
                           child: const SizedBox(
                             width: 36,
                             height: 36,
-                            child: Icon(Icons.menu, color: Colors.white, size: 22),
+                            child: Icon(Icons.chevron_left,
+                                color: Colors.white, size: 22),
                           ),
                         ),
-                      );
-                    }),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'STEP ${step + 1} OF $totalSteps',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                        letterSpacing: 1.2,
+                      )
+                    else
+                      Builder(builder: (context) {
+                        // Only the couple shell's Budget tab renders this inside
+                        // a ShellScaffold — the same wizard header used for
+                        // standalone onboarding (couple + vendor) has no drawer
+                        // to open, so it keeps the plain spacer there.
+                        final shell = ShellScaffold.of(context);
+                        if (shell == null) return const SizedBox(width: 36);
+                        return Material(
+                          color: Colors.white.withAlpha(30),
+                          shape: const CircleBorder(),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () =>
+                                shell.scaffoldKey.currentState?.openDrawer(),
+                            child: const SizedBox(
+                              width: 36,
+                              height: 36,
+                              child:
+                                  Icon(Icons.menu, color: Colors.white, size: 22),
+                            ),
+                          ),
+                        );
+                      }),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'STEP ${step + 1} OF $totalSteps',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          letterSpacing: 1.2,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
                     ),
-                  ),
-                  const SizedBox(width: 48),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  // Expanded, not a bare Text with a Spacer: a long step label
-                  // ("STYLE & PREFERENCES") at a large text scale on a 320pt
-                  // phone is wider than the space left beside the flourish,
-                  // and overflowed by 46px. Wrapping to a second line keeps
-                  // the whole label readable rather than clipping it.
-                  Expanded(
-                    child: Text(
-                      stepLabel,
-                      maxLines: 2,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        // Gold, not forest: this header fills its own Container
-                        // with forestGreen (4.99:1). Forest on forest is invisible.
-                        color: AppColors.gold,
-                        letterSpacing: 1.4,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Rings + flowers pop in fresh on every step change — a
-                  // small celebratory flourish, not something that competes
-                  // with the real step copy for attention.
-                  RingFlourish(step: step),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                stepTitle,
-                style: const TextStyle(
-                  fontFamily: 'Playfair Display',
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  height: 1.25,
+                    const SizedBox(width: 48),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              DashProgressBar(total: totalSteps, current: step),
-            ],
+                const SizedBox(height: 16),
+                Text(
+                  stepLabel,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    // Gold, not white: this header now sits over a photo, and
+                    // gold is what separates the eyebrow from the step title
+                    // below it rather than the two reading as one block.
+                    color: AppColors.gold,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  stepTitle,
+                  style: const TextStyle(
+                    fontFamily: 'Playfair Display',
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    height: 1.25,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DashProgressBar(total: totalSteps, current: step),
+              ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

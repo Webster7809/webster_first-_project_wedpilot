@@ -107,6 +107,7 @@ void main() {
               totalSteps: 4,
               stepLabel: 'STEP LABEL',
               stepTitle: 'Step title',
+              backgroundAssets: ['assets/images/onboarding/couple_1.jpg'],
             ),
           ),
         ),
