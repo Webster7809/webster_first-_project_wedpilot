@@ -6,6 +6,7 @@ const Invitation = require('../db/models/invitation');
 const RsvpResponse = require('../db/models/rsvpResponse');
 const verifyJwt = require('../middleware/verifyJwt');
 const { requireCouple } = require('../middleware/roles');
+const { generateCardNumber } = require('../services/guestCardNumber');
 
 const router = express.Router();
 router.use(verifyJwt, requireCouple);
@@ -31,6 +32,9 @@ function serializeGuest(g) {
     is_invited: g.is_invited,
     invite_token: g.invite_token,
     invite_url: g.invite_token ? `${PUBLIC_WEB_BASE_URL}/g/${g.invite_token}` : null,
+    card_number: g.card_number,
+    checked_in: g.checked_in,
+    checked_in_at: g.checked_in_at,
   };
 }
 
@@ -104,6 +108,7 @@ router.post('/', async (req, res) => {
       phone: phone && phone.trim() ? phone.trim() : null,
       relation: relation && relation.trim() ? relation.trim() : null,
       is_invited: true,
+      card_number: await generateCardNumber(),
     });
     res.status(201).json({ guest: serializeGuest(guest) });
   } catch (err) {
@@ -193,6 +198,61 @@ router.post('/:id/invite-link', async (req, res) => {
   } catch (err) {
     console.error('Create guest invite link error:', err.message);
     res.status(500).json({ error: 'Could not create invite link.' });
+  }
+});
+
+// ── Door check-in ──────────────────────────────────────────────────────────────
+// Confirms the physical card a guest is holding actually belongs to someone
+// on this couple's own list — the identity check a forwarded invite link
+// can't provide by itself. Scoped to req.user.user_id like every other route
+// here, so a card number only ever resolves within the couple checking it in,
+// never across weddings.
+
+router.post('/checkin', async (req, res) => {
+  try {
+    const { cardNumber } = req.body;
+    if (!cardNumber || !String(cardNumber).trim()) {
+      return res.status(400).json({ error: 'Card number is required.' });
+    }
+
+    const guest = await Guest.findOne({
+      where: { couple_user_id: req.user.user_id, card_number: String(cardNumber).trim() },
+    });
+    if (!guest) {
+      return res.status(404).json({ error: 'No guest found with that card number.' });
+    }
+    if (guest.checked_in) {
+      return res.status(409).json({
+        error: `${guest.name} was already checked in at ${new Date(guest.checked_in_at).toLocaleString()}.`,
+        guest: serializeGuest(guest),
+      });
+    }
+
+    guest.checked_in = true;
+    guest.checked_in_at = new Date();
+    await guest.save();
+    res.json({ guest: serializeGuest(guest) });
+  } catch (err) {
+    console.error('Guest check-in error:', err.message);
+    res.status(500).json({ error: 'Could not check in this guest.' });
+  }
+});
+
+// Corrects a mistaken check-in (wrong card typed, duplicate scan) — from the
+// guest list rather than the card number, since the couple is looking at the
+// guest's name at that point, not their card.
+router.patch('/:id/toggle-checkin', async (req, res) => {
+  try {
+    const guest = await Guest.findOne({ where: { guest_id: req.params.id, couple_user_id: req.user.user_id } });
+    if (!guest) return res.status(404).json({ error: 'Guest not found.' });
+
+    guest.checked_in = !guest.checked_in;
+    guest.checked_in_at = guest.checked_in ? new Date() : null;
+    await guest.save();
+    res.json({ guest: serializeGuest(guest) });
+  } catch (err) {
+    console.error('Toggle check-in error:', err.message);
+    res.status(500).json({ error: 'Could not update guest.' });
   }
 });
 

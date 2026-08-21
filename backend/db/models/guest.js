@@ -44,11 +44,27 @@ const Guest = sequelize.define('Guest', {
     type: DataTypes.UUID,
     allowNull: true,
   },
+  card_number: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  checked_in: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  },
+  checked_in_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
 }, {
   tableName: 'guests',
   createdAt: 'created_at',
   updatedAt: 'updated_at',
-  indexes: [{ unique: true, fields: ['invite_token'], name: 'guests_invite_token_unique' }],
+  indexes: [
+    { unique: true, fields: ['invite_token'], name: 'guests_invite_token_unique' },
+    { unique: true, fields: ['card_number'], name: 'guests_card_number_unique' },
+  ],
 });
 
 module.exports = Guest;

@@ -7,6 +7,7 @@ const RsvpResponse = require('../db/models/rsvpResponse');
 const verifyJwt = require('../middleware/verifyJwt');
 const { requireCouple } = require('../middleware/roles');
 const { makeUploader, relativeUploadUrl } = require('../middleware/upload');
+const { generateCardNumber } = require('../services/guestCardNumber');
 
 const router = express.Router();
 const photoUploader = makeUploader('invitations', { allowedMimePrefixes: ['image/'], maxSizeMb: 15 });
@@ -281,6 +282,7 @@ router.post('/public/:shareToken/rsvp', async (req, res) => {
         name: name.trim(),
         email: email && email.trim() ? email.trim() : null,
         is_invited: true,
+        card_number: await generateCardNumber(),
       });
     }
 
