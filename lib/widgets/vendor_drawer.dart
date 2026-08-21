@@ -7,6 +7,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../core/utils/logout_dialog.dart';
 import '../providers/auth_provider.dart';
+import '../providers/messaging_provider.dart';
 
 /// Vendor-shell equivalent of [AppDrawer] — replaces the vendor bottom nav's
 /// 4 tabs (Dashboard/Listings/Inquiries/Account) with drawer items.
@@ -21,6 +22,13 @@ class VendorDrawer extends ConsumerWidget {
     final displayName = vendorProfile?.businessName ?? user?.name ?? 'Vendor';
     final email = user?.email ?? '';
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+    // There was previously no way at all to reach the general conversation
+    // list — only individual threads opened from a specific lead. This is
+    // that missing entry point, with the same unread signal WhatsApp shows
+    // on its own chats list/app icon before you ever open it.
+    final unread = ref.watch(conversationsProvider).valueOrNull
+            ?.fold<int>(0, (sum, c) => sum + c.unreadCount) ??
+        0;
 
     return Drawer(
       child: Column(
@@ -154,6 +162,15 @@ class VendorDrawer extends ConsumerWidget {
                   },
                 ),
                 _DrawerItem(
+                  icon: Icons.chat_bubble_outline,
+                  label: 'Messages',
+                  badgeCount: unread,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.push('/vendor/messages');
+                  },
+                ),
+                _DrawerItem(
                   icon: Icons.person,
                   label: 'Account',
                   onTap: () {
@@ -229,6 +246,7 @@ class _DrawerItem extends StatelessWidget {
   final VoidCallback onTap;
   final Color? iconColor;
   final Color? labelColor;
+  final int? badgeCount;
 
   const _DrawerItem({
     required this.icon,
@@ -236,6 +254,7 @@ class _DrawerItem extends StatelessWidget {
     required this.onTap,
     this.iconColor,
     this.labelColor,
+    this.badgeCount,
   });
 
   @override
@@ -249,6 +268,23 @@ class _DrawerItem extends StatelessWidget {
           fontWeight: FontWeight.w500,
         ),
       ),
+      trailing: (badgeCount ?? 0) > 0
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.amber,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$badgeCount',
+                style: const TextStyle(
+                  color: AppColors.textOnSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            )
+          : null,
       onTap: onTap,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),

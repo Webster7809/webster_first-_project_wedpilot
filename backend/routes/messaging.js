@@ -191,9 +191,15 @@ function serializeMessage(m) {
     message_id: m.message_id,
     convo_id: m.convo_id,
     sender_id: m.sender_user_id,
-    content: m.content,
+    // A deleted message's content is never sent back to either side — the
+    // row is only kept so timestamps/ordering/last-message-preview don't
+    // shift for the other participant. The UI renders a tombstone off
+    // is_deleted, not off an empty string.
+    content: m.is_deleted ? null : m.content,
+    is_deleted: m.is_deleted,
     type: m.type,
     is_read: m.is_read,
+    edited_at: m.edited_at,
     sent_at: m.created_at,
   };
 }
@@ -261,6 +267,66 @@ router.post('/conversations/:id/messages', async (req, res) => {
   } catch (err) {
     console.error('Send message error:', err.message);
     res.status(500).json({ error: 'Could not send message.' });
+  }
+});
+
+// Sender-only, like the equivalent WhatsApp action — content changes for
+// both participants, and `edited_at` is what lets the UI mark it "(edited)"
+// instead of pretending it always read this way.
+router.patch('/conversations/:id/messages/:messageId', async (req, res) => {
+  try {
+    const convo = await ownConversationOr404(req, res);
+    if (!convo) return;
+
+    const message = await Message.findOne({
+      where: { message_id: req.params.messageId, convo_id: convo.convo_id },
+    });
+    if (!message) return res.status(404).json({ error: 'Message not found.' });
+    if (message.sender_user_id !== req.user.user_id) {
+      return res.status(403).json({ error: 'You can only edit your own messages.' });
+    }
+    if (message.is_deleted) {
+      return res.status(409).json({ error: 'This message was deleted.' });
+    }
+
+    const { content } = req.body;
+    if (!content || !content.trim()) return res.status(400).json({ error: 'Message content is required.' });
+
+    message.content = content.trim();
+    message.edited_at = new Date();
+    await message.save();
+
+    res.json({ message: serializeMessage(message) });
+  } catch (err) {
+    console.error('Edit message error:', err.message);
+    res.status(500).json({ error: 'Could not edit message.' });
+  }
+});
+
+// Sender-only. Deletes for both ends at once (see serializeMessage) rather
+// than a per-device "delete for me" — this app has one server-backed thread,
+// not a local message store per device to diverge from it.
+router.delete('/conversations/:id/messages/:messageId', async (req, res) => {
+  try {
+    const convo = await ownConversationOr404(req, res);
+    if (!convo) return;
+
+    const message = await Message.findOne({
+      where: { message_id: req.params.messageId, convo_id: convo.convo_id },
+    });
+    if (!message) return res.status(404).json({ error: 'Message not found.' });
+    if (message.sender_user_id !== req.user.user_id) {
+      return res.status(403).json({ error: 'You can only delete your own messages.' });
+    }
+
+    message.is_deleted = true;
+    message.content = '';
+    await message.save();
+
+    res.json({ message: serializeMessage(message) });
+  } catch (err) {
+    console.error('Delete message error:', err.message);
+    res.status(500).json({ error: 'Could not delete message.' });
   }
 });
 

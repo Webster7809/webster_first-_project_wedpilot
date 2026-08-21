@@ -88,5 +88,35 @@ class MessagingApiService {
     }
   }
 
+  /// Sender-only, enforced server-side — see backend/routes/messaging.js.
+  Future<Message> editMessage(
+      String accessToken, String convoId, String messageId, String content) async {
+    try {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/api/messages/conversations/$convoId/messages/$messageId',
+        data: {'content': content},
+        options: _auth(accessToken),
+      );
+      return Message.fromJson(response.data?['message'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw MessagingApiException(_extractError(e));
+    }
+  }
+
+  /// Deletes for both participants (a tombstone, not a per-device hide) —
+  /// sender-only, enforced server-side.
+  Future<Message> deleteMessage(
+      String accessToken, String convoId, String messageId) async {
+    try {
+      final response = await _dio.delete<Map<String, dynamic>>(
+        '/api/messages/conversations/$convoId/messages/$messageId',
+        options: _auth(accessToken),
+      );
+      return Message.fromJson(response.data?['message'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw MessagingApiException(_extractError(e));
+    }
+  }
+
   String _extractError(DioException e) => describeDioError(e);
 }

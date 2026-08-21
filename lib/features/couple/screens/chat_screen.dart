@@ -9,6 +9,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../widgets/wed_avatar.dart';
 import '../../../widgets/wed_text_field.dart';
 import '../../../widgets/wed_skeleton.dart';
+import '../../../widgets/wed_snack_bar.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String convoId;
@@ -22,6 +23,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _msgCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
 
+  // Non-null while editing an existing message — the send button becomes an
+  // update button and a banner above the input shows what's being edited,
+  // same shape as WhatsApp's edit flow.
+  Message? _editing;
+
   @override
   void dispose() {
     _msgCtrl.dispose();
@@ -29,9 +35,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
+  void _cancelEdit() {
+    setState(() {
+      _editing = null;
+      _msgCtrl.clear();
+    });
+  }
+
   Future<void> _send() async {
     final text = _msgCtrl.text.trim();
     if (text.isEmpty) return;
+
+    if (_editing != null) {
+      final editingId = _editing!.id;
+      _msgCtrl.clear();
+      setState(() => _editing = null);
+      final error = await ref
+          .read(chatMessagesProvider(widget.convoId).notifier)
+          .editMessage(editingId, text);
+      if (!mounted) return;
+      if (error != null) showWedSnackBar(context, error, type: SnackType.error);
+      return;
+    }
+
     _msgCtrl.clear();
     await ref.read(chatMessagesProvider(widget.convoId).notifier).sendMessage(text);
     if (!mounted) return;
@@ -44,6 +70,54 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         );
       }
     });
+  }
+
+  void _showMessageActions(Message message) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit message'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  setState(() {
+                    _editing = message;
+                    _msgCtrl.text = message.content;
+                    _msgCtrl.selection = TextSelection.collapsed(offset: _msgCtrl.text.length);
+                  });
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: AppColors.error),
+                title: const Text('Delete message',
+                    style: TextStyle(color: AppColors.error)),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  final error = await ref
+                      .read(chatMessagesProvider(widget.convoId).notifier)
+                      .deleteMessage(message.id);
+                  if (!mounted) return;
+                  if (error != null) {
+                    showWedSnackBar(context, error, type: SnackType.error);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -102,12 +176,44 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 itemBuilder: (_, i) {
                   final msg = messages[i];
                   final isMe = msg.senderId == currentUserId;
-                  return _MessageBubble(message: msg, isMe: isMe);
+                  return GestureDetector(
+                    // Only the sender can edit/delete their own message, and
+                    // there is nothing left to do with an already-deleted one.
+                    onLongPress: isMe && !msg.isDeleted
+                        ? () => _showMessageActions(msg)
+                        : null,
+                    child: _MessageBubble(message: msg, isMe: isMe),
+                  );
                 },
               ),
             ),
           ),
           const Divider(height: 1),
+          if (_editing != null)
+            Container(
+              width: double.infinity,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.edit_outlined, size: 16, color: AppColors.forestGreen),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Editing message',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.forestGreen,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: _cancelEdit,
+                    child: const Icon(Icons.close, size: 18),
+                  ),
+                ],
+              ),
+            ),
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -159,10 +265,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             child: InkWell(
                               customBorder: const CircleBorder(),
                               onTap: _send,
-                              child: const SizedBox(
+                              child: SizedBox(
                                 width: 44,
                                 height: 44,
-                                child: Icon(Icons.send, color: AppColors.textOnSecondary, size: 20),
+                                child: Icon(
+                                  _editing != null ? Icons.check : Icons.send,
+                                  color: AppColors.textOnSecondary,
+                                  size: 20,
+                                ),
                               ),
                             ),
                           ),
@@ -208,26 +318,68 @@ class _MessageBubble extends StatelessWidget {
           crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Text(
-              message.content,
-              // Ink on gold, never white: AppColors.secondary is gold, and
-              // white on it is 2.42:1 — the couple's own messages were the
-              // least readable text in the app.
+              // A deleted message's real content never even reaches the
+              // client (see Message.fromJson / serializeMessage) — this is
+              // the tombstone both sides see, not a locally-hidden bubble.
+              message.isDeleted ? 'This message was deleted' : message.content,
               style: AppTextStyles.bodyMedium.copyWith(
-                color: isMe
-                    ? AppColors.textOnSecondary
-                    : Theme.of(context).colorScheme.onSurface,
+                color: message.isDeleted
+                    ? (isMe
+                        ? AppColors.textOnSecondary.withAlpha(180)
+                        : Theme.of(context).colorScheme.onSurfaceVariant)
+                    // Ink on gold, never white: AppColors.secondary is gold,
+                    // and white on it is 2.42:1 — the couple's own messages
+                    // were the least readable text in the app.
+                    : (isMe
+                        ? AppColors.textOnSecondary
+                        : Theme.of(context).colorScheme.onSurface),
+                fontStyle: message.isDeleted ? FontStyle.italic : FontStyle.normal,
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              _formatTime(message.sentAt),
-              style: AppTextStyles.caption.copyWith(
-                // white70 on gold was worse still, at 1.9:1.
-                color: isMe
-                    ? AppColors.textPrimary
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 10,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (message.wasEdited && !message.isDeleted) ...[
+                  Text(
+                    'edited · ',
+                    style: AppTextStyles.caption.copyWith(
+                      color: isMe
+                          ? AppColors.textPrimary.withAlpha(160)
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+                Text(
+                  _formatTime(message.sentAt),
+                  style: AppTextStyles.caption.copyWith(
+                    // white70 on gold was worse still, at 1.9:1.
+                    color: isMe
+                        ? AppColors.textPrimary
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 10,
+                  ),
+                ),
+                // Read receipt, WhatsApp-style — single check once sent,
+                // double check once the other side has actually opened the
+                // thread (see GET /conversations/:id/messages, which is what
+                // flips is_read; ChatNotifier polls while this screen is
+                // open so this updates without needing to reopen the chat).
+                // Only ever shown on the couple/vendor's own messages — there
+                // is nothing to report back about a message someone else sent.
+                if (isMe && !message.isDeleted) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    message.isRead ? Icons.done_all : Icons.done,
+                    size: 13,
+                    color: message.isRead
+                        ? AppColors.info
+                        : AppColors.textPrimary.withAlpha(160),
+                  ),
+                ],
+              ],
             ),
           ],
         ),

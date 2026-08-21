@@ -151,6 +151,8 @@ class Message {
   final String content;
   final String type;
   final bool isRead;
+  final bool isDeleted;
+  final DateTime? editedAt;
   final DateTime sentAt;
 
   const Message({
@@ -162,11 +164,14 @@ class Message {
     required this.content,
     this.type = 'text',
     this.isRead = false,
+    this.isDeleted = false,
+    this.editedAt,
     required this.sentAt,
   });
 
   bool get isFile => type == 'file';
   bool get isImage => type == 'image';
+  bool get wasEdited => editedAt != null;
 
   factory Message.fromJson(Map<String, dynamic> json) => Message(
         id: json['message_id'] as String,
@@ -174,9 +179,15 @@ class Message {
         senderId: json['sender_id'] as String,
         senderName: json['sender_name'] as String?,
         senderAvatarUrl: json['sender_avatar_url'] as String?,
-        content: json['content'] as String,
+        // Null for a deleted message (see backend serializeMessage) — the UI
+        // renders a tombstone off isDeleted rather than showing empty text.
+        content: json['content'] as String? ?? '',
         type: json['type'] as String? ?? 'text',
         isRead: json['is_read'] as bool? ?? false,
+        isDeleted: json['is_deleted'] as bool? ?? false,
+        editedAt: json['edited_at'] != null
+            ? DateTime.parse(json['edited_at'] as String)
+            : null,
         sentAt: DateTime.parse(json['sent_at'] as String),
       );
 
@@ -189,6 +200,8 @@ class Message {
         'content': content,
         'type': type,
         'is_read': isRead,
+        'is_deleted': isDeleted,
+        'edited_at': editedAt?.toIso8601String(),
         'sent_at': sentAt.toIso8601String(),
       };
 }

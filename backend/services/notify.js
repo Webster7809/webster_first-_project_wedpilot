@@ -17,14 +17,22 @@ async function notifyUser(userId, notification, emailContent) {
   const notif = await Notification.create({ user_id: userId, ...notification });
 
   if (emailContent) {
-    try {
-      const user = await User.findByPk(userId, { attributes: ['email', 'email_notifications'] });
-      if (user?.email_notifications) {
-        await sendNotificationEmail(user.email, emailContent);
-      }
-    } catch (err) {
-      console.error(`Notification email failed for user ${userId}:`, err.message);
-    }
+    // Fire-and-forget, not awaited: every caller of notifyUser (sending a
+    // chat message, accepting a booking, declining, marking service done...)
+    // used to block on this — an SMTP hiccup meant the couple's own request
+    // sat waiting on mailer.js's own timeout (up to 10s) before it even
+    // completed, for an email that isn't what the UI actually reads back.
+    // Same fix as issueVerificationLink in routes/auth.js, generalized here
+    // since every notification in the app funnels through this one function.
+    User.findByPk(userId, { attributes: ['email', 'email_notifications'] })
+      .then((user) => {
+        if (user?.email_notifications) {
+          return sendNotificationEmail(user.email, emailContent);
+        }
+      })
+      .catch((err) => {
+        console.error(`Notification email failed for user ${userId}:`, err.message);
+      });
   }
 
   return notif;

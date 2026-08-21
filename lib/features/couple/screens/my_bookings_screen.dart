@@ -139,7 +139,11 @@ class _BookingCard extends ConsumerWidget {
     final canRate = inquiry.status == InquiryStatus.booked &&
         inquiry.serviceDoneAt != null &&
         !inquiry.hasFeedback;
-    final canCancel = InquiryStatusDisplay.isActive(inquiry.status);
+    // Once a vendor has approved the booking, self-serve cancel goes away —
+    // backing out of a confirmed booking is no longer a unilateral action
+    // like withdrawing a pending request is; message the vendor instead.
+    final canCancel = InquiryStatusDisplay.isActive(inquiry.status) &&
+        inquiry.status != InquiryStatus.booked;
     final cs = Theme.of(context).colorScheme;
 
     return Container(
@@ -277,8 +281,11 @@ class _BookingCard extends ConsumerWidget {
               width: double.infinity,
               child: TextButton(
                 onPressed: () => confirmAndCancelBooking(context, ref, inquiry),
+                // canCancel excludes InquiryStatus.booked (see above), so
+                // this is always withdrawing a request, never a confirmed
+                // booking.
                 child: Text(
-                  inquiry.status == InquiryStatus.booked ? 'Cancel booking' : 'Cancel request',
+                  'Cancel request',
                   style: AppTextStyles.labelMedium.copyWith(
                     color: AppColors.error,
                     fontWeight: FontWeight.w600,

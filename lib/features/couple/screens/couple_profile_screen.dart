@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/couple_profile.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/messaging_provider.dart';
 import '../../../widgets/action_menu.dart';
 import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
@@ -476,14 +477,14 @@ class _PhotoOptionTile extends StatelessWidget {
 /// The couple's planning tools, collapsed into one card — mirrors
 /// [_PlanningToolsMenu] on the couple dashboard, reusing the shared
 /// [ActionMenu] widget instead of the old always-expanded icon grid.
-class _PlanningToolsMenu extends StatefulWidget {
+class _PlanningToolsMenu extends ConsumerStatefulWidget {
   const _PlanningToolsMenu();
 
   @override
-  State<_PlanningToolsMenu> createState() => _PlanningToolsMenuState();
+  ConsumerState<_PlanningToolsMenu> createState() => _PlanningToolsMenuState();
 }
 
-class _PlanningToolsMenuState extends State<_PlanningToolsMenu> {
+class _PlanningToolsMenuState extends ConsumerState<_PlanningToolsMenu> {
   // Collapsed on arrival, unlike the dashboard's default-open: the profile
   // screen already stacks a hero header, this list, an Account section, and
   // Sign Out below it, so it starts out of the way.
@@ -491,6 +492,13 @@ class _PlanningToolsMenuState extends State<_PlanningToolsMenu> {
 
   @override
   Widget build(BuildContext context) {
+    // Total unread across every conversation — the couple's only entry point
+    // into Messages was a menu row with zero signal on it; nothing hinted a
+    // vendor had actually written back until you opened the list yourself.
+    final unread = ref.watch(conversationsProvider).valueOrNull
+            ?.fold<int>(0, (sum, c) => sum + c.unreadCount) ??
+        0;
+
     return ActionMenu(
       noun: 'planning tools',
       icon: Icons.checklist_rounded,
@@ -501,6 +509,7 @@ class _PlanningToolsMenuState extends State<_PlanningToolsMenu> {
           icon: Icons.chat_bubble_outlined,
           label: 'Messages',
           trailing: 'Chat with vendors',
+          badge: unread > 0 ? '$unread' : null,
           onTap: () => context.push('/couple/messages'),
         ),
         ActionMenuItem(

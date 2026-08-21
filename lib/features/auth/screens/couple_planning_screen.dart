@@ -314,6 +314,12 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                 totalSteps: _totalSteps,
                 stepLabel: _stepLabels[_step],
                 stepTitle: _stepTitles[_step],
+                backgroundAssets: const [
+                  'assets/images/onboarding/couple_1.jpg',
+                  'assets/images/onboarding/couple_2.jpg',
+                  'assets/images/onboarding/couple_3.jpg',
+                  'assets/images/onboarding/couple_4.jpg',
+                ],
                 onBack: _step > 0 ? () => setState(() => _step--) : null,
               ),
               Padding(
@@ -1239,23 +1245,26 @@ class _RequestedVendorCard extends ConsumerWidget {
               text: 'Package price ${fmtCurrency(price)}',
             ),
           ],
-          const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () =>
-                  confirmAndCancelBooking(context, ref, locked.inquiry),
-              child: Text(
-                locked.inquiry.status == InquiryStatus.booked
-                    ? 'Cancel booking'
-                    : 'Cancel request',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.error,
-                  fontWeight: FontWeight.w600,
+          // Once the vendor has approved, self-serve cancel goes away — see
+          // the note on booking_action_button.dart's confirmAndCancelBooking
+          // for why.
+          if (locked.inquiry.status != InquiryStatus.booked) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () =>
+                    confirmAndCancelBooking(context, ref, locked.inquiry),
+                child: Text(
+                  'Cancel request',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

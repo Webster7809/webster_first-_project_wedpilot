@@ -34,6 +34,19 @@ const Message = sequelize.define('Message', {
     allowNull: false,
     defaultValue: false,
   },
+  // Deleting never removes the row — that would shift the other side's view
+  // of the thread (ordering, "N messages", the last-message preview) out
+  // from under them. is_deleted just tells serializeMessage to send a
+  // tombstone instead of `content`.
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  },
+  edited_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
 }, {
   tableName: 'messages',
   createdAt: 'created_at',

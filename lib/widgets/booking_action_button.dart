@@ -32,7 +32,9 @@ Future<void> confirmAndCancelBooking(
   WidgetRef ref,
   Inquiry inquiry,
 ) async {
-  final isBooked = inquiry.status == InquiryStatus.booked;
+  // Every call site gates this out once InquiryStatus.booked (self-serve
+  // cancel goes away the moment a vendor approves — message them instead),
+  // so this only ever runs for a request still awaiting an answer.
   bool submitting = false;
 
   await showDialog<void>(
@@ -40,11 +42,7 @@ Future<void> confirmAndCancelBooking(
     builder: (dialogContext) => StatefulBuilder(
       builder: (dialogContext, setState) => AlertDialog(
         title: const Text('Cancel this booking?'),
-        content: Text(
-          isBooked
-              ? 'This vendor already confirmed your booking. Are you sure you want to cancel it?'
-              : 'Are you sure you want to cancel this booking request?',
-        ),
+        content: const Text('Are you sure you want to cancel this booking request?'),
         actions: [
           TextButton(
             onPressed: submitting ? null : () => Navigator.of(dialogContext).pop(),
@@ -263,18 +261,21 @@ class _BookingActionButtonState extends ConsumerState<BookingActionButton> {
           color: display.color,
           height: widget.height,
         ),
-        TextButton(
-          onPressed: () => confirmAndCancelBooking(context, ref, latest),
-          child: Text(
-            latest.status == InquiryStatus.booked
-                ? 'Cancel booking'
-                : 'Cancel request',
-            style: AppTextStyles.labelMedium.copyWith(
-              color: AppColors.error,
-              fontWeight: FontWeight.w600,
+        // Once the vendor has approved, self-serve cancel goes away — backing
+        // out of a confirmed booking isn't the same one-tap action as
+        // withdrawing a request still awaiting an answer; message the vendor
+        // instead (see the new "Message" entry point on this same screen).
+        if (latest.status != InquiryStatus.booked)
+          TextButton(
+            onPressed: () => confirmAndCancelBooking(context, ref, latest),
+            child: Text(
+              'Cancel request',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.error,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-        ),
       ],
     );
   }
