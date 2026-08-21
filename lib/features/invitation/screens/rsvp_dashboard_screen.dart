@@ -154,6 +154,8 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
                   email: email,
                   phone: phone,
                   relation: relation,
+                  invitationId:
+                      widget.invitationId.isEmpty ? null : widget.invitationId,
                 );
           }
           if (!context.mounted) return;

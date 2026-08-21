@@ -45,11 +45,18 @@ class InvitationApiService {
     String? email,
     String? phone,
     String? relation,
+    String? invitationId,
   }) async {
     try {
       await _dio.post(
         '/api/guests',
-        data: {'name': name, 'email': email, 'phone': phone, 'relation': relation},
+        data: {
+          'name': name,
+          'email': email,
+          'phone': phone,
+          'relation': relation,
+          'invitationId': invitationId,
+        },
         options: _auth(accessToken),
       );
       return null;

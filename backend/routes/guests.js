@@ -92,7 +92,7 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, email, phone, relation } = req.body;
+    const { name, email, phone, relation, invitationId } = req.body;
     const error = validateGuestInput({ name, email, phone });
     if (error) return res.status(400).json({ error });
 
@@ -100,6 +100,22 @@ router.post('/', async (req, res) => {
       where: { couple_user_id: req.user.user_id, name: { [Op.like]: name.trim() } },
     });
     if (duplicate) return res.status(409).json({ error: `A guest named "${name.trim()}" already exists.` });
+
+    // A guest added by name is a known individual, not a walk-in off a
+    // broadcast link — so they get their own locked personal link (see
+    // POST /public/guest/:inviteToken/rsvp) the moment they exist, instead of
+    // only once the couple remembers to tap "Share" on their card.
+    let invite_token = null;
+    let invite_invitation_id = null;
+    if (invitationId) {
+      const invitation = await Invitation.findOne({
+        where: { invitation_id: invitationId, couple_user_id: req.user.user_id },
+      });
+      if (invitation) {
+        invite_token = generateInviteToken();
+        invite_invitation_id = invitationId;
+      }
+    }
 
     const guest = await Guest.create({
       couple_user_id: req.user.user_id,
@@ -109,6 +125,8 @@ router.post('/', async (req, res) => {
       relation: relation && relation.trim() ? relation.trim() : null,
       is_invited: true,
       card_number: await generateCardNumber(),
+      invite_token,
+      invite_invitation_id,
     });
     res.status(201).json({ guest: serializeGuest(guest) });
   } catch (err) {

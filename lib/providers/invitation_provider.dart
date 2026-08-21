@@ -173,6 +173,7 @@ class GuestRsvpNotifier extends StateNotifier<GuestRsvpState> {
     String? email,
     String? phone,
     String? relation,
+    String? invitationId,
   }) async {
     final token = _token;
     if (token == null) return 'Please sign in to add guests.';
@@ -182,6 +183,7 @@ class GuestRsvpNotifier extends StateNotifier<GuestRsvpState> {
       email: email,
       phone: phone,
       relation: relation,
+      invitationId: invitationId,
     );
     if (error != null) return error;
     await load();

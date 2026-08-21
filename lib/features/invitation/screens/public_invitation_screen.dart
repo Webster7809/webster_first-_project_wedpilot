@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/invitation_fonts.dart';
 import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/services/invitation_api_service.dart';
@@ -233,6 +234,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
 
   Widget _buildHeader(BuildContext context, Map<String, dynamic> data, Color accentColor) {
     final coupleName = (data['coupleName'] as String?) ?? 'the happy couple';
+    final subtitle = data['subtitle'] as String?;
     final date = data['date'] as String?;
     final time = data['time'] as String?;
     final backgroundImageUrl = data['backgroundImageUrl'] as String?;
@@ -266,6 +268,19 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
             ),
             textAlign: TextAlign.center,
           ),
+          if (subtitle != null && subtitle.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              subtitle,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withAlpha(220),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
           const SizedBox(height: 14),
           _buildCoupleName(coupleName, nameStyle),
           if (date != null && date.isNotEmpty) ...[
@@ -338,10 +353,16 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
 
   Widget _buildBody(Map<String, dynamic> data, Color accentColor) {
     final venue = data['venue'] as String?;
+    final churchTheme = data['churchTheme'] as String?;
+    final churchTime = data['churchTime'] as String?;
+    final time = data['time'] as String?;
     final dressCode = data['dressCode'] as String?;
     final parking = data['parking'] as String?;
     final receptionVenue = data['receptionVenue'] as String?;
     final rsvpBy = data['rsvpBy'] as String?;
+    final giftType = data['giftType'] as String?;
+    final contact = data['contact'] as String?;
+    final message = data['message'] as String?;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
@@ -350,6 +371,14 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
         children: [
           if (venue != null && venue.isNotEmpty) ...[
             _InfoCard(icon: Icons.location_on_outlined, label: 'Venue', value: venue),
+            const SizedBox(height: 12),
+          ],
+          if (churchTheme != null && churchTheme.isNotEmpty) ...[
+            _InfoCard(icon: Icons.record_voice_over_outlined, label: 'Service theme', value: churchTheme),
+            const SizedBox(height: 12),
+          ],
+          if (churchTime != null && churchTime.isNotEmpty && churchTime != time) ...[
+            _InfoCard(icon: Icons.access_time_outlined, label: 'Church service time', value: churchTime),
             const SizedBox(height: 12),
           ],
           if (dressCode != null && dressCode.isNotEmpty) ...[
@@ -362,6 +391,23 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           ],
           if (receptionVenue != null && receptionVenue.isNotEmpty) ...[
             _InfoCard(icon: Icons.celebration_outlined, label: 'Reception', value: receptionVenue),
+            const SizedBox(height: 12),
+          ],
+          if (giftType != null && giftType.isNotEmpty) ...[
+            _InfoCard(icon: Icons.card_giftcard_outlined, label: 'Gifts', value: giftType),
+            const SizedBox(height: 12),
+          ],
+          if (contact != null && contact.isNotEmpty) ...[
+            _InfoCard(
+              icon: Icons.phone_outlined,
+              label: 'Contact',
+              value: contact,
+              onTap: () => launchUrl(Uri.parse('tel:$contact')),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (message != null && message.isNotEmpty) ...[
+            _MessageCard(message: message, accentColor: accentColor),
             const SizedBox(height: 16),
           ],
           _RsvpFormCard(
@@ -531,12 +577,13 @@ class _InfoCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final VoidCallback? onTap;
   const _InfoCard(
-      {required this.icon, required this.label, required this.value});
+      {required this.icon, required this.label, required this.value, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final card = Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -573,10 +620,56 @@ class _InfoCard extends StatelessWidget {
                   style: GoogleFonts.inter(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: onTap != null ? AppColors.forestGreen : AppColors.textPrimary,
+                    decoration: onTap != null ? TextDecoration.underline : null,
                   ),
                 ),
               ],
+            ),
+          ),
+          if (onTap != null)
+            const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 18),
+        ],
+      ),
+    );
+
+    if (onTap == null) return card;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(borderRadius: BorderRadius.circular(14), onTap: onTap, child: card),
+    );
+  }
+}
+
+// ── Personal message card ───────────────────────────────────────────────────
+
+class _MessageCard extends StatelessWidget {
+  final String message;
+  final Color accentColor;
+  const _MessageCard({required this.message, required this.accentColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: accentColor.withAlpha(15),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accentColor.withAlpha(60)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.format_quote, color: accentColor, size: 22),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            style: GoogleFonts.inter(
+              fontSize: 14.5,
+              fontStyle: FontStyle.italic,
+              height: 1.5,
+              color: AppColors.textPrimary,
             ),
           ),
         ],
