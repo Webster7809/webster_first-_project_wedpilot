@@ -256,6 +256,35 @@ class GuestRsvpNotifier extends StateNotifier<GuestRsvpState> {
     }
   }
 
+  // ── Door check-in ────────────────────────────────────────────────────────────
+
+  /// Verifies [cardNumber] and marks the matching guest checked in. Returns
+  /// the guest on success, or an error message on failure (not found /
+  /// already checked in) — a record instead of throwing, since the check-in
+  /// screen needs to show the failure reason inline, not via a snackbar.
+  Future<(Guest?, String?)> checkInGuest(String cardNumber) async {
+    final token = _token;
+    if (token == null) return (null, 'Please sign in to check in guests.');
+    try {
+      final guest = await InvitationApiService.instance.checkInGuestByCardNumber(token, cardNumber);
+      state = state.copyWith(guests: state.guests.map((g) => g.id == guest.id ? guest : g).toList());
+      return (guest, null);
+    } on InvitationApiException catch (e) {
+      return (null, e.message);
+    }
+  }
+
+  Future<void> toggleCheckin(String id) async {
+    final token = _token;
+    if (token == null) return;
+    try {
+      final guest = await InvitationApiService.instance.toggleGuestCheckin(token, id);
+      state = state.copyWith(guests: state.guests.map((g) => g.id == guest.id ? guest : g).toList());
+    } on InvitationApiException {
+      // Leave state as-is on failure.
+    }
+  }
+
   // ── RSVP management ─────────────────────────────────────────────────────────
 
   Future<String?> submitRsvp({

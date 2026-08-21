@@ -160,6 +160,14 @@ class Guest {
   final String? inviteToken;
   final String? inviteUrl;
 
+  /// Short code printed/written on this guest's physical invitation —
+  /// checked against the system at the door, since a forwarded link alone
+  /// can't confirm who's actually holding it. Assigned by the server on
+  /// creation, so it's only ever null for data from before this existed.
+  final String? cardNumber;
+  final bool checkedIn;
+  final DateTime? checkedInAt;
+
   const Guest({
     required this.id,
     required this.coupleId,
@@ -171,6 +179,9 @@ class Guest {
     this.isInvited = false,
     this.inviteToken,
     this.inviteUrl,
+    this.cardNumber,
+    this.checkedIn = false,
+    this.checkedInAt,
   });
 
   factory Guest.fromJson(Map<String, dynamic> json) => Guest(
@@ -184,6 +195,11 @@ class Guest {
         isInvited: json['is_invited'] as bool? ?? false,
         inviteToken: json['invite_token'] as String?,
         inviteUrl: json['invite_url'] as String?,
+        cardNumber: json['card_number'] as String?,
+        checkedIn: json['checked_in'] as bool? ?? false,
+        checkedInAt: json['checked_in_at'] != null
+            ? DateTime.parse(json['checked_in_at'] as String)
+            : null,
       );
 
   Map<String, dynamic> toJson() => {
@@ -197,6 +213,9 @@ class Guest {
         'is_invited': isInvited,
         'invite_token': inviteToken,
         'invite_url': inviteUrl,
+        'card_number': cardNumber,
+        'checked_in': checkedIn,
+        'checked_in_at': checkedInAt?.toIso8601String(),
       };
 }
 

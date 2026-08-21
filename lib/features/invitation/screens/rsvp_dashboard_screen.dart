@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/state/resource.dart';
@@ -54,7 +55,7 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -95,13 +96,19 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
           tabs: const [
             Tab(text: 'Overview'),
             Tab(text: 'Guest List'),
+            Tab(text: 'Check-in'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabs,
         children: [
-          _OverviewTab(stats: stats, responses: state.responses),
+          _OverviewTab(
+            stats: stats,
+            responses: state.responses,
+            guests: state.guests,
+            onViewDetails: (g, r) => _showGuestDetails(context, g, r),
+          ),
           _GuestListTab(
             guests: state.guests,
             responses: state.responses,
@@ -110,7 +117,13 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
             onDeleteGuest: (id) => _confirmDeleteGuest(context, id),
             onSubmitRsvp: (g) => _showRsvpForm(context, g),
             onShareInvite: (g) => _shareGuestInvite(context, g),
+            onViewDetails: (g) => _showGuestDetails(
+              context,
+              g,
+              state.responses.where((r) => r.guestId == g.id).firstOrNull,
+            ),
           ),
+          _CheckInTab(guests: state.guests),
         ],
       ),
     );
@@ -283,6 +296,20 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
       ),
     );
   }
+
+  void _showGuestDetails(BuildContext context, Guest guest, RsvpResponse? rsvp) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _GuestDetailsSheet(
+        guest: guest,
+        rsvp: rsvp,
+        onToggleCheckin: () => ref.read(guestRsvpProvider.notifier).toggleCheckin(guest.id),
+        onShareInvite: () => _shareGuestInvite(context, guest),
+      ),
+    );
+  }
 }
 
 // ── Overview tab ──────────────────────────────────────────────────────────────
@@ -290,11 +317,20 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
 class _OverviewTab extends StatelessWidget {
   final RsvpStats stats;
   final List<RsvpResponse> responses;
+  final List<Guest> guests;
+  final void Function(Guest guest, RsvpResponse? rsvp) onViewDetails;
 
-  const _OverviewTab({required this.stats, required this.responses});
+  const _OverviewTab({
+    required this.stats,
+    required this.responses,
+    required this.guests,
+    required this.onViewDetails,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final checkedIn = guests.where((g) => g.checkedIn).length;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -351,6 +387,9 @@ class _OverviewTab extends StatelessWidget {
               _InfoRow(
                   label: 'Acceptance rate',
                   value: '${stats.acceptanceRate.toStringAsFixed(0)}%'),
+              _InfoRow(
+                  label: 'Checked in',
+                  value: '$checkedIn / ${stats.totalInvited}'),
             ],
           ),
         ),
@@ -415,10 +454,16 @@ class _OverviewTab extends StatelessWidget {
           const SizedBox(height: 20),
           Text('Recent Responses', style: AppTextStyles.headlineSmall),
           const SizedBox(height: 10),
-          ...responses.reversed.take(5).map((r) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _ResponseCard(response: r),
-              )),
+          ...responses.reversed.take(5).map((r) {
+            final guest = guests.where((g) => g.id == r.guestId).firstOrNull;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _ResponseCard(
+                response: r,
+                onTap: guest != null ? () => onViewDetails(guest, r) : null,
+              ),
+            );
+          }),
         ],
       ],
     );
@@ -435,6 +480,7 @@ class _GuestListTab extends StatefulWidget {
   final ValueChanged<String> onDeleteGuest;
   final ValueChanged<Guest> onSubmitRsvp;
   final ValueChanged<Guest> onShareInvite;
+  final ValueChanged<Guest> onViewDetails;
 
   const _GuestListTab({
     required this.guests,
@@ -444,6 +490,7 @@ class _GuestListTab extends StatefulWidget {
     required this.onDeleteGuest,
     required this.onSubmitRsvp,
     required this.onShareInvite,
+    required this.onViewDetails,
   });
 
   @override
@@ -530,6 +577,7 @@ class _GuestListTabState extends State<_GuestListTab> {
                       onDelete: () => widget.onDeleteGuest(g.id),
                       onRsvp: () => widget.onSubmitRsvp(g),
                       onShareInvite: () => widget.onShareInvite(g),
+                      onViewDetails: () => widget.onViewDetails(g),
                     );
                   },
                 ),
@@ -547,6 +595,7 @@ class _GuestCard extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onRsvp;
   final VoidCallback onShareInvite;
+  final VoidCallback onViewDetails;
 
   const _GuestCard({
     required this.guest,
@@ -556,6 +605,7 @@ class _GuestCard extends StatelessWidget {
     required this.onDelete,
     required this.onRsvp,
     required this.onShareInvite,
+    required this.onViewDetails,
   });
 
   Color get _statusColor => switch (rsvp?.attending) {
@@ -594,8 +644,13 @@ class _GuestCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Guest info ────────────────────────────────────────
-          Padding(
+          // ── Guest info — tap opens the full details sheet; the action row
+          // below has its own explicit buttons, so this is deliberately not
+          // one giant tap target covering the whole card.
+          InkWell(
+            onTap: onViewDetails,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             child: Row(
               children: [
@@ -637,26 +692,54 @@ class _GuestCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
+                      if (guest.cardNumber != null) ...[
+                        const SizedBox(height: 4),
+                        _CardNumberChip(guest: guest),
+                      ],
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _statusColor.withAlpha(26),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _statusLabel,
-                    style: AppTextStyles.caption.copyWith(
-                      color: _statusColor,
-                      fontWeight: FontWeight.w600,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _statusColor.withAlpha(26),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _statusLabel,
+                        style: AppTextStyles.caption.copyWith(
+                          color: _statusColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
+                    if (guest.checkedIn) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.verified,
+                              size: 13, color: AppColors.success),
+                          const SizedBox(width: 3),
+                          Text(
+                            'Checked in',
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.success,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
               ],
+            ),
             ),
           ),
 
@@ -738,6 +821,207 @@ class _GuestAction extends StatelessWidget {
       style: TextButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+}
+
+/// A guest's door check-in code, tappable to copy — the couple needs to get
+/// this onto a physical card somehow, and typing a 6-digit number by hand
+/// from the screen is exactly the kind of thing copy/paste should replace.
+class _CardNumberChip extends StatelessWidget {
+  final Guest guest;
+  const _CardNumberChip({required this.guest});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.iconTint,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () async {
+          await Clipboard.setData(ClipboardData(text: guest.cardNumber!));
+          if (context.mounted) {
+            showWedSnackBar(context, 'Card number copied.', type: SnackType.success);
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.badge_outlined, size: 12, color: AppColors.forestGreen),
+              const SizedBox(width: 4),
+              Text(
+                'Card #${guest.cardNumber}',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.forestGreen,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Check-in tab ──────────────────────────────────────────────────────────────
+
+class _CheckInTab extends ConsumerStatefulWidget {
+  final List<Guest> guests;
+  const _CheckInTab({required this.guests});
+
+  @override
+  ConsumerState<_CheckInTab> createState() => _CheckInTabState();
+}
+
+class _CheckInTabState extends ConsumerState<_CheckInTab> {
+  final _codeCtrl = TextEditingController();
+  final _focusNode = FocusNode();
+  bool _submitting = false;
+  Guest? _lastSuccess;
+  String? _lastError;
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final code = _codeCtrl.text.trim();
+    if (code.isEmpty || _submitting) return;
+    setState(() { _submitting = true; _lastSuccess = null; _lastError = null; });
+
+    final (guest, error) = await ref.read(guestRsvpProvider.notifier).checkInGuest(code);
+    if (!mounted) return;
+    setState(() {
+      _submitting = false;
+      _lastSuccess = guest;
+      _lastError = error;
+    });
+    // Cleared either way — a couple standing at the door scanning a queue of
+    // guests needs the field ready for the next card immediately, not left
+    // holding whatever number just failed.
+    _codeCtrl.clear();
+    _focusNode.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final invited = widget.guests.where((g) => g.isInvited).length;
+    final checkedIn = widget.guests.where((g) => g.checkedIn).length;
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _SoftCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Verify a guest', style: AppTextStyles.headlineSmall),
+              const SizedBox(height: 4),
+              Text(
+                'Enter the number printed on the guest\'s card to confirm '
+                'they\'re on your list.',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 14),
+              WedTextField(
+                label: 'Card number',
+                controller: _codeCtrl,
+                focusNode: _focusNode,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _submit(),
+                autofocus: true,
+              ),
+              const SizedBox(height: 12),
+              WedButton(
+                label: 'Check in',
+                isLoading: _submitting,
+                onPressed: _submitting ? null : _submit,
+              ),
+            ],
+          ),
+        ),
+        if (_lastSuccess != null) ...[
+          const SizedBox(height: 16),
+          _CheckInResultCard(
+            success: true,
+            title: _lastSuccess!.name,
+            message: 'Verified — this card matches your guest list.',
+          ),
+        ],
+        if (_lastError != null) ...[
+          const SizedBox(height: 16),
+          _CheckInResultCard(
+            success: false,
+            title: 'Not verified',
+            message: _lastError!,
+          ),
+        ],
+        const SizedBox(height: 20),
+        _SoftCard(
+          child: Row(
+            children: [
+              const Icon(Icons.how_to_reg_outlined, color: AppColors.forestGreen),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '$checkedIn of $invited guests checked in',
+                  style: AppTextStyles.titleMedium,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CheckInResultCard extends StatelessWidget {
+  final bool success;
+  final String title;
+  final String message;
+  const _CheckInResultCard({
+    required this.success,
+    required this.title,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = success ? AppColors.success : AppColors.error;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withAlpha(20),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withAlpha(60)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(success ? Icons.check_circle : Icons.error_outline, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTextStyles.titleMedium.copyWith(color: color)),
+                const SizedBox(height: 2),
+                Text(message, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -851,7 +1135,8 @@ class _MealRow extends StatelessWidget {
 
 class _ResponseCard extends StatelessWidget {
   final RsvpResponse response;
-  const _ResponseCard({required this.response});
+  final VoidCallback? onTap;
+  const _ResponseCard({required this.response, this.onTap});
 
   Color get _color => switch (response.attending) {
         AttendingStatus.yes => AppColors.success,
@@ -867,7 +1152,7 @@ class _ResponseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SoftCard(
+    final card = _SoftCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -906,6 +1191,155 @@ class _ResponseCard extends StatelessWidget {
               style: AppTextStyles.caption
                   .copyWith(color: _color, fontWeight: FontWeight.w600),
             ),
+          ),
+        ],
+      ),
+    );
+    if (onTap == null) return card;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: card,
+      ),
+    );
+  }
+}
+
+// ── Guest details sheet ───────────────────────────────────────────────────────
+
+/// Everything known about one guest in a single read-only place: contact
+/// info, their door check-in card, and — if they've responded — the full
+/// RSVP (meal preference, dietary notes, personal message) that the Overview
+/// tab's "Recent Responses" and the guest list's card only show pieces of.
+class _GuestDetailsSheet extends StatelessWidget {
+  final Guest guest;
+  final RsvpResponse? rsvp;
+  final VoidCallback onToggleCheckin;
+  final VoidCallback onShareInvite;
+
+  const _GuestDetailsSheet({
+    required this.guest,
+    required this.rsvp,
+    required this.onToggleCheckin,
+    required this.onShareInvite,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(guest.name, style: AppTextStyles.headlineMedium),
+          if (guest.relation?.isNotEmpty ?? false) ...[
+            const SizedBox(height: 2),
+            Text(guest.relation!,
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+          ],
+          const SizedBox(height: 16),
+
+          // ── Contact ──────────────────────────────────────────
+          if (guest.email?.isNotEmpty ?? false)
+            _InfoRow(label: 'Email', value: guest.email!),
+          if (guest.phone?.isNotEmpty ?? false)
+            _InfoRow(label: 'Phone', value: guest.phone!),
+
+          // ── Door check-in ────────────────────────────────────
+          const SizedBox(height: 8),
+          _SoftCard(
+            child: Row(
+              children: [
+                Icon(
+                  guest.checkedIn ? Icons.verified : Icons.badge_outlined,
+                  color: guest.checkedIn ? AppColors.success : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        guest.cardNumber != null ? 'Card #${guest.cardNumber}' : 'No card number yet',
+                        style: AppTextStyles.titleMedium,
+                      ),
+                      Text(
+                        guest.checkedIn
+                            ? 'Checked in${guest.checkedInAt != null ? ' at ${guest.checkedInAt!.toLocal().hour.toString().padLeft(2, '0')}:${guest.checkedInAt!.toLocal().minute.toString().padLeft(2, '0')}' : ''}'
+                            : 'Not checked in yet',
+                        style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: onToggleCheckin,
+                  child: Text(guest.checkedIn ? 'Undo' : 'Check in'),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+          Text('RSVP', style: AppTextStyles.headlineSmall),
+          const SizedBox(height: 10),
+          if (rsvp == null)
+            Text(
+              'No response yet.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+            )
+          else ...[
+            _InfoRow(
+              label: 'Attending',
+              value: rsvp!.attending.name[0].toUpperCase() + rsvp!.attending.name.substring(1),
+            ),
+            if (rsvp!.guestCount > 0)
+              _InfoRow(label: 'Party size', value: '${rsvp!.guestCount}'),
+            if (rsvp!.mealPreference?.isNotEmpty ?? false)
+              _InfoRow(label: 'Meal preference', value: rsvp!.mealPreference!),
+            if (rsvp!.dietaryNotes?.isNotEmpty ?? false)
+              _InfoRow(label: 'Dietary notes', value: rsvp!.dietaryNotes!),
+            if (rsvp!.message?.isNotEmpty ?? false) ...[
+              const SizedBox(height: 8),
+              Text('"${rsvp!.message}"',
+                  style: AppTextStyles.bodyMedium.copyWith(fontStyle: FontStyle.italic)),
+            ],
+            const SizedBox(height: 4),
+            _InfoRow(
+              label: 'Responded',
+              value: '${rsvp!.respondedAt.toLocal()}'.split('.').first,
+            ),
+          ],
+
+          const SizedBox(height: 20),
+          WedButton(
+            label: 'Share invite link',
+            variant: WedButtonVariant.secondary,
+            height: 46,
+            icon: const Icon(Icons.ios_share_outlined, size: 18),
+            onPressed: () {
+              Navigator.pop(context);
+              onShareInvite();
+            },
           ),
         ],
       ),

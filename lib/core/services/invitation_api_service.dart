@@ -113,6 +113,37 @@ class InvitationApiService {
     }
   }
 
+  // ── Door check-in ────────────────────────────────────────────────────────────
+
+  /// Verifies [cardNumber] against this couple's own guest list and marks
+  /// that guest checked in. Throws [InvitationApiException] with the
+  /// server's message on failure — no match (404), or already checked in
+  /// (409, whose message already names the guest and time).
+  Future<Guest> checkInGuestByCardNumber(String accessToken, String cardNumber) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/guests/checkin',
+        data: {'cardNumber': cardNumber},
+        options: _auth(accessToken),
+      );
+      return Guest.fromJson(response.data?['guest'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
+  Future<Guest> toggleGuestCheckin(String accessToken, String id) async {
+    try {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/api/guests/$id/toggle-checkin',
+        options: _auth(accessToken),
+      );
+      return Guest.fromJson(response.data?['guest'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
   // ── RSVP responses (couple-side) ──────────────────────────────────────────────
 
   Future<List<RsvpResponse>> fetchRsvpResponses(String accessToken) async {
