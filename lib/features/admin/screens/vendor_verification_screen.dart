@@ -39,6 +39,12 @@ class VendorVerificationScreen extends ConsumerWidget {
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         actions: [
           IconButton(
+            icon: const Icon(Icons.storefront_outlined),
+            tooltip: 'View all vendors',
+            color: AppColors.forestGreen,
+            onPressed: () => context.push(AppRoutes.adminVendorDirectory),
+          ),
+          IconButton(
             icon: const Icon(Icons.groups_outlined),
             tooltip: 'Manage guest capacity',
             color: AppColors.forestGreen,
@@ -405,6 +411,37 @@ class _VerificationCardState extends State<_VerificationCard> {
                     _DetailRow(
                         icon: Icons.phone_outlined,
                         text: v.phone ?? 'No phone on file'),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => context.push(
+                              AppRoutes.adminVendorDetail.replaceFirst(':id', v.id)),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'View full profile',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.adminIndigo,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 2),
+                                const Icon(Icons.arrow_forward,
+                                    size: 14, color: AppColors.adminIndigo),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

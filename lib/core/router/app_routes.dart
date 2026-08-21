@@ -60,6 +60,8 @@ class AppRoutes {
   static const adminCategories = '/admin/categories';
   static const adminInvitationTemplates = '/admin/invitation-templates';
   static const adminVendorCapacity = '/admin/vendor-capacity';
+  static const adminVendorDirectory = '/admin/vendor-directory';
+  static const adminVendorDetail = '/admin/vendors/:id';
 
   // ── Role prefixes (used in redirect guards) ─────────────────────────────
   static const couplePrefix = '/couple';
