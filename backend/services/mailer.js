@@ -20,6 +20,14 @@ function getTransporter() {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
+    // Nodemailer's own defaults run to 2 minutes per stage (connection,
+    // greeting, socket) — found the hard way when a host whose network
+    // blocks outbound SMTP made /register hang for 120s before the request
+    // finally gave up and responded anyway. 10s is generous for a real SMTP
+    // relay; a host that hasn't answered by then isn't going to.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 10_000,
   });
   return transporter;
 }

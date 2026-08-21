@@ -86,7 +86,7 @@ async function issueVerificationLink(user) {
   user.verify_token_hash = hashToken(rawToken);
   user.verify_token_expires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
   await user.save();
-  return `${PUBLIC_WEB_BASE_URL}/#/verify-email?token=${rawToken}`;
+  return `${PUBLIC_WEB_BASE_URL}/verify-email?token=${rawToken}`;
 }
 
 function issueTokens(user) {
@@ -150,13 +150,13 @@ router.post('/register', authLimiter, async (req, res) => {
     });
 
     // Best effort, and deliberately after the account exists: a signup must
-    // not fail because SMTP is down or slow. If this throws, the account is
+    // not fail — or wait — because SMTP is down or slow. Not awaited: even
+    // with mailer.js's 10s timeouts, that's still 10s of dead air on the
+    // very first request a new user makes. If this throws, the account is
     // still usable and the verify screen's resend button covers the gap.
-    try {
-      await sendVerificationEmail(user.email, await issueVerificationLink(user));
-    } catch (err) {
-      console.error('Verification email failed for', user.email, err.message);
-    }
+    issueVerificationLink(user)
+      .then((link) => sendVerificationEmail(user.email, link))
+      .catch((err) => console.error('Verification email failed for', user.email, err.message));
 
     const tokens = issueTokens(user);
     res.status(201).json({ user: serializeUser(user), ...tokens });
@@ -334,7 +334,7 @@ router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
       user.reset_token_expires = new Date(Date.now() + RESET_TOKEN_TTL_MS);
       await user.save();
 
-      const resetLink = `${PUBLIC_WEB_BASE_URL}/#/reset-password?token=${rawToken}`;
+      const resetLink = `${PUBLIC_WEB_BASE_URL}/reset-password?token=${rawToken}`;
       await sendPasswordResetEmail(normalisedEmail, resetLink);
     }
     res.json(genericResponse);

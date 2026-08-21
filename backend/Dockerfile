@@ -59,4 +59,11 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD node -e "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "server.js"]
+# Applies any pending migration before the server starts — the only place
+# this happens for a platform like Railway, which has no separate release
+# step and runs this image with NODE_ENV=production, where server.js
+# deliberately skips its own sequelize.sync(). Idempotent (see db/migrate.js),
+# and migrate.js exits non-zero on failure, so `&&` refuses to boot the server
+# against a schema that didn't actually update rather than serving traffic
+# against columns the code assumes exist.
+CMD ["sh", "-c", "node db/migrate.js && node server.js"]
