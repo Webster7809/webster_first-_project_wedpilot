@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/router/app_routes.dart';
+import '../../../core/services/messaging_api_service.dart';
 import '../../../core/services/vendor_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
@@ -91,10 +92,36 @@ class _VendorProfileBody extends ConsumerStatefulWidget {
 }
 
 class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
+  bool _messaging = false;
+
   Future<void> _toggleWishlist(String vendorId) async {
     final error = await ref.read(wishlistProvider.notifier).toggle(vendorId);
     if (error != null && mounted) {
       showWedSnackBar(context, error, type: SnackType.error);
+    }
+  }
+
+  // The only way a couple could reach a vendor conversation used to be
+  // opening an existing one from the Messages tab — nothing anywhere let
+  // them start one. This is that missing entry point: right from the
+  // profile they're already looking at, before ever sending a formal
+  // inquiry.
+  Future<void> _messageVendor(String vendorId) async {
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) {
+      showWedSnackBar(context, 'Not signed in.', type: SnackType.error);
+      return;
+    }
+    setState(() => _messaging = true);
+    try {
+      final convo = await MessagingApiService.instance.startConversation(token, vendorId);
+      if (!mounted) return;
+      context.push('/couple/messages/${convo.id}');
+    } on MessagingApiException catch (e) {
+      if (!mounted) return;
+      showWedSnackBar(context, e.message, type: SnackType.error);
+    } finally {
+      if (mounted) setState(() => _messaging = false);
     }
   }
 
@@ -691,6 +718,26 @@ class _VendorProfileBodyState extends ConsumerState<_VendorProfileBody> {
         ),
         child: Row(
           children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: _messaging
+                  ? const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.chat_bubble_outline,
+                          color: AppColors.forestGreen),
+                      tooltip: 'Message ${vendor.businessName}',
+                      onPressed: () => _messageVendor(vendor.id),
+                    ),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: BookingActionButton(vendor: vendor, height: 52),
             ),

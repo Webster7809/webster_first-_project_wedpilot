@@ -5,6 +5,7 @@ const Message = require('../db/models/message');
 const Vendor = require('../db/models/vendor');
 const User = require('../db/models/user');
 const CoupleProfile = require('../db/models/coupleProfile');
+const Inquiry = require('../db/models/inquiry');
 const verifyJwt = require('../middleware/verifyJwt');
 const { notifyUser } = require('../services/notify');
 
@@ -130,25 +131,53 @@ router.get('/conversations', async (req, res) => {
   }
 });
 
-// Find-or-create a conversation between the logged-in couple and a vendor —
-// called after sending an inquiry so a chat thread exists for follow-up.
+async function findOrCreateConvoResponse(res, coupleUserId, vendorId) {
+  const [convo] = await Conversation.findOrCreate({
+    where: { couple_user_id: coupleUserId, vendor_id: vendorId },
+  });
+  const [serialized] = await serializeConversations([convo]);
+  const { _unreadSenderIds, ...rest } = serialized;
+  res.status(201).json({ conversation: { ...rest, unread_count: 0 } });
+}
+
+// Find-or-create a conversation between a couple and a vendor. Either side
+// can start it — a couple messaging a vendor they're interested in (browsing
+// a profile, before ever sending a formal inquiry) needs no relationship
+// check, since discovery flows one direction in this app: couples find
+// vendors, not the other way round. A vendor has no such discovery path, so
+// their side is gated on an inquiry already existing between the two — the
+// only legitimate way a vendor would ever have a couple's user id at all,
+// and a free spam guard against messaging someone who never contacted them.
 router.post('/conversations', async (req, res) => {
   try {
-    if (req.user.role !== 'couple') {
-      return res.status(403).json({ error: 'Only couples can start a conversation.' });
+    if (req.user.role === 'couple') {
+      const { vendor_id } = req.body;
+      if (!vendor_id) return res.status(400).json({ error: 'vendor_id is required.' });
+
+      const vendor = await Vendor.findByPk(vendor_id);
+      if (!vendor) return res.status(404).json({ error: 'Vendor not found.' });
+
+      return await findOrCreateConvoResponse(res, req.user.user_id, vendor_id);
     }
-    const { vendor_id } = req.body;
-    if (!vendor_id) return res.status(400).json({ error: 'vendor_id is required.' });
 
-    const vendor = await Vendor.findByPk(vendor_id);
-    if (!vendor) return res.status(404).json({ error: 'Vendor not found.' });
+    if (req.user.role === 'vendor') {
+      const { couple_user_id } = req.body;
+      if (!couple_user_id) return res.status(400).json({ error: 'couple_user_id is required.' });
 
-    const [convo] = await Conversation.findOrCreate({
-      where: { couple_user_id: req.user.user_id, vendor_id },
-    });
-    const [serialized] = await serializeConversations([convo]);
-    const { _unreadSenderIds, ...rest } = serialized;
-    res.status(201).json({ conversation: { ...rest, unread_count: 0 } });
+      const ownVendorId = await resolveOwnVendorId(req.user.user_id);
+      if (!ownVendorId) return res.status(404).json({ error: 'Vendor profile not found.' });
+
+      const hasInquiry = await Inquiry.findOne({
+        where: { couple_user_id, vendor_id: ownVendorId },
+      });
+      if (!hasInquiry) {
+        return res.status(403).json({ error: 'This couple has not contacted you yet.' });
+      }
+
+      return await findOrCreateConvoResponse(res, couple_user_id, ownVendorId);
+    }
+
+    res.status(403).json({ error: 'Only couples and vendors can start a conversation.' });
   } catch (err) {
     console.error('Create conversation error:', err.message);
     res.status(500).json({ error: 'Could not start conversation.' });

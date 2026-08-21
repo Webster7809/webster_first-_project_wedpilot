@@ -44,6 +44,24 @@ class MessagingApiService {
     }
   }
 
+  /// Find-or-create a conversation with a couple. Vendor-only — the backend
+  /// requires an inquiry to already exist between the two (see
+  /// backend/routes/messaging.js), so this only ever succeeds for a couple
+  /// who has actually contacted this vendor.
+  Future<Conversation> startConversationWithCouple(
+      String accessToken, String coupleUserId) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/messages/conversations',
+        data: {'couple_user_id': coupleUserId},
+        options: _auth(accessToken),
+      );
+      return Conversation.fromJson(response.data?['conversation'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw MessagingApiException(_extractError(e));
+    }
+  }
+
   Future<List<Message>> fetchMessages(String accessToken, String convoId) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(

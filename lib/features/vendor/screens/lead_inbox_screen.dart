@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import '../../../core/router/app_routes.dart';
+import '../../../core/services/messaging_api_service.dart';
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/messaging.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/vendor_own_provider.dart';
 import '../../../widgets/hamburger_menu_button.dart';
 import '../../../widgets/wed_button.dart';
@@ -285,6 +286,39 @@ Future<void> markComplete(
   );
 }
 
+/// Resolves (or creates) the real conversation with this specific couple and
+/// opens it directly. Shared by the card's own message icon and the detail
+/// sheet's button — previously the only version of this existed inside the
+/// sheet's state and just dumped the vendor on the general conversation
+/// list, which was empty for any lead that hadn't already been booked, since
+/// nothing ever created a conversation for it.
+Future<void> messageCouple(
+  BuildContext context,
+  WidgetRef ref,
+  Inquiry inquiry,
+) async {
+  // Only a lead that had never been opened gets marked as read here — see
+  // the note on acceptLead's undo for why this can't be unconditional
+  // (moving a booked inquiry to 'viewed' would silently un-book it).
+  if (inquiry.status == InquiryStatus.newInquiry) {
+    ref
+        .read(vendorOwnProvider.notifier)
+        .markInquiryStatus(inquiry.id, InquiryStatus.viewed);
+  }
+
+  final token = ref.read(authProvider.notifier).accessToken;
+  if (token == null) return;
+  try {
+    final convo = await MessagingApiService.instance
+        .startConversationWithCouple(token, inquiry.coupleId);
+    if (!context.mounted) return;
+    context.push('/vendor/messages/${convo.id}');
+  } on MessagingApiException catch (e) {
+    if (!context.mounted) return;
+    showWedSnackBar(context, e.message, type: SnackType.error);
+  }
+}
+
 class _BookingConfirmedDialog extends StatelessWidget {
   final String coupleName;
   const _BookingConfirmedDialog({required this.coupleName});
@@ -439,7 +473,18 @@ class _LeadCard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
+                // Always in the same place regardless of a lead's status —
+                // messaging a couple used to require opening the detail sheet
+                // to even find the button, which is most of why it read as
+                // "almost impossible."
+                IconButton(
+                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                  color: AppColors.forestGreen,
+                  tooltip: 'Message ${inquiry.coupleName ?? 'couple'}',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => messageCouple(context, ref, inquiry),
+                ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -464,34 +509,47 @@ class _LeadCard extends ConsumerWidget {
             const SizedBox(height: 10),
             Wrap(
               spacing: 6,
+              runSpacing: 6,
               children: [
+                // The status chip and the wedding date used to be mutually
+                // exclusive (date only rendered in the `else` branch below,
+                // which never runs once booked) — the single most important
+                // fact about a confirmed booking disappeared from the card
+                // the moment it was confirmed, recoverable only by opening
+                // the detail sheet. Date now renders independently of status,
+                // same as the couple's own booking card already does.
                 if (isBooked)
                   _Chip(label: 'Booked', color: AppColors.success)
                 else if (isDeclined)
                   _Chip(label: 'Declined', color: AppColors.error)
                 else if (isCancelled)
-                  _Chip(label: 'Cancelled by couple', color: AppColors.textSecondary)
-                else ...[
-                  if (inquiry.weddingDate != null)
-                    _Chip(
-                      label: DateFormat('MMM d, y')
-                          .format(inquiry.weddingDate!),
-                      color: AppColors.forestGreen,
-                    ),
-                  if (inquiry.budgetRangeMin != null)
-                    _Chip(
-                      label:
-                          'ZMW ${inquiry.budgetRangeMin!.toStringAsFixed(0)}–${inquiry.budgetRangeMax?.toStringAsFixed(0) ?? '?'}',
-                      color: AppColors.textSecondary,
-                    ),
-                ],
-                if (isBooked && !inquiry.hasFeedback)
+                  _Chip(label: 'Cancelled by couple', color: AppColors.textSecondary),
+                if (inquiry.weddingDate != null)
                   _Chip(
-                    label: inquiry.serviceDoneAt == null
-                        ? 'Awaiting service'
-                        : 'Awaiting rating',
-                    color: AppColors.amber,
+                    label: DateFormat('MMM d, y').format(inquiry.weddingDate!),
+                    color: AppColors.forestGreen,
                   ),
+                if (_isPendingLead(inquiry) && inquiry.budgetRangeMin != null)
+                  _Chip(
+                    label:
+                        'ZMW ${inquiry.budgetRangeMin!.toStringAsFixed(0)}–${inquiry.budgetRangeMax?.toStringAsFixed(0) ?? '?'}',
+                    color: AppColors.textSecondary,
+                  ),
+                // A fully-rated booking used to fall back to the bare
+                // "Booked" chip above with nothing distinguishing it from a
+                // booking that hasn't even been serviced yet. Now every
+                // booked state has its own correct, persistent chip: still
+                // to do, awaiting the couple, or done.
+                if (isBooked)
+                  if (inquiry.hasFeedback)
+                    _Chip(label: 'Rated ✓', color: AppColors.success)
+                  else
+                    _Chip(
+                      label: inquiry.serviceDoneAt == null
+                          ? 'Awaiting service'
+                          : 'Awaiting rating',
+                      color: AppColors.amber,
+                    ),
               ],
             ),
 
@@ -628,21 +686,13 @@ class _LeadDetailSheetState extends ConsumerState<_LeadDetailSheet> {
     }
   }
 
-  void _messageCouple(Inquiry inquiry) {
-    // Only a lead that has never been opened gets marked as read here.
-    //
-    // This used to write `viewed` unconditionally, which meant messaging a
-    // couple you had already booked *un-booked them*: the backend treats any
-    // move out of 'booked' as an undo, so it released the wedding date from
-    // the calendar and deleted the couple's "confirmed!" notification. A
-    // vendor sending a friendly message silently cancelled the booking.
-    if (inquiry.status == InquiryStatus.newInquiry) {
-      ref
-          .read(vendorOwnProvider.notifier)
-          .markInquiryStatus(inquiry.id, InquiryStatus.viewed);
-    }
+  Future<void> _messageCouple(Inquiry inquiry) async {
+    // Captured before popping the sheet, same reasoning as _accept/_decline:
+    // the sheet's own context is unmounted the instant it closes, and every
+    // `mounted` guard downstream would bail out silently otherwise.
+    final host = Navigator.of(context).context;
     Navigator.pop(context);
-    context.push(AppRoutes.vendorMessages);
+    await messageCouple(host, ref, inquiry);
   }
 
   @override

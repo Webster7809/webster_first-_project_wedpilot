@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/router/app_routes.dart';
 import '../../../core/services/api_error.dart';
+import '../../../core/services/messaging_api_service.dart';
 import '../../../core/services/vendor_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -105,6 +106,23 @@ class _BookingCard extends ConsumerWidget {
       ref.invalidate(myBookingsProvider);
     } catch (e) {
       if (context.mounted) showWedSnackBar(context, describeError(e), type: SnackType.error);
+    }
+  }
+
+  // Nothing anywhere previously let a couple message a vendor they'd
+  // inquired with — this and the matching entry point on the vendor's own
+  // profile page are the only two places that now do.
+  Future<void> _messageVendor(BuildContext context, WidgetRef ref) async {
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    try {
+      final convo =
+          await MessagingApiService.instance.startConversation(token, inquiry.vendorId);
+      if (!context.mounted) return;
+      context.push('/couple/messages/${convo.id}');
+    } on MessagingApiException catch (e) {
+      if (!context.mounted) return;
+      showWedSnackBar(context, e.message, type: SnackType.error);
     }
   }
 
@@ -215,6 +233,23 @@ class _BookingCard extends ConsumerWidget {
                 Text("You've rated this vendor",
                     style: AppTextStyles.caption.copyWith(color: AppColors.success)),
               ],
+            ),
+          ],
+          if (!_canRemove) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _messageVendor(context, ref),
+                icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                label: Text('Message ${inquiry.vendorName ?? 'vendor'}'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.forestGreen,
+                  side: const BorderSide(color: AppColors.divider),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
             ),
           ],
           if (canRate) ...[
