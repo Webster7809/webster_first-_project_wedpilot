@@ -27,13 +27,13 @@ class _RecordingVendorOwn extends VendorOwnNotifier {
   String? failWith;
 
   @override
-  Future<String?> markInquiryStatus(
+  Future<(String?, String?)> markInquiryStatus(
     String id,
     InquiryStatus status, {
     String? declineReason,
   }) async {
     calls.add((id, status, declineReason));
-    if (failWith != null) return failWith;
+    if (failWith != null) return (failWith, null);
 
     // Mirror the real notifier: reflect the new status back into state so the
     // card rebuilds the way it would against a live backend. Inquiry has no
@@ -48,7 +48,10 @@ class _RecordingVendorOwn extends VendorOwnNotifier {
         ],
       ),
     );
-    return null;
+    // No convoId: keeps these tests exercising the plain "Booked with ..."
+    // snackbar path rather than the post-accept message-prompt dialog, which
+    // only fires when the (real) backend actually created a conversation.
+    return (null, null);
   }
 }
 

@@ -407,7 +407,10 @@ class VendorApiService {
     }
   }
 
-  Future<Inquiry> updateInquiryStatus(
+  /// Returns the updated inquiry plus the conversation id to message the
+  /// couple through — non-null only when [status] is `'booked'`, since that's
+  /// the only transition that creates (or finds) the thread server-side.
+  Future<(Inquiry, String?)> updateInquiryStatus(
     String accessToken,
     String inquiryId,
     String status, {
@@ -423,7 +426,8 @@ class VendorApiService {
         options: _auth(accessToken),
       );
       final data = response.data ?? {};
-      return Inquiry.fromJson(data['inquiry'] as Map<String, dynamic>);
+      final inquiry = Inquiry.fromJson(data['inquiry'] as Map<String, dynamic>);
+      return (inquiry, data['convo_id'] as String?);
     } on DioException catch (e) {
       throw VendorApiException(_extractError(e));
     }

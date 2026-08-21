@@ -218,7 +218,7 @@ Future<void> acceptLead(
       ? InquiryStatus.viewed
       : inquiry.status;
 
-  final error = await ref
+  final (error, convoId) = await ref
       .read(vendorOwnProvider.notifier)
       .markInquiryStatus(inquiry.id, InquiryStatus.booked);
   if (!context.mounted) return;
@@ -227,13 +227,32 @@ Future<void> acceptLead(
     return;
   }
 
+  final coupleName = inquiry.coupleName ?? 'this couple';
+
+  // The backend creates the conversation thread the moment a booking is
+  // confirmed (see services/inquiryStatus.js) specifically so this prompt can
+  // drop straight into a real chat instead of an empty inbox — accepting is
+  // exactly when a vendor should say hello, not whenever they happen to
+  // notice the "Message couple" button buried in the detail sheet.
+  if (convoId != null) {
+    final wantsToMessage = await showDialog<bool>(
+      context: context,
+      builder: (_) => _BookingConfirmedDialog(coupleName: coupleName),
+    );
+    if (!context.mounted) return;
+    if (wantsToMessage == true) {
+      context.push('/vendor/messages/$convoId');
+      return;
+    }
+  }
+
   showWedSnackBar(
     context,
-    'Booked with ${inquiry.coupleName ?? 'this couple'}.',
+    'Booked with $coupleName.',
     type: SnackType.success,
     actionLabel: 'UNDO',
     onAction: () async {
-      final undoError = await ref
+      final (undoError, _) = await ref
           .read(vendorOwnProvider.notifier)
           .markInquiryStatus(inquiry.id, revertTo);
       if (!context.mounted) return;
@@ -244,6 +263,54 @@ Future<void> acceptLead(
       );
     },
   );
+}
+
+/// Marks a booked engagement's service as fulfilled and prompts the couple to
+/// rate the vendor — the same action as [_ServiceDoneSection]'s button, now
+/// also reachable directly from the card so it doesn't require opening the
+/// detail sheet to find.
+Future<void> markComplete(
+  BuildContext context,
+  WidgetRef ref,
+  Inquiry inquiry,
+) async {
+  final error =
+      await ref.read(vendorOwnProvider.notifier).markServiceDone(inquiry.id);
+  if (!context.mounted) return;
+  showWedSnackBar(
+    context,
+    error ??
+        'Marked complete — ${inquiry.coupleName ?? 'the couple'} can now rate you.',
+    type: error != null ? SnackType.error : SnackType.success,
+  );
+}
+
+class _BookingConfirmedDialog extends StatelessWidget {
+  final String coupleName;
+  const _BookingConfirmedDialog({required this.coupleName});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Booking confirmed!'),
+      content: Text(
+        '$coupleName has been notified. Send them a message now to '
+        'introduce yourself and go over the details?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Later'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: TextButton.styleFrom(foregroundColor: AppColors.forestGreen),
+          child: const Text('Message Now'),
+        ),
+      ],
+    );
+  }
 }
 
 /// Decline keeps its confirmation, unlike accept: it is final for the couple,
@@ -260,7 +327,7 @@ Future<void> declineLead(
   );
   if (reason == null || !context.mounted) return;
 
-  final error = await ref.read(vendorOwnProvider.notifier).markInquiryStatus(
+  final (error, _) = await ref.read(vendorOwnProvider.notifier).markInquiryStatus(
         inquiry.id,
         InquiryStatus.declined,
         declineReason: reason.trim(),
@@ -459,6 +526,26 @@ class _LeadCard extends ConsumerWidget {
                 ],
               ),
             ],
+
+            // The prominent, on-card counterpart to accept/decline for the
+            // next step in a booking's life — previously the only way to mark
+            // a booking complete was to open the detail sheet and find the
+            // button buried inside it.
+            if (isBooked && inquiry.serviceDoneAt == null && !inquiry.hasFeedback) ...[
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: WedButton(
+                  label: 'Mark Booking Complete',
+                  variant: WedButtonVariant.accent,
+                  height: 42,
+                  borderRadius: 12,
+                  fontSize: 14,
+                  icon: const Icon(Icons.task_alt_outlined, size: 16),
+                  onPressed: () => markComplete(context, ref, inquiry),
+                ),
+              ),
+            ],
           ],
         ),
         ),
@@ -536,7 +623,7 @@ class _LeadDetailSheetState extends ConsumerState<_LeadDetailSheet> {
     if (error != null) {
       showWedSnackBar(context, error, type: SnackType.error);
     } else {
-      showWedSnackBar(context, 'Couple notified to rate you.',
+      showWedSnackBar(context, 'Marked complete — the couple can now rate you.',
           type: SnackType.success);
     }
   }
@@ -789,7 +876,7 @@ class _ServiceDoneSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Once the wedding/service is done, let the couple know so they can rate you.',
+          'Once the wedding/service is done, mark it complete so the couple can rate you.',
           style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: 8),
@@ -797,8 +884,8 @@ class _ServiceDoneSection extends StatelessWidget {
           width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: isBusy ? null : onNotify,
-            icon: const Icon(Icons.notifications_active_outlined, size: 16),
-            label: const Text('Notify Couple to Rate'),
+            icon: const Icon(Icons.task_alt_outlined, size: 16),
+            label: const Text('Mark Booking Complete'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: const BorderSide(color: AppColors.primary),

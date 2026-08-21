@@ -793,14 +793,15 @@ router.patch('/me/inquiries/:id', verifyJwt, requireVendor, async (req, res) => 
     // The transition rules live in services/inquiryStatus.js so they can be
     // tested directly — this is the only code that decides whether a wedding
     // date is held on a vendor's calendar.
+    let convoId = null;
     try {
-      await applyInquiryStatus({
+      ({ convoId } = await applyInquiryStatus({
         vendor,
         inquiry,
         status,
         declineReason: req.body.decline_reason,
         resolveWeddingDate,
-      });
+      }));
     } catch (err) {
       if (err instanceof InquiryStatusError) {
         return res.status(err.status).json({ error: err.message });
@@ -808,7 +809,7 @@ router.patch('/me/inquiries/:id', verifyJwt, requireVendor, async (req, res) => 
       throw err;
     }
 
-    res.json({ inquiry: await serializeOwnInquiry(inquiry, vendor) });
+    res.json({ inquiry: await serializeOwnInquiry(inquiry, vendor), convo_id: convoId });
   } catch (err) {
     console.error('Update inquiry error:', err.message);
     res.status(500).json({ error: 'Could not update inquiry.' });

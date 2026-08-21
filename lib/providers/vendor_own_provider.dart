@@ -423,17 +423,20 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
 
   // ── Inquiries ──────────────────────────────────────────────────────────────
 
-  Future<String?> markInquiryStatus(
+  /// Returns `(error, convoId)` — [convoId] is only ever non-null on a
+  /// successful transition to `booked`, where the backend creates the
+  /// couple/vendor conversation on the spot (see services/inquiryStatus.js).
+  Future<(String?, String?)> markInquiryStatus(
     String id,
     InquiryStatus status, {
     String? declineReason,
   }) async {
     final token = _token;
-    if (token == null) return 'Not signed in.';
+    if (token == null) return ('Not signed in.', null);
     final current = state.data;
-    if (current == null) return 'No vendor profile yet.';
+    if (current == null) return ('No vendor profile yet.', null);
     try {
-      final updated = await _service.updateInquiryStatus(
+      final (updated, convoId) = await _service.updateInquiryStatus(
         token,
         id,
         status.name,
@@ -444,11 +447,11 @@ class VendorOwnNotifier extends StateNotifier<Resource<VendorOwnState>> {
           inquiries: current.inquiries.map((i) => i.id == id ? updated : i).toList(),
         ),
       );
-      return null;
+      return (null, convoId);
     } on VendorApiException catch (e) {
-      return e.message;
+      return (e.message, null);
     } catch (e) {
-      return describeError(e);
+      return (describeError(e), null);
     }
   }
 

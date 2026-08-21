@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const Inquiry = require('../db/models/inquiry');
 const Notification = require('../db/models/notification');
+const Conversation = require('../db/models/conversation');
 const { recalculateVendorStats } = require('./vendorStats');
 const { blockDate, releaseDate } = require('./vendorAvailability');
 const { notifyUser } = require('./notify');
@@ -92,7 +93,18 @@ async function applyInquiryStatus({
   // derive from inquiry status/timing.
   await recalculateVendorStats(vendor.vendor_id);
 
+  let convoId = null;
   if (status === 'booked') {
+    // A confirmed booking is exactly when a couple and vendor actually need
+    // to talk — logistics, timing, final details. Creating the thread here
+    // (rather than requiring either side to discover the messaging tab and
+    // start one manually) is what lets the vendor route straight into a real
+    // chat right after accepting instead of landing on an empty inbox.
+    const [convo] = await Conversation.findOrCreate({
+      where: { couple_user_id: inquiry.couple_user_id, vendor_id: vendor.vendor_id },
+    });
+    convoId = convo.convo_id;
+
     const bookingBody = inquiry.wedding_date
       ? `Your booking for ${inquiry.wedding_date} is confirmed.`
       : 'Your booking request has been confirmed.';
@@ -145,7 +157,7 @@ async function applyInquiryStatus({
     if (staleAcceptance) await staleAcceptance.destroy();
   }
 
-  return inquiry;
+  return { inquiry, convoId };
 }
 
 module.exports = {
