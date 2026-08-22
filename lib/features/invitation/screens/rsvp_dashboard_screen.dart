@@ -7,7 +7,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/share_helper.dart';
 import '../../../models/invitation.dart';
+import '../../../models/vendor_profile.dart';
+import '../../../providers/booking_provider.dart' show bookedVendorsProvider;
 import '../../../providers/invitation_provider.dart';
+import '../../../widgets/catering_estimate_card.dart';
+import '../../../widgets/count_stepper.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/typeahead_field.dart';
 import '../../../widgets/wed_button.dart';
@@ -138,7 +142,7 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => _GuestFormSheet(
         existing: existing,
-        onSave: (name, email, phone, relation) async {
+        onSave: (name, email, phone, relation, maxPartySize) async {
           String? error;
           if (existing != null) {
             error = await ref.read(guestRsvpProvider.notifier).editGuest(
@@ -147,6 +151,7 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
                   email: email,
                   phone: phone,
                   relation: relation,
+                  maxPartySize: maxPartySize,
                 );
           } else {
             error = await ref.read(guestRsvpProvider.notifier).addGuest(
@@ -156,6 +161,7 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
                   relation: relation,
                   invitationId:
                       widget.invitationId.isEmpty ? null : widget.invitationId,
+                  maxPartySize: maxPartySize,
                 );
           }
           if (!context.mounted) return;
@@ -278,7 +284,7 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
       builder: (_) => AlertDialog(
         title: const Text('Reset RSVP'),
         content: const Text(
-            'This clears their current response and unlocks their personal invite link so they can respond again. Continue?'),
+            'This clears their current response — their invitation will show as not yet responded, and they can submit a fresh answer through their personal link. Continue?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
@@ -309,6 +315,9 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
         rsvp: rsvp,
         onToggleCheckin: () => ref.read(guestRsvpProvider.notifier).toggleCheckin(guest.id),
         onShareInvite: () => _shareGuestInvite(context, guest),
+        onLoadHistory: rsvp != null
+            ? () => ref.read(guestRsvpProvider.notifier).fetchRsvpHistory(rsvp.id)
+            : null,
       ),
     );
   }
@@ -316,7 +325,7 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
 
 // ── Overview tab ──────────────────────────────────────────────────────────────
 
-class _OverviewTab extends StatelessWidget {
+class _OverviewTab extends ConsumerWidget {
   final RsvpStats stats;
   final List<RsvpResponse> responses;
   final List<Guest> guests;
@@ -330,8 +339,10 @@ class _OverviewTab extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final checkedIn = guests.where((g) => g.checkedIn).length;
+    final effectiveGuestCount = ref.watch(effectiveGuestCountProvider);
+    final bookedVendorsAsync = ref.watch(bookedVendorsProvider);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -395,7 +406,47 @@ class _OverviewTab extends StatelessWidget {
             ],
           ),
         ),
+
+        // Vendor capacity vs. confirmed guests — reuses the same
+        // VendorProfile.canServeGuestCount/fittingGuestCapacity helpers the
+        // AI vendor matcher and discovery filter already use, just checked
+        // here against the couple's *booked* vendors instead of the
+        // candidate pool.
+        if (effectiveGuestCount != null && effectiveGuestCount > 0) ...[
+          const SizedBox(height: 16),
+          bookedVendorsAsync.when(
+            data: (vendors) => vendors.isEmpty
+                ? const SizedBox.shrink()
+                : _SoftCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Vendor Capacity', style: AppTextStyles.headlineSmall),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Checked against your $effectiveGuestCount confirmed guests.',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 12),
+                        for (final vendor in vendors)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _VendorCapacityRow(
+                              vendor: vendor,
+                              guestCount: effectiveGuestCount,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+          ),
+        ],
         const SizedBox(height: 16),
+
+        const CateringEstimateCard(),
 
         // Response progress bar
         _SoftCard(
@@ -451,6 +502,32 @@ class _OverviewTab extends StatelessWidget {
           ),
         ],
 
+        // Custom question tallies (choice-type questions only — see
+        // RsvpStats.questionTallies)
+        if (stats.questionTallies.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text('Question Responses', style: AppTextStyles.headlineSmall),
+          const SizedBox(height: 10),
+          for (final entry in stats.questionTallies.entries) ...[
+            _SoftCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(entry.key, style: AppTextStyles.labelLarge),
+                  const SizedBox(height: 10),
+                  for (final option in entry.value.entries)
+                    _MealRow(
+                      meal: option.key,
+                      count: option.value,
+                      total: stats.totalAttending,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ],
+
         // Recent responses
         if (responses.isNotEmpty) ...[
           const SizedBox(height: 20),
@@ -467,6 +544,61 @@ class _OverviewTab extends StatelessWidget {
             );
           }),
         ],
+      ],
+    );
+  }
+}
+
+/// One booked vendor's stated capacity vs. the couple's confirmed guest
+/// count — reuses [VendorProfile.canServeGuestCount]/[fittingGuestCapacity]
+/// rather than any new capacity logic (see [_OverviewTab]).
+class _VendorCapacityRow extends StatelessWidget {
+  final VendorProfile vendor;
+  final int guestCount;
+
+  const _VendorCapacityRow({required this.vendor, required this.guestCount});
+
+  @override
+  Widget build(BuildContext context) {
+    final fitting = vendor.fittingGuestCapacity(guestCount);
+    final IconData icon;
+    final Color color;
+    final String message;
+    if (vendor.maxGuestCapacity == null) {
+      icon = Icons.help_outline;
+      color = AppColors.textSecondary;
+      message = 'Capacity not stated';
+    } else if (vendor.canServeGuestCount(guestCount)) {
+      icon = Icons.check_circle_outline;
+      color = AppColors.success;
+      message = fitting != null
+          ? 'Can accommodate — fits up to $fitting guests'
+          : 'Can accommodate your guest count';
+    } else {
+      icon = Icons.warning_amber_outlined;
+      color = AppColors.error;
+      message =
+          'Capacity insufficient — largest package fits ${vendor.maxGuestCapacity} guests';
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${vendor.businessName} · ${vendor.category}',
+                style: AppTextStyles.bodyMedium
+                    .copyWith(fontWeight: FontWeight.w600),
+              ),
+              Text(message, style: AppTextStyles.bodySmall.copyWith(color: color)),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1222,11 +1354,16 @@ class _GuestDetailsSheet extends StatelessWidget {
   final VoidCallback onToggleCheckin;
   final VoidCallback onShareInvite;
 
+  /// Null when there's no RSVP yet to have a history. Present only for
+  /// couple-initiated edits — see [RsvpHistoryEntry].
+  final Future<List<RsvpHistoryEntry>> Function()? onLoadHistory;
+
   const _GuestDetailsSheet({
     required this.guest,
     required this.rsvp,
     required this.onToggleCheckin,
     required this.onShareInvite,
+    this.onLoadHistory,
   });
 
   @override
@@ -1320,6 +1457,13 @@ class _GuestDetailsSheet extends StatelessWidget {
               _InfoRow(label: 'Meal preference', value: rsvp!.mealPreference!),
             if (rsvp!.dietaryNotes?.isNotEmpty ?? false)
               _InfoRow(label: 'Dietary notes', value: rsvp!.dietaryNotes!),
+            for (final answer in rsvp!.answers)
+              _InfoRow(
+                label: answer.questionText ?? 'Question',
+                value: answer.answerJson.isNotEmpty
+                    ? answer.answerJson.join(', ')
+                    : (answer.answerText ?? '—'),
+              ),
             if (rsvp!.message?.isNotEmpty ?? false) ...[
               const SizedBox(height: 8),
               Text('"${rsvp!.message}"',
@@ -1330,6 +1474,10 @@ class _GuestDetailsSheet extends StatelessWidget {
               label: 'Responded',
               value: '${rsvp!.respondedAt.toLocal()}'.split('.').first,
             ),
+            if (onLoadHistory != null) ...[
+              const SizedBox(height: 12),
+              _HistorySection(onLoad: onLoadHistory!),
+            ],
           ],
 
           const SizedBox(height: 20),
@@ -1349,11 +1497,96 @@ class _GuestDetailsSheet extends StatelessWidget {
   }
 }
 
+// ── Collapsed-by-default RSVP change history (couple-initiated edits only) ──
+
+class _HistorySection extends StatefulWidget {
+  final Future<List<RsvpHistoryEntry>> Function() onLoad;
+  const _HistorySection({required this.onLoad});
+
+  @override
+  State<_HistorySection> createState() => _HistorySectionState();
+}
+
+class _HistorySectionState extends State<_HistorySection> {
+  bool _expanded = false;
+  bool _loading = false;
+  List<RsvpHistoryEntry>? _entries;
+
+  Future<void> _toggle() async {
+    if (_expanded) {
+      setState(() => _expanded = false);
+      return;
+    }
+    setState(() { _expanded = true; _loading = _entries == null; });
+    if (_entries == null) {
+      final entries = await widget.onLoad();
+      if (mounted) setState(() { _entries = entries; _loading = false; });
+    }
+  }
+
+  String _label(AttendingStatus? status) {
+    if (status == null) return 'no response';
+    return status.name[0].toUpperCase() + status.name.substring(1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: _toggle,
+          child: Row(
+            children: [
+              Icon(_expanded ? Icons.expand_less : Icons.history,
+                  size: 18, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              Text('Change history',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
+        if (_expanded) ...[
+          const SizedBox(height: 8),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if ((_entries ?? const []).isEmpty)
+            Text('No manual edits recorded.',
+                style: AppTextStyles.caption.copyWith(color: AppColors.textHint))
+          else
+            for (final entry in _entries!)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '${'${entry.changedAt.toLocal()}'.split('.').first} — '
+                  '${_label(entry.previousStatus)} → ${_label(entry.newStatus)} '
+                  '(${entry.previousGuestCount ?? '—'} → ${entry.newGuestCount} guests)',
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                ),
+              ),
+        ],
+      ],
+    );
+  }
+}
+
 // ── Guest form sheet ──────────────────────────────────────────────────────────
 
 class _GuestFormSheet extends StatefulWidget {
   final Guest? existing;
-  final void Function(String name, String? email, String? phone, String? relation) onSave;
+  final void Function(
+    String name,
+    String? email,
+    String? phone,
+    String? relation,
+    int? maxPartySize,
+  ) onSave;
 
   const _GuestFormSheet({required this.existing, required this.onSave});
 
@@ -1366,6 +1599,7 @@ class _GuestFormSheetState extends State<_GuestFormSheet> {
   late final TextEditingController _emailCtrl;
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _relationCtrl;
+  late int _maxPartySize;
   String? _nameError;
 
   @override
@@ -1376,6 +1610,7 @@ class _GuestFormSheetState extends State<_GuestFormSheet> {
     _phoneCtrl = TextEditingController(text: widget.existing?.phone ?? '');
     _relationCtrl =
         TextEditingController(text: widget.existing?.relation ?? '');
+    _maxPartySize = widget.existing?.maxPartySize ?? 1;
   }
 
   @override
@@ -1400,6 +1635,7 @@ class _GuestFormSheetState extends State<_GuestFormSheet> {
       _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
       _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
       _relationCtrl.text.trim().isEmpty ? null : _relationCtrl.text.trim(),
+      _maxPartySize,
     );
   }
 
@@ -1446,6 +1682,19 @@ class _GuestFormSheetState extends State<_GuestFormSheet> {
             const SizedBox(height: 12),
             _field(_phoneCtrl, 'Phone (optional)',
                 type: TextInputType.phone),
+            const SizedBox(height: 16),
+            Text('Max people on this invitation', style: AppTextStyles.labelLarge),
+            const SizedBox(height: 4),
+            Text(
+              'A family/group invitation — e.g. "the Banda family, max 4" — '
+              'rejects an RSVP for more than this many people.',
+              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            CountStepper(
+              value: _maxPartySize,
+              onChanged: (v) => setState(() => _maxPartySize = v),
+            ),
             const SizedBox(height: 24),
             WedButton(
               label: widget.existing != null ? 'Save Changes' : 'Add Guest',
@@ -1636,41 +1885,11 @@ class _RsvpFormSheetState extends State<_RsvpFormSheet> {
               if (_status != AttendingStatus.no) ...[
                 Text('Number of guests *', style: AppTextStyles.labelLarge),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    IconButton(
-                      tooltip: 'Decrease guest count',
-                      onPressed: () =>
-                          setState(() => _count = (_count - 1).clamp(1, 20)),
-                      icon: const Icon(Icons.remove_circle_outlined),
-                      color: AppColors.goldDeep,
-                    ),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: _countError != null
-                                ? AppColors.error
-                                : AppColors.divider,
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '$_count',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.headlineSmall,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Increase guest count',
-                      onPressed: () =>
-                          setState(() => _count = (_count + 1).clamp(1, 20)),
-                      icon: const Icon(Icons.add_circle_outlined),
-                      color: AppColors.goldDeep,
-                    ),
-                  ],
+                CountStepper(
+                  value: _count,
+                  max: widget.guest.maxPartySize ?? 20,
+                  hasError: _countError != null,
+                  onChanged: (v) => setState(() => _count = v),
                 ),
                 if (_countError != null)
                   Text(_countError!,

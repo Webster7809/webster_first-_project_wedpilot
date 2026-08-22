@@ -6,6 +6,7 @@ import '../core/services/invitation_api_service.dart';
 import '../core/services/rsvp_service.dart';
 import '../core/state/resource.dart';
 import 'auth_provider.dart';
+import 'booking_provider.dart' show bookedVendorsProvider;
 
 export '../core/services/rsvp_service.dart' show RsvpStats;
 
@@ -174,6 +175,7 @@ class GuestRsvpNotifier extends StateNotifier<GuestRsvpState> {
     String? phone,
     String? relation,
     String? invitationId,
+    int? maxPartySize,
   }) async {
     final token = _token;
     if (token == null) return 'Please sign in to add guests.';
@@ -184,6 +186,7 @@ class GuestRsvpNotifier extends StateNotifier<GuestRsvpState> {
       phone: phone,
       relation: relation,
       invitationId: invitationId,
+      maxPartySize: maxPartySize,
     );
     if (error != null) return error;
     await load();
@@ -196,6 +199,7 @@ class GuestRsvpNotifier extends StateNotifier<GuestRsvpState> {
     String? email,
     String? phone,
     String? relation,
+    int? maxPartySize,
   }) async {
     final token = _token;
     if (token == null) return 'Please sign in to edit guests.';
@@ -206,6 +210,7 @@ class GuestRsvpNotifier extends StateNotifier<GuestRsvpState> {
       email: email,
       phone: phone,
       relation: relation,
+      maxPartySize: maxPartySize,
     );
     if (error != null) return error;
     await load();
@@ -336,6 +341,19 @@ class GuestRsvpNotifier extends StateNotifier<GuestRsvpState> {
       // Leave state as-is on failure.
     }
   }
+
+  /// Couple-initiated edits only — see [RsvpHistoryEntry]. Returns an empty
+  /// list on failure rather than throwing, since this only backs an optional
+  /// "View history" affordance, not a primary flow.
+  Future<List<RsvpHistoryEntry>> fetchRsvpHistory(String rsvpId) async {
+    final token = _token;
+    if (token == null) return const [];
+    try {
+      return await InvitationApiService.instance.fetchRsvpHistory(token, rsvpId);
+    } on InvitationApiException {
+      return const [];
+    }
+  }
 }
 
 final guestRsvpProvider =
@@ -346,6 +364,86 @@ final guestRsvpProvider =
 /// Convenience derived provider for stats only.
 final rsvpStatsProvider = Provider<RsvpStats>((ref) {
   return ref.watch(guestRsvpProvider).stats;
+});
+
+/// The guest count vendor-capacity checks and matching should actually use:
+/// the real confirmed RSVP total once any exist, falling back to the
+/// couple's manually-entered onboarding estimate (CoupleProfile.guestCount)
+/// otherwise. Real RSVP data is ground truth the moment it exists — the
+/// manual estimate was always just a placeholder for it, entered before any
+/// guest had actually responded.
+final effectiveGuestCountProvider = Provider<int?>((ref) {
+  final totalAttending = ref.watch(rsvpStatsProvider).totalAttending;
+  if (totalAttending > 0) return totalAttending;
+  return ref.watch(coupleProfileProvider)?.guestCount;
+});
+
+/// Whether/why a guest-based catering estimate can be shown. [cannotCalculate]
+/// covers both "no single per-person listing" and "more than one booked
+/// caterer" — either way, guessing which price applies would be a fake
+/// number, which the couple's own RSVP data must never produce.
+enum CateringEstimateStatus { noBookedCaterer, cannotCalculate, available }
+
+class CateringEstimate {
+  final CateringEstimateStatus status;
+  final String? vendorName;
+  final double? priceMin;
+  final double? priceMax;
+  final int confirmedGuests;
+  final double? estimatedTotal;
+
+  const CateringEstimate({
+    required this.status,
+    this.vendorName,
+    this.priceMin,
+    this.priceMax,
+    required this.confirmedGuests,
+    this.estimatedTotal,
+  });
+}
+
+/// Guest-based catering estimate — see spec's budget-integration
+/// requirement. Deliberately narrow: only computes when the couple's booked
+/// Catering vendor has exactly one active per-person-priced listing, so this
+/// never presents a guessed number as real. Never mutates Budget.categories;
+/// purely a read-only insight derived live from already-fetched data.
+final cateringEstimateProvider = Provider<CateringEstimate?>((ref) {
+  final vendors = ref.watch(bookedVendorsProvider).valueOrNull;
+  if (vendors == null) return null;
+
+  final caterers = vendors.where((v) => v.category == 'Catering').toList();
+  if (caterers.isEmpty) return null;
+
+  final confirmedGuests = ref.watch(rsvpStatsProvider).totalAttending;
+
+  if (caterers.length > 1) {
+    return CateringEstimate(
+      status: CateringEstimateStatus.cannotCalculate,
+      confirmedGuests: confirmedGuests,
+    );
+  }
+
+  final caterer = caterers.single;
+  final personServices =
+      caterer.services.where((s) => s.isActive && s.unit == 'person').toList();
+  if (personServices.length != 1) {
+    return CateringEstimate(
+      status: CateringEstimateStatus.cannotCalculate,
+      vendorName: caterer.businessName,
+      confirmedGuests: confirmedGuests,
+    );
+  }
+
+  final service = personServices.single;
+  final pricePerGuest = (service.priceMin + service.priceMax) / 2;
+  return CateringEstimate(
+    status: CateringEstimateStatus.available,
+    vendorName: caterer.businessName,
+    priceMin: service.priceMin,
+    priceMax: service.priceMax,
+    confirmedGuests: confirmedGuests,
+    estimatedTotal: pricePerGuest * confirmedGuests,
+  );
 });
 
 // ── Templates ─────────────────────────────────────────────────────────────────

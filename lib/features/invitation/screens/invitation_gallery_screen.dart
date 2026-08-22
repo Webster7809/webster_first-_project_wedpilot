@@ -34,10 +34,15 @@ class InvitationGalleryScreen extends ConsumerWidget {
       showWedSnackBar(context, 'Publish this invitation first to share it.', type: SnackType.info);
       return;
     }
+    // A short, readable fallback for anyone who can't tap the link directly
+    // (read aloud over the phone, retyped from a screenshot) — the same
+    // share_token the link itself already carries, just reformatted.
+    final code = 'WDP-${invitation.shareToken.substring(0, 6).toUpperCase()}';
     shareWithFallback(
       context,
       text: 'You\'re invited to celebrate our wedding! 💍\n\n'
-          'View our invitation here: ${invitation.shareUrl}',
+          'View our invitation here: ${invitation.shareUrl}\n'
+          'Invitation code: $code',
       subject: 'Wedding Invitation',
     );
   }

@@ -46,6 +46,7 @@ class InvitationApiService {
     String? phone,
     String? relation,
     String? invitationId,
+    int? maxPartySize,
   }) async {
     try {
       await _dio.post(
@@ -56,6 +57,7 @@ class InvitationApiService {
           'phone': phone,
           'relation': relation,
           'invitationId': invitationId,
+          'maxPartySize': maxPartySize,
         },
         options: _auth(accessToken),
       );
@@ -72,11 +74,18 @@ class InvitationApiService {
     String? email,
     String? phone,
     String? relation,
+    int? maxPartySize,
   }) async {
     try {
       await _dio.patch(
         '/api/guests/$id',
-        data: {'name': name, 'email': email, 'phone': phone, 'relation': relation},
+        data: {
+          'name': name,
+          'email': email,
+          'phone': phone,
+          'relation': relation,
+          'maxPartySize': maxPartySize,
+        },
         options: _auth(accessToken),
       );
       return null;
@@ -215,6 +224,20 @@ class InvitationApiService {
     }
   }
 
+  /// Couple-initiated edits only — see [RsvpHistoryEntry].
+  Future<List<RsvpHistoryEntry>> fetchRsvpHistory(String accessToken, String rsvpId) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/guests/responses/$rsvpId/history',
+        options: _auth(accessToken),
+      );
+      final list = (response.data?['history'] as List?) ?? [];
+      return list.map((h) => RsvpHistoryEntry.fromJson(h as Map<String, dynamic>)).toList();
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
   // ── Invitations (couple-side) ─────────────────────────────────────────────────
 
   Future<List<Invitation>> fetchInvitations(String accessToken) async {
@@ -298,13 +321,153 @@ class InvitationApiService {
     }
   }
 
+  // ── Meal options (couple-side) ────────────────────────────────────────────────
+
+  Future<List<MealOption>> fetchMealOptions(String accessToken, String invitationId) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/invitations/$invitationId/meal-options',
+        options: _auth(accessToken),
+      );
+      final list = (response.data?['meal_options'] as List?) ?? [];
+      return list.map((o) => MealOption.fromJson(o as Map<String, dynamic>)).toList();
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
+  Future<MealOption> addMealOption(String accessToken, String invitationId, String label) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/invitations/$invitationId/meal-options',
+        data: {'label': label},
+        options: _auth(accessToken),
+      );
+      return MealOption.fromJson(response.data?['meal_option'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
+  Future<MealOption> editMealOption(String accessToken, String optionId, String label) async {
+    try {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/api/invitations/meal-options/$optionId',
+        data: {'label': label},
+        options: _auth(accessToken),
+      );
+      return MealOption.fromJson(response.data?['meal_option'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
+  Future<void> deleteMealOption(String accessToken, String optionId) async {
+    try {
+      await _dio.delete('/api/invitations/meal-options/$optionId', options: _auth(accessToken));
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
+  // ── Custom RSVP questions (couple-side) ───────────────────────────────────────
+
+  Future<List<RsvpQuestion>> fetchRsvpQuestions(String accessToken, String invitationId) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/invitations/$invitationId/rsvp-questions',
+        options: _auth(accessToken),
+      );
+      final list = (response.data?['rsvp_questions'] as List?) ?? [];
+      return list.map((q) => RsvpQuestion.fromJson(q as Map<String, dynamic>)).toList();
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
+  Future<RsvpQuestion> addRsvpQuestion(
+    String accessToken,
+    String invitationId, {
+    required String questionText,
+    required RsvpQuestionType type,
+    List<String>? options,
+    bool isRequired = false,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/invitations/$invitationId/rsvp-questions',
+        data: {
+          'questionText': questionText,
+          'type': questionTypeToWire(type),
+          'options': options,
+          'isRequired': isRequired,
+        },
+        options: _auth(accessToken),
+      );
+      return RsvpQuestion.fromJson(response.data?['rsvp_question'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
+  Future<RsvpQuestion> editRsvpQuestion(
+    String accessToken,
+    String questionId, {
+    required String questionText,
+    required RsvpQuestionType type,
+    List<String>? options,
+    bool isRequired = false,
+    bool isEnabled = true,
+  }) async {
+    try {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/api/invitations/rsvp-questions/$questionId',
+        data: {
+          'questionText': questionText,
+          'type': questionTypeToWire(type),
+          'options': options,
+          'isRequired': isRequired,
+          'isEnabled': isEnabled,
+        },
+        options: _auth(accessToken),
+      );
+      return RsvpQuestion.fromJson(response.data?['rsvp_question'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
+  Future<RsvpQuestion> toggleRsvpQuestionEnabled(String accessToken, String questionId, bool isEnabled) async {
+    try {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/api/invitations/rsvp-questions/$questionId',
+        data: {'isEnabled': isEnabled},
+        options: _auth(accessToken),
+      );
+      return RsvpQuestion.fromJson(response.data?['rsvp_question'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
+  /// Throws [InvitationApiException] with a 409 message ("guests have
+  /// already answered...") when the question has any answers — the caller
+  /// should fall back to [toggleRsvpQuestionEnabled] instead.
+  Future<void> deleteRsvpQuestion(String accessToken, String questionId) async {
+    try {
+      await _dio.delete('/api/invitations/rsvp-questions/$questionId', options: _auth(accessToken));
+    } on DioException catch (e) {
+      throw InvitationApiException(_extractError(e));
+    }
+  }
+
   // ── Public, unauthenticated guest-facing endpoints ────────────────────────────
 
   /// Returns `null` if no published invitation exists for this token (404 — expected).
-  Future<Invitation?> fetchPublicInvitation(String shareToken) async {
+  Future<PublicInvitationView?> fetchPublicInvitation(String shareToken) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>('/api/invitations/public/$shareToken');
-      return Invitation.fromJson(response.data?['invitation'] as Map<String, dynamic>);
+      return PublicInvitationView.fromJson(response.data!);
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) return null;
       throw InvitationApiException(_extractError(e));
@@ -317,7 +480,10 @@ class InvitationApiService {
     String? email,
     required AttendingStatus attending,
     required int guestCount,
+    String? mealPreference,
+    String? dietaryNotes,
     String? message,
+    List<RsvpAnswerInput>? answers,
   }) async {
     try {
       await _dio.post(
@@ -327,7 +493,10 @@ class InvitationApiService {
           'email': email,
           'attending': attending.name,
           'guestCount': guestCount,
+          'mealPreference': mealPreference,
+          'dietaryNotes': dietaryNotes,
           'message': message,
+          'answers': answers?.map((a) => a.toJson()).toList(),
         },
       );
     } on DioException catch (e) {
@@ -347,14 +516,17 @@ class InvitationApiService {
     }
   }
 
-  /// Submits an RSVP through a guest's personal invite link. Throws
-  /// [InvitationApiException] with a 409 message if this guest has already
-  /// responded through this link.
+  /// Submits an RSVP through a guest's personal invite link. Safe to call
+  /// again later to update a previous answer — the server upserts rather
+  /// than rejecting a second submission through this same personal link.
   Future<void> submitGuestInviteRsvp(
     String inviteToken, {
     required AttendingStatus attending,
     required int guestCount,
+    String? mealPreference,
+    String? dietaryNotes,
     String? message,
+    List<RsvpAnswerInput>? answers,
   }) async {
     try {
       await _dio.post(
@@ -362,7 +534,10 @@ class InvitationApiService {
         data: {
           'attending': attending.name,
           'guestCount': guestCount,
+          'mealPreference': mealPreference,
+          'dietaryNotes': dietaryNotes,
           'message': message,
+          'answers': answers?.map((a) => a.toJson()).toList(),
         },
       );
     } on DioException catch (e) {

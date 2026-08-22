@@ -48,6 +48,15 @@ const Guest = sequelize.define('Guest', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  // Upper bound on how many people this one invitation covers (a family/
+  // group RSVP) — null means uncapped, since pre-existing guests never had
+  // one set. Enforced against `guestCount` on every RSVP submission; see
+  // migrations/013_guest_max_party_size.js.
+  max_party_size: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    validate: { min: 1, max: 20 },
+  },
   checked_in: {
     type: DataTypes.BOOLEAN,
     allowNull: false,

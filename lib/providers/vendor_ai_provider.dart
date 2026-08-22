@@ -16,6 +16,7 @@ import '../core/utils/geo_utils.dart';
 import 'auth_provider.dart';
 import 'booking_provider.dart';
 import 'budget_provider.dart';
+import 'invitation_provider.dart' show effectiveGuestCountProvider;
 import 'vendor_provider.dart';
 
 export '../models/budget_class.dart';
@@ -132,9 +133,13 @@ final vendorMatchValidationProvider =
   final locationString = (wizardLocation != null && wizardLocation.isNotEmpty)
       ? wizardLocation
       : coupleProfile?.location;
+  // A fresh guest count typed into the wizard right now always wins (the
+  // couple is actively telling this run what to use); otherwise prefer the
+  // real confirmed RSVP total over the stale onboarding estimate once any
+  // RSVPs exist — see effectiveGuestCountProvider.
   final guestCount = (wizardGuestCount != null && wizardGuestCount > 0)
       ? wizardGuestCount
-      : coupleProfile?.guestCount;
+      : ref.watch(effectiveGuestCountProvider);
   timer.lap('Input validation');
 
   // Fetches only the couple's requested categories, filtered at the DB query
@@ -538,7 +543,7 @@ final aiRecommendedVendorsProvider =
   final wizardGuestCount = ref.watch(wizardGuestCountProvider);
   final guestCount = (wizardGuestCount != null && wizardGuestCount > 0)
       ? wizardGuestCount
-      : coupleProfile?.guestCount;
+      : ref.watch(effectiveGuestCountProvider);
 
   final validation = await ref.watch(vendorMatchValidationProvider.future);
   timer.lap('Validation pipeline (breakdown logged separately above)');

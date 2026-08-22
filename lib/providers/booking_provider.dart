@@ -14,12 +14,29 @@ final myBookingsProvider = FutureProvider<List<Inquiry>>((ref) async {
   return VendorApiService.instance.fetchMyBookings(token);
 });
 
+/// Resolves each id to its full profile via an individual fetch (not subject
+/// to the vendor directory's page cap), silently dropping any that fail to
+/// load rather than failing the whole list for one bad vendor.
+Future<List<VendorProfile>> _resolveVendorProfiles(
+  String token,
+  Set<String> vendorIds,
+) async {
+  if (vendorIds.isEmpty) return [];
+  final results = await Future.wait(
+    vendorIds.map((id) async {
+      try {
+        return await VendorApiService.instance.fetchVendorDetail(token, id);
+      } catch (_) {
+        return null;
+      }
+    }),
+  );
+  return results.whereType<VendorProfile>().toList();
+}
+
 /// Vendors the couple can actually leave feedback for right now — mirrors
 /// the same `canRate` rule shown on my_bookings_screen.dart's "Rate this
-/// vendor" button (status booked, service marked done, not yet rated) —
-/// resolved to full profiles the same individual-fetch way
-/// wishlistedVendorsProvider does, so this is never subject to the vendor
-/// directory's page cap and never confuses "booked" with "wishlisted."
+/// vendor" button (status booked, service marked done, not yet rated).
 final rateableVendorsProvider = FutureProvider<List<VendorProfile>>((ref) async {
   final token = ref.watch(authProvider.notifier).accessToken;
   if (token == null) return [];
@@ -31,18 +48,22 @@ final rateableVendorsProvider = FutureProvider<List<VendorProfile>>((ref) async 
           !b.hasFeedback)
         b.vendorId,
   };
-  if (vendorIds.isEmpty) return [];
+  return _resolveVendorProfiles(token, vendorIds);
+});
 
-  final results = await Future.wait(
-    vendorIds.map((id) async {
-      try {
-        return await VendorApiService.instance.fetchVendorDetail(token, id);
-      } catch (_) {
-        return null;
-      }
-    }),
-  );
-  return results.whereType<VendorProfile>().toList();
+/// Full profiles of every vendor the couple has actually booked (status ==
+/// booked, regardless of feedback state) — used to compare each vendor's
+/// stated capacity against the couple's confirmed RSVP headcount on the RSVP
+/// dashboard (see effectiveGuestCountProvider).
+final bookedVendorsProvider = FutureProvider<List<VendorProfile>>((ref) async {
+  final token = ref.watch(authProvider.notifier).accessToken;
+  if (token == null) return [];
+  final bookings = await ref.watch(myBookingsProvider.future);
+  final vendorIds = {
+    for (final b in bookings)
+      if (b.status == InquiryStatus.booked) b.vendorId,
+  };
+  return _resolveVendorProfiles(token, vendorIds);
 });
 
 /// Vendors the couple currently has a live request with, keyed by vendor id —

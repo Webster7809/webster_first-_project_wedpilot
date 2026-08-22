@@ -1,15 +1,30 @@
 const crypto = require('crypto');
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { Op } = require('sequelize');
 const Guest = require('../db/models/guest');
 const Invitation = require('../db/models/invitation');
 const RsvpResponse = require('../db/models/rsvpResponse');
+const RsvpQuestion = require('../db/models/rsvpQuestion');
+const RsvpAnswer = require('../db/models/rsvpAnswer');
+const RsvpHistory = require('../db/models/rsvpHistory');
 const verifyJwt = require('../middleware/verifyJwt');
 const { requireCouple } = require('../middleware/roles');
 const { generateCardNumber } = require('../services/guestCardNumber');
 
 const router = express.Router();
 router.use(verifyJwt, requireCouple);
+
+// Generous enough for a real door check-in rush, tight enough to slow down
+// brute-forcing card numbers even from a compromised couple session — same
+// pattern as authLimiter/passwordResetLimiter in routes/auth.js.
+const checkinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many check-in attempts. Please wait a few minutes and try again.' },
+});
 
 // ── Serialization ────────────────────────────────────────────────────────────────
 
@@ -33,6 +48,7 @@ function serializeGuest(g) {
     invite_token: g.invite_token,
     invite_url: g.invite_token ? `${PUBLIC_WEB_BASE_URL}/g/${g.invite_token}` : null,
     card_number: g.card_number,
+    max_party_size: g.max_party_size,
     checked_in: g.checked_in,
     checked_in_at: g.checked_in_at,
   };
@@ -42,7 +58,7 @@ function generateInviteToken() {
   return crypto.randomBytes(8).toString('hex');
 }
 
-function serializeRsvp(r, guestName) {
+function serializeRsvp(r, guestName, answers = []) {
   return {
     rsvp_id: r.rsvp_id,
     invitation_id: r.invitation_id,
@@ -54,16 +70,46 @@ function serializeRsvp(r, guestName) {
     dietary_notes: r.dietary_notes,
     message: r.message,
     responded_at: r.responded_at,
+    answers,
   };
 }
 
-/// Batch-resolves each response's guest's current name.
+/// Batch-resolves each response's guest's current name, and (for the
+/// dashboard's per-question tally) each response's custom-question answers
+/// with their question text/type resolved alongside.
 async function serializeRsvps(responses) {
   if (responses.length === 0) return [];
   const guestIds = [...new Set(responses.map((r) => r.guest_id))];
-  const guests = await Guest.findAll({ where: { guest_id: { [Op.in]: guestIds } } });
+  const rsvpIds = responses.map((r) => r.rsvp_id);
+  const [guests, allAnswers] = await Promise.all([
+    Guest.findAll({ where: { guest_id: { [Op.in]: guestIds } } }),
+    RsvpAnswer.findAll({ where: { rsvp_id: { [Op.in]: rsvpIds } } }),
+  ]);
   const nameById = new Map(guests.map((g) => [g.guest_id, g.name]));
-  return responses.map((r) => serializeRsvp(r, nameById.get(r.guest_id) ?? null));
+
+  const questionIds = [...new Set(allAnswers.map((a) => a.question_id))];
+  const questions = questionIds.length
+    ? await RsvpQuestion.findAll({ where: { question_id: { [Op.in]: questionIds } } })
+    : [];
+  const questionById = new Map(questions.map((q) => [q.question_id, q]));
+
+  const answersByRsvpId = new Map();
+  for (const a of allAnswers) {
+    const question = questionById.get(a.question_id);
+    if (!question) continue; // orphaned by a hard-deleted question; skip
+    const list = answersByRsvpId.get(a.rsvp_id) ?? [];
+    list.push({
+      question_id: a.question_id,
+      question_text: question.question_text,
+      type: question.type,
+      answer_text: a.answer_text,
+      answer_json: a.answer_json,
+    });
+    answersByRsvpId.set(a.rsvp_id, list);
+  }
+
+  return responses.map((r) =>
+    serializeRsvp(r, nameById.get(r.guest_id) ?? null, answersByRsvpId.get(r.rsvp_id) ?? []));
 }
 
 function validateGuestInput({ name, email, phone }) {
@@ -74,6 +120,17 @@ function validateGuestInput({ name, email, phone }) {
   }
   if (phone && phone.trim() && phone.trim().length < 7) {
     return 'Enter a valid phone number (at least 7 digits).';
+  }
+  return null;
+}
+
+// null/undefined means "uncapped" and is always valid — only a stated value
+// out of range is rejected.
+function validateMaxPartySize(maxPartySize) {
+  if (maxPartySize === undefined || maxPartySize === null || maxPartySize === '') return null;
+  const n = Number(maxPartySize);
+  if (!Number.isInteger(n) || n < 1 || n > 20) {
+    return 'Max party size must be a whole number between 1 and 20.';
   }
   return null;
 }
@@ -92,8 +149,8 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, email, phone, relation, invitationId } = req.body;
-    const error = validateGuestInput({ name, email, phone });
+    const { name, email, phone, relation, invitationId, maxPartySize } = req.body;
+    const error = validateGuestInput({ name, email, phone }) || validateMaxPartySize(maxPartySize);
     if (error) return res.status(400).json({ error });
 
     const duplicate = await Guest.findOne({
@@ -125,6 +182,7 @@ router.post('/', async (req, res) => {
       relation: relation && relation.trim() ? relation.trim() : null,
       is_invited: true,
       card_number: await generateCardNumber(),
+      max_party_size: maxPartySize ? Number(maxPartySize) : null,
       invite_token,
       invite_invitation_id,
     });
@@ -140,8 +198,8 @@ router.patch('/:id', async (req, res) => {
     const guest = await Guest.findOne({ where: { guest_id: req.params.id, couple_user_id: req.user.user_id } });
     if (!guest) return res.status(404).json({ error: 'Guest not found.' });
 
-    const { name, email, phone, relation } = req.body;
-    const error = validateGuestInput({ name, email, phone });
+    const { name, email, phone, relation, maxPartySize } = req.body;
+    const error = validateGuestInput({ name, email, phone }) || validateMaxPartySize(maxPartySize);
     if (error) return res.status(400).json({ error });
 
     const duplicate = await Guest.findOne({
@@ -157,6 +215,7 @@ router.patch('/:id', async (req, res) => {
     guest.email = email && email.trim() ? email.trim() : null;
     guest.phone = phone && phone.trim() ? phone.trim() : null;
     guest.relation = relation && relation.trim() ? relation.trim() : null;
+    guest.max_party_size = maxPartySize ? Number(maxPartySize) : null;
     await guest.save();
     res.json({ guest: serializeGuest(guest) });
   } catch (err) {
@@ -226,7 +285,7 @@ router.post('/:id/invite-link', async (req, res) => {
 // here, so a card number only ever resolves within the couple checking it in,
 // never across weddings.
 
-router.post('/checkin', async (req, res) => {
+router.post('/checkin', checkinLimiter, async (req, res) => {
   try {
     const { cardNumber } = req.body;
     if (!cardNumber || !String(cardNumber).trim()) {
@@ -306,6 +365,11 @@ router.post('/:id/rsvp', async (req, res) => {
     }
     if (count > 20) return res.status(400).json({ error: 'Guest count seems unrealistically high (max 20).' });
     if (count < 0) return res.status(400).json({ error: 'Guest count cannot be negative.' });
+    if (guest.max_party_size && count > guest.max_party_size) {
+      return res.status(400).json({
+        error: `This invitation is for a maximum of ${guest.max_party_size} people.`,
+      });
+    }
 
     const existing = await RsvpResponse.findOne({ where: { guest_id: guest.guest_id } });
     const values = {
@@ -320,6 +384,12 @@ router.post('/:id/rsvp', async (req, res) => {
       responded_at: new Date(),
     };
 
+    // Captured before .update() below, which mutates `existing` in place —
+    // reading these fields off it afterward would silently record "no
+    // change" (previous == new) on every edit.
+    const previousStatus = existing?.attending ?? null;
+    const previousGuestCount = existing?.guest_count ?? null;
+
     let rsvp;
     if (existing) {
       await existing.update(values);
@@ -327,6 +397,20 @@ router.post('/:id/rsvp', async (req, res) => {
     } else {
       rsvp = await RsvpResponse.create(values);
     }
+
+    // Couple-initiated (manual guest-list entry), so it's logged — unlike a
+    // guest editing their own RSVP through their link, this is staff
+    // intervention worth a paper trail.
+    await RsvpHistory.create({
+      rsvp_id: rsvp.rsvp_id,
+      changed_by_user_id: req.user.user_id,
+      previous_status: previousStatus,
+      new_status: values.attending,
+      previous_guest_count: previousGuestCount,
+      new_guest_count: values.guest_count,
+      changed_at: new Date(),
+    });
+
     res.status(201).json({ rsvp: serializeRsvp(rsvp, guest.name) });
   } catch (err) {
     console.error('Submit RSVP error:', err.message);
@@ -355,15 +439,57 @@ router.patch('/responses/:rsvpId', async (req, res) => {
     if (!['yes', 'no', 'maybe'].includes(attending)) {
       return res.status(400).json({ error: 'attending must be "yes", "no", or "maybe".' });
     }
+    const previousStatus = rsvp.attending;
+    const previousGuestCount = rsvp.guest_count;
     rsvp.attending = attending;
     if (attending === 'no') rsvp.guest_count = 0;
     rsvp.responded_at = new Date();
     await rsvp.save();
+
+    await RsvpHistory.create({
+      rsvp_id: rsvp.rsvp_id,
+      changed_by_user_id: req.user.user_id,
+      previous_status: previousStatus,
+      new_status: rsvp.attending,
+      previous_guest_count: previousGuestCount,
+      new_guest_count: rsvp.guest_count,
+      changed_at: new Date(),
+    });
+
     const [serialized] = await serializeRsvps([rsvp]);
     res.json({ rsvp: serialized });
   } catch (err) {
     console.error('Update RSVP status error:', err.message);
     res.status(500).json({ error: 'Could not update RSVP.' });
+  }
+});
+
+// Couple-initiated edits only (see RsvpHistory.create() calls above) — a
+// guest revising their own RSVP through their link is never logged here.
+router.get('/responses/:rsvpId/history', async (req, res) => {
+  try {
+    const rsvp = await RsvpResponse.findOne({
+      where: { rsvp_id: req.params.rsvpId, couple_user_id: req.user.user_id },
+    });
+    if (!rsvp) return res.status(404).json({ error: 'RSVP not found.' });
+
+    const rows = await RsvpHistory.findAll({
+      where: { rsvp_id: rsvp.rsvp_id },
+      order: [['changed_at', 'DESC']],
+    });
+    res.json({
+      history: rows.map((h) => ({
+        history_id: h.history_id,
+        previous_status: h.previous_status,
+        new_status: h.new_status,
+        previous_guest_count: h.previous_guest_count,
+        new_guest_count: h.new_guest_count,
+        changed_at: h.changed_at,
+      })),
+    });
+  } catch (err) {
+    console.error('List RSVP history error:', err.message);
+    res.status(500).json({ error: 'Could not load RSVP history.' });
   }
 });
 

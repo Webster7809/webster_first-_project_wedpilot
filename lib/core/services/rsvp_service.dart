@@ -56,11 +56,45 @@ class RsvpService {
     final totalAttending =
         attending.fold<int>(0, (sum, r) => sum + r.guestCount);
 
+    // guest_count is intentionally zeroed on a decline (see RsvpResponse),
+    // so "how many would have attended" comes from the invitation's own
+    // party-size cap instead — 1 when there is none, same default an
+    // uncapped ad-hoc guest gets everywhere else.
+    final guestById = {for (final g in guests) g.id: g};
+    final totalDeclining = declined.fold<int>(
+      0,
+      (sum, r) => sum + (guestById[r.guestId]?.maxPartySize ?? 1),
+    );
+
     final mealCounts = <String, int>{};
     for (final r in attending) {
       final meal = r.mealPreference;
       if (meal != null && meal.isNotEmpty) {
         mealCounts[meal] = (mealCounts[meal] ?? 0) + r.guestCount;
+      }
+    }
+
+    // Per-question tally for choice-type custom questions only (yes/no,
+    // single choice, multi choice) — free text/number answers don't group
+    // into meaningful counts the way a fixed option set does.
+    final questionTallies = <String, Map<String, int>>{};
+    for (final r in attending) {
+      for (final a in r.answers) {
+        final label = a.questionText;
+        if (label == null) continue;
+        if (a.type != RsvpQuestionType.yesNo &&
+            a.type != RsvpQuestionType.singleChoice &&
+            a.type != RsvpQuestionType.multiChoice) {
+          continue;
+        }
+        final selections = a.answerJson.isNotEmpty
+            ? a.answerJson
+            : (a.answerText != null && a.answerText!.isNotEmpty ? [a.answerText!] : const <String>[]);
+        if (selections.isEmpty) continue;
+        final tally = questionTallies.putIfAbsent(label, () => {});
+        for (final selection in selections) {
+          tally[selection] = (tally[selection] ?? 0) + r.guestCount;
+        }
       }
     }
 
@@ -79,7 +113,9 @@ class RsvpService {
       totalAttending: totalAttending,
       totalInvited: totalInvited,
       totalGuests: guests.length,
+      totalDeclining: totalDeclining,
       mealCounts: mealCounts,
+      questionTallies: questionTallies,
       responseRate: responseRate,
       acceptanceRate: acceptanceRate,
     );
@@ -96,7 +132,16 @@ class RsvpStats {
   final int totalAttending;
   final int totalInvited;
   final int totalGuests;
+
+  /// People who would have attended a declined invitation — guest_count is
+  /// zeroed on decline, so this comes from party-size caps instead. Used
+  /// only to explain why "attending + declining" can be less than invited.
+  final int totalDeclining;
   final Map<String, int> mealCounts;
+
+  /// Question text -> {answer label: guest count}, for choice-type custom
+  /// questions only (yes/no, single choice, multi choice).
+  final Map<String, Map<String, int>> questionTallies;
   final double responseRate;
   final double acceptanceRate;
 
@@ -108,7 +153,9 @@ class RsvpStats {
     required this.totalAttending,
     required this.totalInvited,
     required this.totalGuests,
+    this.totalDeclining = 0,
     required this.mealCounts,
+    this.questionTallies = const {},
     required this.responseRate,
     required this.acceptanceRate,
   });

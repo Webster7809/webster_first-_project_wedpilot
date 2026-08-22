@@ -9,6 +9,7 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/vendor_profile.dart';
+import '../../../providers/invitation_provider.dart' show effectiveGuestCountProvider;
 import '../../../providers/vendor_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/gold_rule.dart';
@@ -59,8 +60,10 @@ class _VendorDiscoveryScreenState extends ConsumerState<VendorDiscoveryScreen> {
         coupleProfile?.location?.split(',').first.trim() ?? 'your city';
     // 'Fits my guests' is only meaningful once the couple has a guest count
     // on file — a chip that silently does nothing (or filters against a
-    // number that doesn't exist) is worse than not offering it.
-    final guestCount = coupleProfile?.guestCount;
+    // number that doesn't exist) is worse than not offering it. Prefers the
+    // real confirmed RSVP total over the manual onboarding estimate once any
+    // RSVPs exist — see effectiveGuestCountProvider.
+    final guestCount = ref.watch(effectiveGuestCountProvider);
     final activeFilters = guestCount != null && guestCount > 0
         ? _kFilters
         : _kFilters.sublist(0, _kFilters.length - 1);
@@ -478,7 +481,7 @@ class _VendorDiscoveryScreenState extends ConsumerState<VendorDiscoveryScreen> {
   }
 
   List<VendorProfile> _applyFilter(List<VendorProfile> vendors) {
-    final guestCount = ref.read(coupleProfileProvider)?.guestCount;
+    final guestCount = ref.read(effectiveGuestCountProvider);
     return switch (_filterIndex) {
       1 => vendors.where((v) => v.priceMin > 0 && v.priceMin < 30000).toList(),
       2 => vendors.where((v) => v.isVerified).toList(),

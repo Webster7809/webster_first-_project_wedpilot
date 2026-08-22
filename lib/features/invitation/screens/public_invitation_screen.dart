@@ -10,6 +10,7 @@ import '../../../core/services/invitation_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/invitation.dart';
+import '../../../widgets/count_stepper.dart';
 import '../../../widgets/loading_shimmer.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
@@ -26,15 +27,34 @@ class PublicInvitationScreen extends StatefulWidget {
 class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  final _mealCtrl = TextEditingController();
+  final _dietaryCtrl = TextEditingController();
+  final _messageCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _loading = true;
   bool _submitting = false;
   bool _submitted = false;
   bool _alreadyResponded = false;
+  // True only while the guest is actively revising an already-submitted
+  // response (see "Update your RSVP") — keeps the success screen from
+  // covering the form back up the moment _alreadyResponded is true again.
+  bool _editingExisting = false;
   String? _guestName;
   String? _error;
   Invitation? _invitation;
+  List<MealOption> _mealOptions = const [];
+  List<RsvpQuestion> _rsvpQuestions = const [];
+  // Keyed by RsvpQuestion.id. Values are String for
+  // yes_no/single_choice/short_text/long_text/number, List<String> for
+  // multi_choice — matches what _QuestionField reads/writes for its type.
+  Map<String, dynamic> _answerValues = {};
   AttendingStatus _attending = AttendingStatus.yes;
+  int _guestCount = 1;
+
+  /// Upper bound on party size for this specific guest link — null means
+  /// either uncapped or (for the broadcast link) simply unknown until a name
+  /// is typed, in which case the server has the final say on submit.
+  int? _maxPartySize;
 
   bool get _isGuestLink => widget.inviteToken != null;
 
@@ -57,18 +77,31 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
         setState(() {
           _invitation = result?.invitation;
           _guestName = result?.guestName;
+          _maxPartySize = result?.maxPartySize;
+          _mealOptions = result?.mealOptions ?? const [];
+          _rsvpQuestions = result?.rsvpQuestions ?? const [];
           _alreadyResponded = result?.alreadyResponded ?? false;
           if (_guestName != null) _nameCtrl.text = _guestName!;
-          if (_alreadyResponded && result?.respondedAttending != null) {
-            _attending = result!.respondedAttending!;
+          if (_alreadyResponded) {
+            if (result?.respondedAttending != null) _attending = result!.respondedAttending!;
+            _guestCount = result?.respondedGuestCount ?? 1;
+            _mealCtrl.text = result?.respondedMealPreference ?? '';
+            _dietaryCtrl.text = result?.respondedDietaryNotes ?? '';
+            _messageCtrl.text = result?.respondedMessage ?? '';
+            _answerValues = {
+              for (final a in result?.respondedAnswers ?? const <RsvpAnswer>[])
+                a.questionId: a.answerJson.isNotEmpty ? a.answerJson : a.answerText,
+            };
           }
           _loading = false;
         });
       } else {
-        final invitation = await InvitationApiService.instance.fetchPublicInvitation(widget.shareToken!);
+        final view = await InvitationApiService.instance.fetchPublicInvitation(widget.shareToken!);
         if (!mounted) return;
         setState(() {
-          _invitation = invitation;
+          _invitation = view?.invitation;
+          _mealOptions = view?.mealOptions ?? const [];
+          _rsvpQuestions = view?.rsvpQuestions ?? const [];
           _loading = false;
         });
       }
@@ -93,6 +126,18 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
         (s) => s.name == attending,
         orElse: () => _attending,
       );
+      final count = draft['guestCount'] as int?;
+      if (count != null) _guestCount = count;
+      final meal = draft['meal'] as String?;
+      if (meal != null) _mealCtrl.text = meal;
+      final dietary = draft['dietary'] as String?;
+      if (dietary != null) _dietaryCtrl.text = dietary;
+      final message = draft['message'] as String?;
+      if (message != null) _messageCtrl.text = message;
+      final answers = draft['answers'];
+      if (answers is Map) {
+        _answerValues = answers.map((k, v) => MapEntry(k as String, v is List ? v.cast<String>() : v));
+      }
     });
   }
 
@@ -100,18 +145,67 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
+    _mealCtrl.dispose();
+    _dietaryCtrl.dispose();
+    _messageCtrl.dispose();
     super.dispose();
+  }
+
+  /// Mirrors the server's own required-question check (skipped when
+  /// declining) so a guest sees the problem immediately rather than after a
+  /// round trip. Returns the question text of the first unanswered required
+  /// question, or null if everything required is filled in.
+  String? _firstMissingRequiredQuestion() {
+    if (_attending == AttendingStatus.no) return null;
+    for (final q in _rsvpQuestions) {
+      if (!q.isRequired) continue;
+      final value = _answerValues[q.id];
+      final hasValue = value is List ? value.isNotEmpty : (value is String && value.trim().isNotEmpty);
+      if (!hasValue) return q.questionText;
+    }
+    return null;
+  }
+
+  List<RsvpAnswerInput> _buildAnswerInputs() {
+    final inputs = <RsvpAnswerInput>[];
+    for (final q in _rsvpQuestions) {
+      final value = _answerValues[q.id];
+      if (q.type == RsvpQuestionType.multiChoice) {
+        if (value is List && value.isNotEmpty) {
+          inputs.add(RsvpAnswerInput(questionId: q.id, answerJson: value.cast<String>()));
+        }
+      } else if (value is String && value.trim().isNotEmpty) {
+        inputs.add(RsvpAnswerInput(questionId: q.id, answerText: value.trim()));
+      }
+    }
+    return inputs;
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final missing = _firstMissingRequiredQuestion();
+    if (missing != null) {
+      setState(() => _error = 'Please answer: $missing');
+      return;
+    }
     setState(() { _submitting = true; _error = null; });
+    final meal = _mealCtrl.text.trim().isEmpty ? null : _mealCtrl.text.trim();
+    final dietary = _dietaryCtrl.text.trim().isEmpty ? null : _dietaryCtrl.text.trim();
+    final message = _messageCtrl.text.trim().isEmpty ? null : _messageCtrl.text.trim();
+    final answers = _buildAnswerInputs();
+    // Declining never sends a party size — the stepper is for "how many of
+    // us are coming," which is meaningless once the answer is no.
+    final count = _attending == AttendingStatus.no ? 1 : _guestCount;
     try {
       if (_isGuestLink) {
         await InvitationApiService.instance.submitGuestInviteRsvp(
           widget.inviteToken!,
           attending: _attending,
-          guestCount: 1,
+          guestCount: count,
+          mealPreference: meal,
+          dietaryNotes: dietary,
+          message: message,
+          answers: answers,
         );
       } else {
         await InvitationApiService.instance.submitPublicRsvp(
@@ -119,20 +213,20 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           name: _nameCtrl.text.trim(),
           email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
           attending: _attending,
-          guestCount: 1,
+          guestCount: count,
+          mealPreference: meal,
+          dietaryNotes: dietary,
+          message: message,
+          answers: answers,
         );
       }
       await _draftBox.delete(_draftKey);
-      if (mounted) setState(() { _submitting = false; _submitted = true; });
+      if (mounted) {
+        setState(() { _submitting = false; _submitted = true; _alreadyResponded = true; _editingExisting = false; });
+      }
     } on InvitationApiException catch (e) {
       if (!mounted) return;
-      if (e.message == 'You have already responded to this invitation.') {
-        // Rare double-submit race (e.g. double-tap): treat identically to
-        // having loaded in an already-responded state.
-        setState(() { _submitting = false; _alreadyResponded = true; });
-      } else {
-        setState(() { _submitting = false; _error = e.message; });
-      }
+      setState(() { _submitting = false; _error = e.message; });
     }
   }
 
@@ -171,7 +265,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
     }
 
     final data = _invitation!.customData;
-    final showSuccess = _submitted || _alreadyResponded;
+    final showSuccess = (_submitted || _alreadyResponded) && !_editingExisting;
     final accentColor = _accentColorFrom(data);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -414,14 +508,34 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
             formKey: _formKey,
             nameCtrl: _nameCtrl,
             emailCtrl: _emailCtrl,
+            mealCtrl: _mealCtrl,
+            dietaryCtrl: _dietaryCtrl,
+            messageCtrl: _messageCtrl,
             rsvpBy: rsvpBy,
             attending: _attending,
             onAttendingChanged: (v) => setState(() => _attending = v),
+            guestCount: _guestCount,
+            maxPartySize: _maxPartySize,
+            onGuestCountChanged: (v) => setState(() => _guestCount = v),
+            mealOptions: _mealOptions,
+            rsvpQuestions: _rsvpQuestions,
+            answerValues: _answerValues,
+            onAnswerChanged: (id, value) => setState(() => _answerValues[id] = value),
             error: _error,
             showEmailField: !_isGuestLink,
             readOnlyName: _isGuestLink,
+            hideGuestCountStepper: _isGuestLink && _maxPartySize == 1,
             accentColor: accentColor,
           ),
+          if (_editingExisting) ...[
+            const SizedBox(height: 12),
+            Center(
+              child: TextButton(
+                onPressed: () => setState(() => _editingExisting = false),
+                child: const Text('Cancel'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -467,6 +581,19 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
             ),
             textAlign: TextAlign.center,
           ),
+          // Only the personal link has server-verified existing-response data
+          // to edit from — the broadcast link's "already responded" is
+          // tracked client-side only (see _loadDraft), so it has nothing
+          // reliable to pre-fill an edit from.
+          if (_isGuestLink) ...[
+            const SizedBox(height: 20),
+            TextButton.icon(
+              onPressed: () => setState(() => _editingExisting = true),
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('Update your RSVP'),
+              style: TextButton.styleFrom(foregroundColor: AppColors.forestGreen),
+            ),
+          ],
         ],
       ),
     );
@@ -479,6 +606,11 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
       'name': _nameCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
       'attending': _attending.name,
+      'guestCount': _guestCount,
+      'meal': _mealCtrl.text.trim(),
+      'dietary': _dietaryCtrl.text.trim(),
+      'message': _messageCtrl.text.trim(),
+      'answers': _answerValues,
     });
     if (context.mounted) {
       showWedSnackBar(context, 'Draft saved', type: SnackType.success);
@@ -678,30 +810,267 @@ class _MessageCard extends StatelessWidget {
   }
 }
 
+// ── Shared field decoration ───────────────────────────────────────────────────
+
+InputDecoration _rsvpFieldDec(String hint) => InputDecoration(
+      hintText: hint,
+      hintStyle: GoogleFonts.inter(fontSize: 14, color: AppColors.textHint),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.divider),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.divider),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.forestGreen, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    );
+
+// Shown when the couple hasn't configured any meal options for this
+// invitation — a reasonable default rather than showing nothing.
+const _kDefaultMealOptions = ['Chicken', 'Beef', 'Vegetarian'];
+
+// ── Meal preference: chip choices sourced from the couple's configured
+// options (or the default set above), with an "Other" chip that reveals a
+// free-text field — never hard-coded as the only way to answer. ──────────────
+
+class _MealChoiceField extends StatefulWidget {
+  final List<String> options;
+  final TextEditingController controller;
+  const _MealChoiceField({required this.options, required this.controller});
+
+  @override
+  State<_MealChoiceField> createState() => _MealChoiceFieldState();
+}
+
+class _MealChoiceFieldState extends State<_MealChoiceField> {
+  late bool _custom = widget.controller.text.isNotEmpty &&
+      !widget.options.contains(widget.controller.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final option in widget.options)
+              _chip(
+                option,
+                selected: !_custom && widget.controller.text == option,
+                onTap: () => setState(() {
+                  _custom = false;
+                  widget.controller.text = option;
+                }),
+              ),
+            _chip(
+              'Other',
+              selected: _custom,
+              onTap: () => setState(() {
+                _custom = true;
+                widget.controller.clear();
+              }),
+            ),
+          ],
+        ),
+        if (_custom) ...[
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: widget.controller,
+            decoration: _rsvpFieldDec('Enter your meal preference'),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _chip(String label, {required bool selected, required VoidCallback onTap}) {
+    return Material(
+      color: selected ? AppColors.forestGreen.withAlpha(23) : AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: selected ? AppColors.forestGreen : AppColors.divider,
+          width: selected ? 1.5 : 1,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12.5,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? AppColors.forestGreen : AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Custom RSVP question: one input per RsvpQuestionType ─────────────────────
+
+class _QuestionField extends StatelessWidget {
+  final RsvpQuestion question;
+
+  /// String for yes_no/single_choice/short_text/long_text/number;
+  /// `List<String>` for multi_choice.
+  final dynamic value;
+  final ValueChanged<dynamic> onChanged;
+  final Color accentColor;
+
+  const _QuestionField({
+    required this.question,
+    required this.value,
+    required this.onChanged,
+    required this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    switch (question.type) {
+      case RsvpQuestionType.yesNo:
+        return Row(
+          children: [
+            Expanded(child: _choiceChip('Yes', value == 'Yes', () => onChanged('Yes'))),
+            const SizedBox(width: 8),
+            Expanded(child: _choiceChip('No', value == 'No', () => onChanged('No'))),
+          ],
+        );
+      case RsvpQuestionType.singleChoice:
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final option in question.options)
+              _choiceChip(option, value == option, () => onChanged(option)),
+          ],
+        );
+      case RsvpQuestionType.multiChoice:
+        final selected = (value is List ? value.cast<String>() : const <String>[]);
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final option in question.options)
+              _choiceChip(option, selected.contains(option), () {
+                final next = List<String>.from(selected);
+                next.contains(option) ? next.remove(option) : next.add(option);
+                onChanged(next);
+              }),
+          ],
+        );
+      case RsvpQuestionType.number:
+        return TextFormField(
+          key: ValueKey(question.id),
+          initialValue: value is String ? value : null,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: _rsvpFieldDec('Enter a number'),
+          onChanged: onChanged,
+        );
+      case RsvpQuestionType.longText:
+        return TextFormField(
+          key: ValueKey(question.id),
+          initialValue: value is String ? value : null,
+          maxLines: 3,
+          decoration: _rsvpFieldDec('Your answer'),
+          onChanged: onChanged,
+        );
+      case RsvpQuestionType.shortText:
+        return TextFormField(
+          key: ValueKey(question.id),
+          initialValue: value is String ? value : null,
+          decoration: _rsvpFieldDec('Your answer'),
+          onChanged: onChanged,
+        );
+    }
+  }
+
+  Widget _choiceChip(String label, bool selected, VoidCallback onTap) {
+    return Material(
+      color: selected ? accentColor.withAlpha(23) : AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: selected ? accentColor : AppColors.divider, width: selected ? 1.5 : 1),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 12.5,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? accentColor : AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── RSVP form card ────────────────────────────────────────────────────────────
 
 class _RsvpFormCard extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController nameCtrl;
   final TextEditingController emailCtrl;
+  final TextEditingController mealCtrl;
+  final TextEditingController dietaryCtrl;
+  final TextEditingController messageCtrl;
   final String? rsvpBy;
   final AttendingStatus attending;
   final ValueChanged<AttendingStatus> onAttendingChanged;
+  final int guestCount;
+  final int? maxPartySize;
+  final ValueChanged<int> onGuestCountChanged;
+  final List<MealOption> mealOptions;
+  final List<RsvpQuestion> rsvpQuestions;
+  final Map<String, dynamic> answerValues;
+  final void Function(String questionId, dynamic value) onAnswerChanged;
   final String? error;
   final bool showEmailField;
   final bool readOnlyName;
+  final bool hideGuestCountStepper;
   final Color accentColor;
 
   const _RsvpFormCard({
     required this.formKey,
     required this.nameCtrl,
     required this.emailCtrl,
+    required this.mealCtrl,
+    required this.dietaryCtrl,
+    required this.messageCtrl,
     required this.rsvpBy,
     required this.attending,
     required this.onAttendingChanged,
+    required this.guestCount,
+    required this.maxPartySize,
+    required this.onGuestCountChanged,
+    required this.mealOptions,
+    this.rsvpQuestions = const [],
+    this.answerValues = const {},
+    required this.onAnswerChanged,
     required this.error,
     this.showEmailField = true,
     this.readOnlyName = false,
+    this.hideGuestCountStepper = false,
     this.accentColor = AppColors.forestGreen,
   });
 
@@ -734,7 +1103,7 @@ class _RsvpFormCard extends StatelessWidget {
               controller: nameCtrl,
               enabled: !readOnlyName,
               textCapitalization: TextCapitalization.words,
-              decoration: _fieldDec('Full name'),
+              decoration: _rsvpFieldDec('Full name'),
               validator: (v) =>
                   (v?.trim().isEmpty ?? true) ? 'Name is required' : null,
             ),
@@ -745,13 +1114,60 @@ class _RsvpFormCard extends StatelessWidget {
               TextFormField(
                 controller: emailCtrl,
                 keyboardType: TextInputType.emailAddress,
-                decoration: _fieldDec('Email address (optional)'),
+                decoration: _rsvpFieldDec('Email address (optional)'),
               ),
             ],
             const SizedBox(height: 14),
             _FormLabel('Will you attend?'),
             const SizedBox(height: 8),
             _AttendRow(value: attending, onChanged: onAttendingChanged, accentColor: accentColor),
+            if (attending != AttendingStatus.no) ...[
+              if (!hideGuestCountStepper) ...[
+                const SizedBox(height: 16),
+                _FormLabel('How many people from your invitation will attend?'),
+                const SizedBox(height: 8),
+                CountStepper(
+                  value: guestCount,
+                  max: maxPartySize ?? 20,
+                  onChanged: onGuestCountChanged,
+                ),
+              ],
+              const SizedBox(height: 14),
+              _FormLabel('Meal preference'),
+              const SizedBox(height: 8),
+              _MealChoiceField(
+                options: mealOptions.isNotEmpty
+                    ? mealOptions.map((o) => o.label).toList()
+                    : _kDefaultMealOptions,
+                controller: mealCtrl,
+              ),
+              const SizedBox(height: 14),
+              _FormLabel('Dietary restrictions or allergies'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: dietaryCtrl,
+                decoration: _rsvpFieldDec('Optional'),
+              ),
+              for (final question in rsvpQuestions.where((q) => q.isEnabled)) ...[
+                const SizedBox(height: 14),
+                _FormLabel(question.isRequired ? '${question.questionText} *' : question.questionText),
+                const SizedBox(height: 8),
+                _QuestionField(
+                  question: question,
+                  value: answerValues[question.id],
+                  onChanged: (v) => onAnswerChanged(question.id, v),
+                  accentColor: accentColor,
+                ),
+              ],
+            ],
+            const SizedBox(height: 14),
+            _FormLabel('Message for the couple'),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: messageCtrl,
+              maxLines: 3,
+              decoration: _rsvpFieldDec('Optional'),
+            ),
             if (error != null) ...[
               const SizedBox(height: 12),
               Text(error!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
@@ -761,29 +1177,6 @@ class _RsvpFormCard extends StatelessWidget {
       ),
     );
   }
-
-  static InputDecoration _fieldDec(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: GoogleFonts.inter(
-          fontSize: 14,
-          color: AppColors.textHint,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide:
-              const BorderSide(color: AppColors.forestGreen, width: 1.5),
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      );
 }
 
 class _FormLabel extends StatelessWidget {

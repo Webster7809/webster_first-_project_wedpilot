@@ -8,11 +8,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../core/constants/invitation_fonts.dart';
-import '../../../core/services/invitation_api_service.dart' show resolveInvitationMediaUrl;
+import '../../../core/services/invitation_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/share_helper.dart';
 import '../../../models/invitation.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/invitation_provider.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
@@ -106,6 +107,7 @@ class _InvitationEditorScreenState
   final _churchThemeCtrl = TextEditingController(text: 'A Covenant Love');
   final _churchTimeCtrl = TextEditingController(text: '09:00 AM');
   final _giftTypeCtrl = TextEditingController(text: 'Cash gifts appreciated');
+  final _newMealOptionCtrl = TextEditingController();
 
   Color _accentColor = const Color(0xFFF06292);
   int _selectedFont = 0;
@@ -116,15 +118,177 @@ class _InvitationEditorScreenState
   String? _backgroundImageUrl;
 
   // Editor panel & image transform state
-  int _selectedTab = 0; // 0=Photo 1=Text 2=Font 3=Color 4=Layout
+  int _selectedTab = 0; // 0=Photo 1=Text 2=Font 3=Color 4=Layout 5=RSVP 6=Questions
   Color _cardBgColor = AppColors.forestGreen;
   double _imageScale = 1.0;
   Offset _imageOffset = Offset.zero;
+
+  // RSVP tab — meal options. Only meaningful once the invitation actually
+  // exists (a real invitation_id to attach them to), so this stays empty
+  // until _loadMealOptions runs.
+  List<MealOption> _mealOptions = [];
+  bool _mealOptionsLoading = false;
+
+  // Questions tab — same lazy, invitation_id-gated loading as meal options.
+  List<RsvpQuestion> _rsvpQuestions = [];
+  bool _rsvpQuestionsLoading = false;
 
   @override
   void initState() {
     super.initState();
     _loadExistingData();
+    _loadMealOptions();
+    _loadRsvpQuestions();
+  }
+
+  Future<void> _loadMealOptions() async {
+    if (widget.invitationId == null) return;
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    setState(() => _mealOptionsLoading = true);
+    try {
+      final options = await InvitationApiService.instance
+          .fetchMealOptions(token, widget.invitationId!);
+      if (mounted) setState(() { _mealOptions = options; _mealOptionsLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _mealOptionsLoading = false);
+    }
+  }
+
+  Future<void> _addMealOption(String label) async {
+    if (widget.invitationId == null || label.trim().isEmpty) return;
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    try {
+      final option = await InvitationApiService.instance
+          .addMealOption(token, widget.invitationId!, label.trim());
+      if (mounted) setState(() => _mealOptions = [..._mealOptions, option]);
+    } on InvitationApiException catch (e) {
+      if (mounted) showWedSnackBar(context, e.message, type: SnackType.error);
+    }
+  }
+
+  Future<void> _deleteMealOption(MealOption option) async {
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    // Optimistic — a couple removing an option expects it gone immediately;
+    // re-fetch on failure rather than leaving the list silently wrong.
+    setState(() => _mealOptions = _mealOptions.where((o) => o.id != option.id).toList());
+    try {
+      await InvitationApiService.instance.deleteMealOption(token, option.id);
+    } on InvitationApiException catch (e) {
+      if (mounted) showWedSnackBar(context, e.message, type: SnackType.error);
+      _loadMealOptions();
+    }
+  }
+
+  Future<void> _loadRsvpQuestions() async {
+    if (widget.invitationId == null) return;
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    setState(() => _rsvpQuestionsLoading = true);
+    try {
+      final questions = await InvitationApiService.instance
+          .fetchRsvpQuestions(token, widget.invitationId!);
+      if (mounted) setState(() { _rsvpQuestions = questions; _rsvpQuestionsLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _rsvpQuestionsLoading = false);
+    }
+  }
+
+  Future<void> _addRsvpQuestion({
+    required String questionText,
+    required RsvpQuestionType type,
+    required List<String> options,
+    required bool isRequired,
+  }) async {
+    if (widget.invitationId == null) return;
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    try {
+      final question = await InvitationApiService.instance.addRsvpQuestion(
+        token,
+        widget.invitationId!,
+        questionText: questionText,
+        type: type,
+        options: options,
+        isRequired: isRequired,
+      );
+      if (mounted) setState(() => _rsvpQuestions = [..._rsvpQuestions, question]);
+    } on InvitationApiException catch (e) {
+      if (mounted) showWedSnackBar(context, e.message, type: SnackType.error);
+    }
+  }
+
+  Future<void> _editRsvpQuestion(
+    RsvpQuestion existing, {
+    required String questionText,
+    required RsvpQuestionType type,
+    required List<String> options,
+    required bool isRequired,
+  }) async {
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    try {
+      final updated = await InvitationApiService.instance.editRsvpQuestion(
+        token,
+        existing.id,
+        questionText: questionText,
+        type: type,
+        options: options,
+        isRequired: isRequired,
+        isEnabled: existing.isEnabled,
+      );
+      if (mounted) {
+        setState(() => _rsvpQuestions =
+            _rsvpQuestions.map((q) => q.id == updated.id ? updated : q).toList());
+      }
+    } on InvitationApiException catch (e) {
+      if (mounted) showWedSnackBar(context, e.message, type: SnackType.error);
+    }
+  }
+
+  Future<void> _toggleRsvpQuestionEnabled(RsvpQuestion question) async {
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    setState(() => _rsvpQuestions = _rsvpQuestions
+        .map((q) => q.id == question.id
+            ? RsvpQuestion(
+                id: q.id,
+                invitationId: q.invitationId,
+                questionText: q.questionText,
+                type: q.type,
+                options: q.options,
+                isRequired: q.isRequired,
+                isEnabled: !q.isEnabled,
+                sortOrder: q.sortOrder,
+              )
+            : q)
+        .toList());
+    try {
+      await InvitationApiService.instance
+          .toggleRsvpQuestionEnabled(token, question.id, !question.isEnabled);
+    } on InvitationApiException catch (e) {
+      if (mounted) showWedSnackBar(context, e.message, type: SnackType.error);
+      _loadRsvpQuestions();
+    }
+  }
+
+  Future<void> _deleteRsvpQuestion(RsvpQuestion question) async {
+    final token = ref.read(authProvider.notifier).accessToken;
+    if (token == null) return;
+    try {
+      await InvitationApiService.instance.deleteRsvpQuestion(token, question.id);
+      if (mounted) {
+        setState(() => _rsvpQuestions = _rsvpQuestions.where((q) => q.id != question.id).toList());
+      }
+    } on InvitationApiException catch (e) {
+      // 409 ("guests have already answered...") — surface it and offer the
+      // only remaining option, disabling, rather than a dead-end error.
+      if (mounted) {
+        showWedSnackBar(context, e.message, type: SnackType.error);
+      }
+    }
   }
 
   void _loadExistingData() {
@@ -179,6 +343,7 @@ class _InvitationEditorScreenState
     _churchThemeCtrl.dispose();
     _churchTimeCtrl.dispose();
     _giftTypeCtrl.dispose();
+    _newMealOptionCtrl.dispose();
     super.dispose();
   }
 
@@ -715,6 +880,8 @@ class _InvitationEditorScreenState
       (icon: Icons.draw, label: 'Font'),
       (icon: Icons.color_lens, label: 'Color'),
       (icon: Icons.grid_view, label: 'Layout'),
+      (icon: Icons.checklist, label: 'RSVP'),
+      (icon: Icons.quiz_outlined, label: 'Questions'),
     ];
     return Row(
       children: [
@@ -782,8 +949,174 @@ class _InvitationEditorScreenState
       1 => _buildDetailsContent(theme),
       2 => _buildFontContent(theme),
       3 => _buildStyleContent(theme),
-      _ => _buildLayoutTabContent(theme),
+      4 => _buildLayoutTabContent(theme),
+      5 => _buildRsvpTabContent(theme),
+      _ => _buildQuestionsTabContent(theme),
     };
+  }
+
+  // ── RSVP tab: meal options guests choose from on the public form ─────────
+  Widget _buildRsvpTabContent(ThemeData theme) {
+    if (widget.invitationId == null) {
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: Text(
+          'Save your invitation first to configure meal options for guests.',
+          style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Meal Options',
+            style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Guests choose from this list on your RSVP form. Leave it empty '
+            'to show a default set (Chicken, Beef, Vegetarian).',
+            style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          if (_mealOptionsLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (_mealOptions.isEmpty)
+            Text(
+              'No custom meal options yet.',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textHint),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final option in _mealOptions)
+                  Chip(
+                    label: Text(option.label),
+                    onDeleted: () => _deleteMealOption(option),
+                    deleteIconColor: AppColors.textSecondary,
+                  ),
+              ],
+            ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: WedTextField(
+                  controller: _newMealOptionCtrl,
+                  label: 'Add a meal option (e.g. Vegetarian)',
+                  onFieldSubmitted: (v) {
+                    _addMealOption(v);
+                    _newMealOptionCtrl.clear();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.add_circle, color: AppColors.forestGreen),
+                onPressed: () {
+                  _addMealOption(_newMealOptionCtrl.text);
+                  _newMealOptionCtrl.clear();
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Questions tab: custom RSVP questions guests answer alongside their RSVP ─
+  Widget _buildQuestionsTabContent(ThemeData theme) {
+    if (widget.invitationId == null) {
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: Text(
+          'Save your invitation first to add custom RSVP questions.',
+          style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Custom Questions',
+            style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Ask guests anything beyond meal choice — transportation, plus-ones, '
+            'song requests. Answers show up per-guest on your RSVP dashboard.',
+            style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          if (_rsvpQuestionsLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (_rsvpQuestions.isEmpty)
+            Text(
+              'No custom questions yet.',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textHint),
+            )
+          else
+            for (final question in _rsvpQuestions)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _QuestionRow(
+                  question: question,
+                  onEdit: () => _showQuestionForm(existing: question),
+                  onToggleEnabled: () => _toggleRsvpQuestionEnabled(question),
+                  onDelete: () => _deleteRsvpQuestion(question),
+                ),
+              ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => _showQuestionForm(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add question'),
+            style: OutlinedButton.styleFrom(foregroundColor: AppColors.forestGreen),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showQuestionForm({RsvpQuestion? existing}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _QuestionFormSheet(
+        existing: existing,
+        onSave: (questionText, type, options, isRequired) {
+          if (existing != null) {
+            _editRsvpQuestion(existing,
+                questionText: questionText, type: type, options: options, isRequired: isRequired);
+          } else {
+            _addRsvpQuestion(
+                questionText: questionText, type: type, options: options, isRequired: isRequired);
+          }
+        },
+      ),
+    );
   }
 
   // ── Photo tab: camera / gallery / files picker ────────────────────────────
@@ -2539,4 +2872,274 @@ class _RGBSlider extends StatelessWidget {
       ],
     );
   }
+}
+
+// ── One custom RSVP question row (Questions tab) ────────────────────────────
+
+class _QuestionRow extends StatelessWidget {
+  final RsvpQuestion question;
+  final VoidCallback onEdit;
+  final VoidCallback onToggleEnabled;
+  final VoidCallback onDelete;
+
+  const _QuestionRow({
+    required this.question,
+    required this.onEdit,
+    required this.onToggleEnabled,
+    required this.onDelete,
+  });
+
+  String get _typeLabel => switch (question.type) {
+        RsvpQuestionType.yesNo => 'Yes/No',
+        RsvpQuestionType.singleChoice => 'Single choice',
+        RsvpQuestionType.multiChoice => 'Multiple choice',
+        RsvpQuestionType.shortText => 'Short text',
+        RsvpQuestionType.longText => 'Long text',
+        RsvpQuestionType.number => 'Number',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: question.isEnabled ? Colors.white : AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  question.questionText,
+                  style: GoogleFonts.inter(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: question.isEnabled ? AppColors.textPrimary : AppColors.textHint,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  [_typeLabel, if (question.isRequired) 'Required'].join(' • '),
+                  style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: question.isEnabled,
+            onChanged: (_) => onToggleEnabled(),
+            activeTrackColor: AppColors.forestGreen,
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 19),
+            color: AppColors.textSecondary,
+            onPressed: onEdit,
+            tooltip: 'Edit',
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 19),
+            color: AppColors.error,
+            onPressed: onDelete,
+            tooltip: 'Delete',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Add/edit custom RSVP question sheet ──────────────────────────────────────
+
+class _QuestionFormSheet extends StatefulWidget {
+  final RsvpQuestion? existing;
+  final void Function(String questionText, RsvpQuestionType type, List<String> options, bool isRequired) onSave;
+
+  const _QuestionFormSheet({required this.existing, required this.onSave});
+
+  @override
+  State<_QuestionFormSheet> createState() => _QuestionFormSheetState();
+}
+
+class _QuestionFormSheetState extends State<_QuestionFormSheet> {
+  late final TextEditingController _textCtrl;
+  late final TextEditingController _optionCtrl;
+  late RsvpQuestionType _type;
+  late bool _isRequired;
+  late List<String> _options;
+  String? _error;
+
+  bool get _isChoiceType =>
+      _type == RsvpQuestionType.singleChoice || _type == RsvpQuestionType.multiChoice;
+
+  @override
+  void initState() {
+    super.initState();
+    _textCtrl = TextEditingController(text: widget.existing?.questionText ?? '');
+    _optionCtrl = TextEditingController();
+    _type = widget.existing?.type ?? RsvpQuestionType.shortText;
+    _isRequired = widget.existing?.isRequired ?? false;
+    _options = List.of(widget.existing?.options ?? const []);
+  }
+
+  @override
+  void dispose() {
+    _textCtrl.dispose();
+    _optionCtrl.dispose();
+    super.dispose();
+  }
+
+  void _addOption() {
+    final value = _optionCtrl.text.trim();
+    if (value.isEmpty || _options.contains(value)) return;
+    setState(() { _options = [..._options, value]; _optionCtrl.clear(); });
+  }
+
+  void _save() {
+    final text = _textCtrl.text.trim();
+    if (text.isEmpty) {
+      setState(() => _error = 'Question text is required.');
+      return;
+    }
+    if (_isChoiceType && _options.length < 2) {
+      setState(() => _error = 'Add at least 2 options for a choice question.');
+      return;
+    }
+    Navigator.pop(context);
+    widget.onSave(text, _type, _isChoiceType ? _options : const [], _isRequired);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                widget.existing != null ? 'Edit Question' : 'Add Question',
+                style: AppTextStyles.headlineMedium,
+              ),
+              const SizedBox(height: 20),
+              WedTextField(
+                controller: _textCtrl,
+                label: 'Question *',
+                errorText: _error,
+                onChanged: (_) {
+                  if (_error != null) setState(() => _error = null);
+                },
+              ),
+              const SizedBox(height: 12),
+              Text('Answer type', style: AppTextStyles.labelLarge),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final type in RsvpQuestionType.values)
+                    ChoiceChip(
+                      label: Text(_typeLabel(type)),
+                      selected: _type == type,
+                      onSelected: (_) => setState(() => _type = type),
+                      selectedColor: AppColors.forestGreen.withAlpha(30),
+                      labelStyle: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _type == type ? AppColors.forestGreen : AppColors.textSecondary,
+                      ),
+                    ),
+                ],
+              ),
+              if (_isChoiceType) ...[
+                const SizedBox(height: 16),
+                Text('Options (at least 2)', style: AppTextStyles.labelLarge),
+                const SizedBox(height: 8),
+                if (_options.isNotEmpty)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final option in _options)
+                        Chip(
+                          label: Text(option),
+                          onDeleted: () => setState(() => _options = _options.where((o) => o != option).toList()),
+                          deleteIconColor: AppColors.textSecondary,
+                        ),
+                    ],
+                  ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: WedTextField(
+                        controller: _optionCtrl,
+                        label: 'Add an option',
+                        onFieldSubmitted: (_) => _addOption(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle, color: AppColors.forestGreen),
+                      onPressed: _addOption,
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Required', style: AppTextStyles.labelLarge),
+                subtitle: Text(
+                  'Guests must answer this to submit an "attending" RSVP.',
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                ),
+                value: _isRequired,
+                activeTrackColor: AppColors.forestGreen,
+                onChanged: (v) => setState(() => _isRequired = v),
+              ),
+              const SizedBox(height: 12),
+              WedButton(
+                label: widget.existing != null ? 'Save Changes' : 'Add Question',
+                variant: WedButtonVariant.accent,
+                height: 50,
+                onPressed: _save,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _typeLabel(RsvpQuestionType type) => switch (type) {
+        RsvpQuestionType.yesNo => 'Yes/No',
+        RsvpQuestionType.singleChoice => 'Single choice',
+        RsvpQuestionType.multiChoice => 'Multiple choice',
+        RsvpQuestionType.shortText => 'Short text',
+        RsvpQuestionType.longText => 'Long text',
+        RsvpQuestionType.number => 'Number',
+      };
 }

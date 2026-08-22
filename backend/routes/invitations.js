@@ -1,9 +1,13 @@
 const crypto = require('crypto');
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { Op } = require('sequelize');
 const Invitation = require('../db/models/invitation');
 const Guest = require('../db/models/guest');
+const MealOption = require('../db/models/mealOption');
 const RsvpResponse = require('../db/models/rsvpResponse');
+const RsvpQuestion = require('../db/models/rsvpQuestion');
+const RsvpAnswer = require('../db/models/rsvpAnswer');
 const verifyJwt = require('../middleware/verifyJwt');
 const { requireCouple } = require('../middleware/roles');
 const { makeUploader, relativeUploadUrl } = require('../middleware/upload');
@@ -11,6 +15,18 @@ const { generateCardNumber } = require('../services/guestCardNumber');
 
 const router = express.Router();
 const photoUploader = makeUploader('invitations', { allowedMimePrefixes: ['image/'], maxSizeMb: 15 });
+
+// Unauthenticated RSVP submission is the one write path a stranger can hit
+// directly — same pattern as authLimiter in routes/auth.js. Generous enough
+// for a guest fumbling the form a few times, tight enough to slow down
+// scripted abuse of either link type.
+const publicRsvpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please wait a few minutes and try again.' },
+});
 
 // ── Serialization ────────────────────────────────────────────────────────────────
 
@@ -156,6 +172,257 @@ router.delete('/:id', verifyJwt, requireCouple, async (req, res) => {
   }
 });
 
+// ── Meal options (couple-owned) ────────────────────────────────────────────────────
+// Configurable per invitation, rendered as a choice list on the public RSVP
+// form instead of free text (see the public GET routes below, which embed
+// the current list). RsvpResponse.meal_preference has no FK back here —
+// editing/removing an option later must never touch an existing answer.
+
+function serializeMealOption(o) {
+  return { option_id: o.option_id, invitation_id: o.invitation_id, label: o.label, sort_order: o.sort_order };
+}
+
+async function findOwnedInvitation(invitationId, coupleUserId) {
+  return Invitation.findOne({ where: { invitation_id: invitationId, couple_user_id: coupleUserId } });
+}
+
+router.get('/:id/meal-options', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const invitation = await findOwnedInvitation(req.params.id, req.user.user_id);
+    if (!invitation) return res.status(404).json({ error: 'Invitation not found.' });
+
+    const options = await MealOption.findAll({
+      where: { invitation_id: invitation.invitation_id },
+      order: [['sort_order', 'ASC']],
+    });
+    res.json({ meal_options: options.map(serializeMealOption) });
+  } catch (err) {
+    console.error('List meal options error:', err.message);
+    res.status(500).json({ error: 'Could not load meal options.' });
+  }
+});
+
+router.post('/:id/meal-options', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const invitation = await findOwnedInvitation(req.params.id, req.user.user_id);
+    if (!invitation) return res.status(404).json({ error: 'Invitation not found.' });
+
+    const { label } = req.body;
+    if (!label || !label.trim()) return res.status(400).json({ error: 'A label is required.' });
+
+    const count = await MealOption.count({ where: { invitation_id: invitation.invitation_id } });
+    const option = await MealOption.create({
+      invitation_id: invitation.invitation_id,
+      label: label.trim(),
+      sort_order: count,
+    });
+    res.status(201).json({ meal_option: serializeMealOption(option) });
+  } catch (err) {
+    console.error('Add meal option error:', err.message);
+    res.status(500).json({ error: 'Could not add meal option.' });
+  }
+});
+
+router.patch('/meal-options/:optionId', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const option = await MealOption.findOne({ where: { option_id: req.params.optionId } });
+    if (!option) return res.status(404).json({ error: 'Meal option not found.' });
+    const invitation = await findOwnedInvitation(option.invitation_id, req.user.user_id);
+    if (!invitation) return res.status(404).json({ error: 'Meal option not found.' });
+
+    const { label } = req.body;
+    if (!label || !label.trim()) return res.status(400).json({ error: 'A label is required.' });
+    option.label = label.trim();
+    await option.save();
+    res.json({ meal_option: serializeMealOption(option) });
+  } catch (err) {
+    console.error('Edit meal option error:', err.message);
+    res.status(500).json({ error: 'Could not update meal option.' });
+  }
+});
+
+router.delete('/meal-options/:optionId', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const option = await MealOption.findOne({ where: { option_id: req.params.optionId } });
+    if (!option) return res.status(404).json({ error: 'Meal option not found.' });
+    const invitation = await findOwnedInvitation(option.invitation_id, req.user.user_id);
+    if (!invitation) return res.status(404).json({ error: 'Meal option not found.' });
+
+    await option.destroy();
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('Delete meal option error:', err.message);
+    res.status(500).json({ error: 'Could not delete meal option.' });
+  }
+});
+
+// ── Custom RSVP questions (couple-owned) ───────────────────────────────────────────
+// Answered alongside the RSVP itself in the public POST routes below.
+// `options` only applies to single_choice/multi_choice; every other type
+// stores null there.
+
+const QUESTION_TYPES = ['yes_no', 'single_choice', 'multi_choice', 'short_text', 'long_text', 'number'];
+const CHOICE_TYPES = ['single_choice', 'multi_choice'];
+
+function serializeQuestion(q) {
+  return {
+    question_id: q.question_id,
+    invitation_id: q.invitation_id,
+    question_text: q.question_text,
+    type: q.type,
+    options: q.options,
+    is_required: q.is_required,
+    is_enabled: q.is_enabled,
+    sort_order: q.sort_order,
+  };
+}
+
+function validateQuestionInput({ questionText, type, options }) {
+  if (!questionText || !questionText.trim()) return 'Question text is required.';
+  if (!QUESTION_TYPES.includes(type)) return `type must be one of: ${QUESTION_TYPES.join(', ')}.`;
+  if (CHOICE_TYPES.includes(type)) {
+    if (!Array.isArray(options) || options.filter((o) => typeof o === 'string' && o.trim()).length < 2) {
+      return 'Choice questions need at least 2 options.';
+    }
+  }
+  return null;
+}
+
+router.get('/:id/rsvp-questions', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const invitation = await findOwnedInvitation(req.params.id, req.user.user_id);
+    if (!invitation) return res.status(404).json({ error: 'Invitation not found.' });
+
+    const questions = await RsvpQuestion.findAll({
+      where: { invitation_id: invitation.invitation_id },
+      order: [['sort_order', 'ASC']],
+    });
+    res.json({ rsvp_questions: questions.map(serializeQuestion) });
+  } catch (err) {
+    console.error('List RSVP questions error:', err.message);
+    res.status(500).json({ error: 'Could not load RSVP questions.' });
+  }
+});
+
+router.post('/:id/rsvp-questions', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const invitation = await findOwnedInvitation(req.params.id, req.user.user_id);
+    if (!invitation) return res.status(404).json({ error: 'Invitation not found.' });
+
+    const { questionText, type, options, isRequired } = req.body;
+    const error = validateQuestionInput({ questionText, type, options });
+    if (error) return res.status(400).json({ error });
+
+    const count = await RsvpQuestion.count({ where: { invitation_id: invitation.invitation_id } });
+    const question = await RsvpQuestion.create({
+      invitation_id: invitation.invitation_id,
+      question_text: questionText.trim(),
+      type,
+      options: CHOICE_TYPES.includes(type)
+        ? options.filter((o) => typeof o === 'string' && o.trim()).map((o) => o.trim())
+        : null,
+      is_required: !!isRequired,
+      sort_order: count,
+    });
+    res.status(201).json({ rsvp_question: serializeQuestion(question) });
+  } catch (err) {
+    console.error('Add RSVP question error:', err.message);
+    res.status(500).json({ error: 'Could not add RSVP question.' });
+  }
+});
+
+router.patch('/rsvp-questions/:questionId', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const question = await RsvpQuestion.findOne({ where: { question_id: req.params.questionId } });
+    if (!question) return res.status(404).json({ error: 'RSVP question not found.' });
+    const invitation = await findOwnedInvitation(question.invitation_id, req.user.user_id);
+    if (!invitation) return res.status(404).json({ error: 'RSVP question not found.' });
+
+    // Toggling enabled state doesn't require re-validating the rest of the
+    // question — a couple disabling a question they can no longer fully
+    // edit (it already has answers) must still be possible.
+    if (typeof req.body.isEnabled === 'boolean' && Object.keys(req.body).length === 1) {
+      question.is_enabled = req.body.isEnabled;
+      await question.save();
+      return res.json({ rsvp_question: serializeQuestion(question) });
+    }
+
+    const { questionText, type, options, isRequired, isEnabled } = req.body;
+    const error = validateQuestionInput({ questionText, type, options });
+    if (error) return res.status(400).json({ error });
+
+    question.question_text = questionText.trim();
+    question.type = type;
+    question.options = CHOICE_TYPES.includes(type)
+      ? options.filter((o) => typeof o === 'string' && o.trim()).map((o) => o.trim())
+      : null;
+    question.is_required = !!isRequired;
+    if (typeof isEnabled === 'boolean') question.is_enabled = isEnabled;
+    await question.save();
+    res.json({ rsvp_question: serializeQuestion(question) });
+  } catch (err) {
+    console.error('Edit RSVP question error:', err.message);
+    res.status(500).json({ error: 'Could not update RSVP question.' });
+  }
+});
+
+router.delete('/rsvp-questions/:questionId', verifyJwt, requireCouple, async (req, res) => {
+  try {
+    const question = await RsvpQuestion.findOne({ where: { question_id: req.params.questionId } });
+    if (!question) return res.status(404).json({ error: 'RSVP question not found.' });
+    const invitation = await findOwnedInvitation(question.invitation_id, req.user.user_id);
+    if (!invitation) return res.status(404).json({ error: 'RSVP question not found.' });
+
+    const answerCount = await RsvpAnswer.count({ where: { question_id: question.question_id } });
+    if (answerCount > 0) {
+      return res.status(409).json({
+        error: 'Guests have already answered this question — disable it instead of deleting it.',
+      });
+    }
+
+    await question.destroy();
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('Delete RSVP question error:', err.message);
+    res.status(500).json({ error: 'Could not delete RSVP question.' });
+  }
+});
+
+// Validates submitted answers against this invitation's enabled questions and
+// returns { error } (400, missing a required answer) or { rows } ready for
+// RsvpAnswer.bulkCreate. Skips required-question enforcement when declining —
+// an allergy/transport question shouldn't block a "no."
+function buildAnswerRows(questions, submittedAnswers, rsvpId, attending) {
+  const byId = new Map(questions.map((q) => [q.question_id, q]));
+  const answerById = new Map(
+    (Array.isArray(submittedAnswers) ? submittedAnswers : [])
+      .filter((a) => a && typeof a.questionId === 'string')
+      .map((a) => [a.questionId, a]),
+  );
+
+  const rows = [];
+  for (const question of questions) {
+    const answer = answerById.get(question.question_id);
+    const isMulti = question.type === 'multi_choice';
+    const hasValue = isMulti
+      ? Array.isArray(answer?.answerJson) && answer.answerJson.length > 0
+      : typeof answer?.answerText === 'string' && answer.answerText.trim() !== '';
+
+    if (question.is_required && attending !== 'no' && !hasValue) {
+      return { error: `Please answer: ${question.question_text}` };
+    }
+    if (!hasValue) continue;
+
+    if (isMulti) {
+      const selected = answer.answerJson.filter((v) => typeof v === 'string' && v.trim());
+      rows.push({ rsvp_id: rsvpId, question_id: question.question_id, answer_text: null, answer_json: selected });
+    } else {
+      rows.push({ rsvp_id: rsvpId, question_id: question.question_id, answer_text: String(answer.answerText).trim(), answer_json: null });
+    }
+  }
+  return { rows };
+}
+
 // ── Public, unauthenticated guest-facing routes ────────────────────────────────────
 // Reached via the app's own /i/:shareToken deep link — no Authorization header,
 // since the guest opening the link has never logged in.
@@ -170,7 +437,20 @@ router.get('/public/:shareToken', async (req, res) => {
     invitation.view_count += 1;
     await invitation.save();
 
-    res.json({ invitation: serializeInvitation(invitation) });
+    const mealOptions = await MealOption.findAll({
+      where: { invitation_id: invitation.invitation_id },
+      order: [['sort_order', 'ASC']],
+    });
+    const questions = await RsvpQuestion.findAll({
+      where: { invitation_id: invitation.invitation_id, is_enabled: true },
+      order: [['sort_order', 'ASC']],
+    });
+
+    res.json({
+      invitation: serializeInvitation(invitation),
+      meal_options: mealOptions.map(serializeMealOption),
+      rsvp_questions: questions.map(serializeQuestion),
+    });
   } catch (err) {
     console.error('Public invitation lookup error:', err.message);
     res.status(500).json({ error: 'Could not load invitation.' });
@@ -198,18 +478,38 @@ router.get('/public/guest/:inviteToken', async (req, res) => {
     await invitation.save();
 
     const existingRsvp = await RsvpResponse.findOne({ where: { guest_id: guest.guest_id } });
+    const mealOptions = await MealOption.findAll({
+      where: { invitation_id: invitation.invitation_id },
+      order: [['sort_order', 'ASC']],
+    });
+    const questions = await RsvpQuestion.findAll({
+      where: { invitation_id: invitation.invitation_id, is_enabled: true },
+      order: [['sort_order', 'ASC']],
+    });
+    const existingAnswers = existingRsvp
+      ? await RsvpAnswer.findAll({ where: { rsvp_id: existingRsvp.rsvp_id } })
+      : [];
 
     res.json({
       invitation: serializeInvitation(invitation),
-      guest: { guest_id: guest.guest_id, name: guest.name },
+      guest: { guest_id: guest.guest_id, name: guest.name, max_party_size: guest.max_party_size },
       already_responded: !!existingRsvp,
       existing_response: existingRsvp
         ? {
             attending: existingRsvp.attending,
             guest_count: existingRsvp.guest_count,
+            meal_preference: existingRsvp.meal_preference,
+            dietary_notes: existingRsvp.dietary_notes,
             message: existingRsvp.message,
+            answers: existingAnswers.map((a) => ({
+              question_id: a.question_id,
+              answer_text: a.answer_text,
+              answer_json: a.answer_json,
+            })),
           }
         : null,
+      meal_options: mealOptions.map(serializeMealOption),
+      rsvp_questions: questions.map(serializeQuestion),
     });
   } catch (err) {
     console.error('Public guest invitation lookup error:', err.message);
@@ -217,7 +517,7 @@ router.get('/public/guest/:inviteToken', async (req, res) => {
   }
 });
 
-router.post('/public/guest/:inviteToken/rsvp', async (req, res) => {
+router.post('/public/guest/:inviteToken/rsvp', publicRsvpLimiter, async (req, res) => {
   try {
     const guest = await Guest.findOne({ where: { invite_token: req.params.inviteToken } });
     if (!guest || !guest.invite_invitation_id) {
@@ -229,26 +529,56 @@ router.post('/public/guest/:inviteToken/rsvp', async (req, res) => {
     });
     if (!invitation) return res.status(404).json({ error: 'Invitation not found.' });
 
-    const existingRsvp = await RsvpResponse.findOne({ where: { guest_id: guest.guest_id } });
-    if (existingRsvp) {
-      return res.status(409).json({ error: 'You have already responded to this invitation.' });
-    }
-
-    const { attending, guestCount, message } = req.body;
+    const { attending, guestCount, mealPreference, dietaryNotes, message, answers } = req.body;
     if (!['yes', 'no', 'maybe'].includes(attending)) {
       return res.status(400).json({ error: 'attending must be "yes", "no", or "maybe".' });
     }
     const count = Number(guestCount) || 1;
+    if (guest.max_party_size && count > guest.max_party_size) {
+      return res.status(400).json({
+        error: `This invitation is for a maximum of ${guest.max_party_size} people.`,
+      });
+    }
 
-    await RsvpResponse.create({
+    const questions = await RsvpQuestion.findAll({
+      where: { invitation_id: invitation.invitation_id, is_enabled: true },
+    });
+    const built = buildAnswerRows(questions, answers, null, attending);
+    if (built.error) return res.status(400).json({ error: built.error });
+
+    const values = {
       couple_user_id: invitation.couple_user_id,
       invitation_id: invitation.invitation_id,
       guest_id: guest.guest_id,
       attending,
       guest_count: attending === 'no' ? 0 : count,
+      meal_preference: mealPreference && mealPreference.trim() ? mealPreference.trim() : null,
+      dietary_notes: dietaryNotes && dietaryNotes.trim() ? dietaryNotes.trim() : null,
       message: message && message.trim() ? message.trim() : null,
       responded_at: new Date(),
-    });
+    };
+
+    // Upsert, not a one-shot create: a personal link is scoped to one named
+    // guest by possession of its token, so letting that same guest revise
+    // their own answer later (see spec — "Update your RSVP") is safe. The
+    // link's actual anti-abuse protection is the max_party_size cap above,
+    // not blocking the real invitee from changing their mind.
+    const existingRsvp = await RsvpResponse.findOne({ where: { guest_id: guest.guest_id } });
+    let rsvp;
+    if (existingRsvp) {
+      await existingRsvp.update(values);
+      rsvp = existingRsvp;
+    } else {
+      rsvp = await RsvpResponse.create(values);
+    }
+
+    // Re-answering replaces the prior answer set wholesale rather than
+    // merging — simplest correct behavior for "Update your RSVP".
+    await RsvpAnswer.destroy({ where: { rsvp_id: rsvp.rsvp_id } });
+    if (built.rows.length > 0) {
+      await RsvpAnswer.bulkCreate(built.rows.map((r) => ({ ...r, rsvp_id: rsvp.rsvp_id })));
+    }
+
     res.status(201).json({ submitted: true });
   } catch (err) {
     console.error('Public guest RSVP submit error:', err.message);
@@ -256,14 +586,14 @@ router.post('/public/guest/:inviteToken/rsvp', async (req, res) => {
   }
 });
 
-router.post('/public/:shareToken/rsvp', async (req, res) => {
+router.post('/public/:shareToken/rsvp', publicRsvpLimiter, async (req, res) => {
   try {
     const invitation = await Invitation.findOne({
       where: { share_token: req.params.shareToken, status: 'published' },
     });
     if (!invitation) return res.status(404).json({ error: 'Invitation not found.' });
 
-    const { name, email, attending, guestCount, message } = req.body;
+    const { name, email, attending, guestCount, mealPreference, dietaryNotes, message, answers } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
     if (!['yes', 'no', 'maybe'].includes(attending)) {
       return res.status(400).json({ error: 'attending must be "yes", "no", or "maybe".' });
@@ -272,7 +602,9 @@ router.post('/public/:shareToken/rsvp', async (req, res) => {
 
     // Match an existing guest on the couple's list by name (case-insensitive)
     // so a guest who was pre-added still gets tracked as one person; otherwise
-    // this RSVP creates a new ad-hoc guest entry.
+    // this RSVP creates a new ad-hoc guest entry. An ad-hoc guest walking in
+    // off the broadcast link was never given a stated party size, so they're
+    // capped at 1 by default, same as any other un-configured invitation.
     let guest = await Guest.findOne({
       where: { couple_user_id: invitation.couple_user_id, name: { [Op.like]: name.trim() } },
     });
@@ -283,8 +615,20 @@ router.post('/public/:shareToken/rsvp', async (req, res) => {
         email: email && email.trim() ? email.trim() : null,
         is_invited: true,
         card_number: await generateCardNumber(),
+        max_party_size: 1,
       });
     }
+    if (guest.max_party_size && count > guest.max_party_size) {
+      return res.status(400).json({
+        error: `This invitation is for a maximum of ${guest.max_party_size} people.`,
+      });
+    }
+
+    const questions = await RsvpQuestion.findAll({
+      where: { invitation_id: invitation.invitation_id, is_enabled: true },
+    });
+    const built = buildAnswerRows(questions, answers, null, attending);
+    if (built.error) return res.status(400).json({ error: built.error });
 
     const existingRsvp = await RsvpResponse.findOne({ where: { guest_id: guest.guest_id } });
     const values = {
@@ -293,15 +637,25 @@ router.post('/public/:shareToken/rsvp', async (req, res) => {
       guest_id: guest.guest_id,
       attending,
       guest_count: attending === 'no' ? 0 : count,
+      meal_preference: mealPreference && mealPreference.trim() ? mealPreference.trim() : null,
+      dietary_notes: dietaryNotes && dietaryNotes.trim() ? dietaryNotes.trim() : null,
       message: message && message.trim() ? message.trim() : null,
       responded_at: new Date(),
     };
 
+    let rsvp;
     if (existingRsvp) {
       await existingRsvp.update(values);
+      rsvp = existingRsvp;
     } else {
-      await RsvpResponse.create(values);
+      rsvp = await RsvpResponse.create(values);
     }
+
+    await RsvpAnswer.destroy({ where: { rsvp_id: rsvp.rsvp_id } });
+    if (built.rows.length > 0) {
+      await RsvpAnswer.bulkCreate(built.rows.map((r) => ({ ...r, rsvp_id: rsvp.rsvp_id })));
+    }
+
     res.status(201).json({ submitted: true });
   } catch (err) {
     console.error('Public RSVP submit error:', err.message);

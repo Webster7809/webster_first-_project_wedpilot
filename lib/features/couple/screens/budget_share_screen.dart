@@ -9,6 +9,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../models/budget.dart';
 import '../../../providers/budget_provider.dart';
 import '../../../core/utils/format_utils.dart';
+import '../../../widgets/catering_estimate_card.dart';
 
 class BudgetShareScreen extends ConsumerWidget {
   const BudgetShareScreen({super.key});
@@ -248,7 +249,9 @@ class BudgetShareScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                const CateringEstimateCard(),
+                const SizedBox(height: 4),
 
                 // Category breakdown header
                 Row(
