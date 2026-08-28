@@ -1036,74 +1036,83 @@ class _RsvpCard extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
         boxShadow: AppShadows.elevated,
       ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 52,
-            height: 52,
-            child: Stack(
-              alignment: Alignment.center,
+      child: Material(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onSetupGuests,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
-                PieChart(
-                  PieChartData(
-                    sectionsSpace: 2,
-                    centerSpaceRadius: 16,
-                    startDegreeOffset: -90,
-                    sections: [
-                      PieChartSectionData(
-                        value: confirmed.toDouble(),
-                        color: AppColors.forestGreen,
-                        radius: 11,
-                        showTitle: false,
+                SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PieChart(
+                        PieChartData(
+                          sectionsSpace: 2,
+                          centerSpaceRadius: 16,
+                          startDegreeOffset: -90,
+                          sections: [
+                            PieChartSectionData(
+                              value: confirmed.toDouble(),
+                              color: AppColors.forestGreen,
+                              radius: 11,
+                              showTitle: false,
+                            ),
+                            PieChartSectionData(
+                              value: (total - confirmed).toDouble(),
+                              color: AppColors.segmentedBarTrack,
+                              radius: 11,
+                              showTitle: false,
+                            ),
+                          ],
+                        ),
                       ),
-                      PieChartSectionData(
-                        value: (total - confirmed).toDouble(),
-                        color: AppColors.segmentedBarTrack,
-                        radius: 11,
-                        showTitle: false,
+                      Text(
+                        '${((confirmed / total) * 100).round()}%',
+                        style: AppTextStyles.caption.copyWith(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                Text(
-                  '${((confirmed / total) * 100).round()}%',
-                  style: AppTextStyles.caption.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 10,
-                    color: Theme.of(context).colorScheme.primary,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$confirmed of $total confirmed',
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        "Guests have RSVP'd to your invitation",
+                        style: AppTextStyles.caption.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$confirmed of $total confirmed',
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  "Guests have RSVP'd to your invitation",
-                  style: AppTextStyles.caption.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

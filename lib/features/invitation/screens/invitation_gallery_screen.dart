@@ -176,6 +176,8 @@ class InvitationGalleryScreen extends ConsumerWidget {
                     onShare: () => _share(context, invitations[i]),
                     onDelete: () =>
                         _confirmDelete(context, ref, invitations[i]),
+                    onViewRsvps: () => context
+                        .push('/couple/invitations/${invitations[i].id}/rsvp'),
                   ),
                   childCount: invitations.length,
                 ),
@@ -268,12 +270,14 @@ class _InvitationCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onShare;
   final VoidCallback onDelete;
+  final VoidCallback onViewRsvps;
 
   const _InvitationCard({
     required this.invitation,
     required this.onEdit,
     required this.onShare,
     required this.onDelete,
+    required this.onViewRsvps,
   });
 
   @override
@@ -428,6 +432,25 @@ class _InvitationCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: onViewRsvps,
+                        icon: const Icon(Icons.people_alt_outlined, size: 15),
+                        label: const Text('Guests'),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.forestGreen),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          foregroundColor: AppColors.forestGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: onShare,
