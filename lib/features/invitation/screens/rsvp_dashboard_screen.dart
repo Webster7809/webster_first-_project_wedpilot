@@ -182,17 +182,22 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
   void _confirmDeleteGuest(BuildContext context, String id) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      // showDialog defaults to the root navigator, but this screen is pushed
+      // inside the couple shell's own nested navigator — popping with the
+      // outer `context` above pops THAT navigator instead of the dialog, so
+      // the dialog stays stuck on screen. Each button must pop with its own
+      // `dialogContext` instead.
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Remove Guest'),
         content: const Text(
             'This will also remove their RSVP response. Continue?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel')),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final error = await ref.read(guestRsvpProvider.notifier).deleteGuest(id);
               if (!context.mounted) return;
               if (error != null) {
@@ -281,17 +286,20 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
   void _resetGuestRsvp(BuildContext context, String rsvpId) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      // See the matching comment in _confirmDeleteGuest — pop with the
+      // dialog's own context, not the pushed screen's, or the dialog never
+      // closes.
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Reset RSVP'),
         content: const Text(
             'This clears their current response — their invitation will show as not yet responded, and they can submit a fresh answer through their personal link. Continue?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel')),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               await ref.read(guestRsvpProvider.notifier).deleteRsvp(rsvpId);
               if (context.mounted) {
                 showWedSnackBar(context, 'RSVP reset.', type: SnackType.info);
@@ -533,7 +541,9 @@ class _OverviewTab extends ConsumerWidget {
           const SizedBox(height: 20),
           Text('Recent Responses', style: AppTextStyles.headlineSmall),
           const SizedBox(height: 10),
-          ...responses.reversed.take(5).map((r) {
+          // Backend returns these ordered newest-first (responded_at DESC),
+          // so the first 5 already are the most recent — no .reversed here.
+          ...responses.take(5).map((r) {
             final guest = guests.where((g) => g.id == r.guestId).firstOrNull;
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -1683,11 +1693,11 @@ class _GuestFormSheetState extends State<_GuestFormSheet> {
             _field(_phoneCtrl, 'Phone (optional)',
                 type: TextInputType.phone),
             const SizedBox(height: 16),
-            Text('Max people on this invitation', style: AppTextStyles.labelLarge),
+            Text('Number of people on this invitation', style: AppTextStyles.labelLarge),
             const SizedBox(height: 4),
             Text(
-              'A family/group invitation — e.g. "the Banda family, max 4" — '
-              'rejects an RSVP for more than this many people.',
+              'A family/group invitation — e.g. "the Banda family, 4 people" — '
+              'the guest confirms yes/no/maybe but can\'t change this number themselves.',
               style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 8),

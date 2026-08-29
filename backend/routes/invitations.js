@@ -529,16 +529,26 @@ router.post('/public/guest/:inviteToken/rsvp', publicRsvpLimiter, async (req, re
     });
     if (!invitation) return res.status(404).json({ error: 'Invitation not found.' });
 
-    const { attending, guestCount, mealPreference, dietaryNotes, message, answers } = req.body;
+    // Single-use: a personal link is scoped to one named guest, and once
+    // they've answered once the link is done — reopening or resubmitting it
+    // (by that guest again, or by anyone it got forwarded to) can no longer
+    // change the answer. Viewing (the GET route above) never locks anything;
+    // only a successful submission does.
+    const alreadyResponded = await RsvpResponse.findOne({ where: { guest_id: guest.guest_id } });
+    if (alreadyResponded) {
+      return res.status(409).json({
+        error: 'This invitation has already been used to RSVP and cannot be changed.',
+      });
+    }
+
+    const { attending, mealPreference, dietaryNotes, message, answers } = req.body;
     if (!['yes', 'no', 'maybe'].includes(attending)) {
       return res.status(400).json({ error: 'attending must be "yes", "no", or "maybe".' });
     }
-    const count = Number(guestCount) || 1;
-    if (guest.max_party_size && count > guest.max_party_size) {
-      return res.status(400).json({
-        error: `This invitation is for a maximum of ${guest.max_party_size} people.`,
-      });
-    }
+    // How many people this invitation covers is set by the couple
+    // (guest.max_party_size) — never a number the guest submitting gets to
+    // choose. See guests.js POST /:id/rsvp for where the couple sets it.
+    const count = guest.max_party_size || 1;
 
     const questions = await RsvpQuestion.findAll({
       where: { invitation_id: invitation.invitation_id, is_enabled: true },
@@ -558,23 +568,21 @@ router.post('/public/guest/:inviteToken/rsvp', publicRsvpLimiter, async (req, re
       responded_at: new Date(),
     };
 
-    // Upsert, not a one-shot create: a personal link is scoped to one named
-    // guest by possession of its token, so letting that same guest revise
-    // their own answer later (see spec — "Update your RSVP") is safe. The
-    // link's actual anti-abuse protection is the max_party_size cap above,
-    // not blocking the real invitee from changing their mind.
-    const existingRsvp = await RsvpResponse.findOne({ where: { guest_id: guest.guest_id } });
     let rsvp;
-    if (existingRsvp) {
-      await existingRsvp.update(values);
-      rsvp = existingRsvp;
-    } else {
+    try {
       rsvp = await RsvpResponse.create(values);
+    } catch (err) {
+      // Closes the race between the check above and this insert — see
+      // migration 017's unique index on guest_id. Two near-simultaneous
+      // submissions through the same link now can't both succeed.
+      if (err.name === 'SequelizeUniqueConstraintError') {
+        return res.status(409).json({
+          error: 'This invitation has already been used to RSVP and cannot be changed.',
+        });
+      }
+      throw err;
     }
 
-    // Re-answering replaces the prior answer set wholesale rather than
-    // merging — simplest correct behavior for "Update your RSVP".
-    await RsvpAnswer.destroy({ where: { rsvp_id: rsvp.rsvp_id } });
     if (built.rows.length > 0) {
       await RsvpAnswer.bulkCreate(built.rows.map((r) => ({ ...r, rsvp_id: rsvp.rsvp_id })));
     }
@@ -593,12 +601,11 @@ router.post('/public/:shareToken/rsvp', publicRsvpLimiter, async (req, res) => {
     });
     if (!invitation) return res.status(404).json({ error: 'Invitation not found.' });
 
-    const { name, email, attending, guestCount, mealPreference, dietaryNotes, message, answers } = req.body;
+    const { name, email, attending, mealPreference, dietaryNotes, message, answers } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
     if (!['yes', 'no', 'maybe'].includes(attending)) {
       return res.status(400).json({ error: 'attending must be "yes", "no", or "maybe".' });
     }
-    const count = Number(guestCount) || 1;
 
     // Match an existing guest on the couple's list by name (case-insensitive)
     // so a guest who was pre-added still gets tracked as one person; otherwise
@@ -618,11 +625,10 @@ router.post('/public/:shareToken/rsvp', publicRsvpLimiter, async (req, res) => {
         max_party_size: 1,
       });
     }
-    if (guest.max_party_size && count > guest.max_party_size) {
-      return res.status(400).json({
-        error: `This invitation is for a maximum of ${guest.max_party_size} people.`,
-      });
-    }
+    // How many people this invitation covers is set by the couple
+    // (guest.max_party_size) — never a number the guest submitting gets to
+    // choose.
+    const count = guest.max_party_size || 1;
 
     const questions = await RsvpQuestion.findAll({
       where: { invitation_id: invitation.invitation_id, is_enabled: true },

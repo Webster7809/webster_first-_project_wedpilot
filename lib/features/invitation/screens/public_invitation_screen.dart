@@ -10,7 +10,6 @@ import '../../../core/services/invitation_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/invitation.dart';
-import '../../../widgets/count_stepper.dart';
 import '../../../widgets/loading_shimmer.dart';
 import '../../../widgets/wed_snack_bar.dart';
 
@@ -35,10 +34,6 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
   bool _submitting = false;
   bool _submitted = false;
   bool _alreadyResponded = false;
-  // True only while the guest is actively revising an already-submitted
-  // response (see "Update your RSVP") — keeps the success screen from
-  // covering the form back up the moment _alreadyResponded is true again.
-  bool _editingExisting = false;
   String? _guestName;
   String? _error;
   Invitation? _invitation;
@@ -92,6 +87,9 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
               for (final a in result?.respondedAnswers ?? const <RsvpAnswer>[])
                 a.questionId: a.answerJson.isNotEmpty ? a.answerJson : a.answerText,
             };
+          } else {
+            // The couple sets this per guest — never a choice the guest makes.
+            _guestCount = _maxPartySize ?? 1;
           }
           _loading = false;
         });
@@ -126,8 +124,6 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
         (s) => s.name == attending,
         orElse: () => _attending,
       );
-      final count = draft['guestCount'] as int?;
-      if (count != null) _guestCount = count;
       final meal = draft['meal'] as String?;
       if (meal != null) _mealCtrl.text = meal;
       final dietary = draft['dietary'] as String?;
@@ -193,8 +189,8 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
     final dietary = _dietaryCtrl.text.trim().isEmpty ? null : _dietaryCtrl.text.trim();
     final message = _messageCtrl.text.trim().isEmpty ? null : _messageCtrl.text.trim();
     final answers = _buildAnswerInputs();
-    // Declining never sends a party size — the stepper is for "how many of
-    // us are coming," which is meaningless once the answer is no.
+    // Declining never sends a party size — the couple-set count is
+    // meaningless once the answer is no (the server zeroes it either way).
     final count = _attending == AttendingStatus.no ? 1 : _guestCount;
     try {
       if (_isGuestLink) {
@@ -222,7 +218,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
       }
       await _draftBox.delete(_draftKey);
       if (mounted) {
-        setState(() { _submitting = false; _submitted = true; _alreadyResponded = true; _editingExisting = false; });
+        setState(() { _submitting = false; _submitted = true; _alreadyResponded = true; });
       }
     } on InvitationApiException catch (e) {
       if (!mounted) return;
@@ -265,7 +261,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
     }
 
     final data = _invitation!.customData;
-    final showSuccess = (_submitted || _alreadyResponded) && !_editingExisting;
+    final showSuccess = _submitted || _alreadyResponded;
     final accentColor = _accentColorFrom(data);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -515,8 +511,6 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
             attending: _attending,
             onAttendingChanged: (v) => setState(() => _attending = v),
             guestCount: _guestCount,
-            maxPartySize: _maxPartySize,
-            onGuestCountChanged: (v) => setState(() => _guestCount = v),
             mealOptions: _mealOptions,
             rsvpQuestions: _rsvpQuestions,
             answerValues: _answerValues,
@@ -524,18 +518,8 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
             error: _error,
             showEmailField: !_isGuestLink,
             readOnlyName: _isGuestLink,
-            hideGuestCountStepper: _isGuestLink && _maxPartySize == 1,
             accentColor: accentColor,
           ),
-          if (_editingExisting) ...[
-            const SizedBox(height: 12),
-            Center(
-              child: TextButton(
-                onPressed: () => setState(() => _editingExisting = false),
-                child: const Text('Cancel'),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -574,26 +558,20 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Your RSVP has been received.\n$coupleName look forward to celebrating with you!',
+            // A personal link is single-use: once it's been answered, it
+            // can't be reopened to change the answer, by the original guest
+            // or anyone it was forwarded to — see invitations.js's guest RSVP
+            // route. The broadcast link keeps allowing revision, since it's
+            // shared by many guests rather than scoped to one.
+            justSubmitted || !_isGuestLink
+                ? 'Your RSVP has been received.\n$coupleName look forward to celebrating with you!'
+                : 'This invitation link has already been used and can no longer be changed.\nContact $coupleName if you need to update your response.',
             style: AppTextStyles.bodyMedium.copyWith(
               color: AppColors.textSecondary,
               height: 1.6,
             ),
             textAlign: TextAlign.center,
           ),
-          // Only the personal link has server-verified existing-response data
-          // to edit from — the broadcast link's "already responded" is
-          // tracked client-side only (see _loadDraft), so it has nothing
-          // reliable to pre-fill an edit from.
-          if (_isGuestLink) ...[
-            const SizedBox(height: 20),
-            TextButton.icon(
-              onPressed: () => setState(() => _editingExisting = true),
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              label: const Text('Update your RSVP'),
-              style: TextButton.styleFrom(foregroundColor: AppColors.forestGreen),
-            ),
-          ],
         ],
       ),
     );
@@ -606,7 +584,6 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
       'name': _nameCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
       'attending': _attending.name,
-      'guestCount': _guestCount,
       'meal': _mealCtrl.text.trim(),
       'dietary': _dietaryCtrl.text.trim(),
       'message': _messageCtrl.text.trim(),
@@ -1037,9 +1014,9 @@ class _RsvpFormCard extends StatelessWidget {
   final String? rsvpBy;
   final AttendingStatus attending;
   final ValueChanged<AttendingStatus> onAttendingChanged;
+  // Set entirely by the couple (via Guest.maxPartySize) — the guest confirms
+  // yes/no/maybe but never chooses this number themselves.
   final int guestCount;
-  final int? maxPartySize;
-  final ValueChanged<int> onGuestCountChanged;
   final List<MealOption> mealOptions;
   final List<RsvpQuestion> rsvpQuestions;
   final Map<String, dynamic> answerValues;
@@ -1047,7 +1024,6 @@ class _RsvpFormCard extends StatelessWidget {
   final String? error;
   final bool showEmailField;
   final bool readOnlyName;
-  final bool hideGuestCountStepper;
   final Color accentColor;
 
   const _RsvpFormCard({
@@ -1061,8 +1037,6 @@ class _RsvpFormCard extends StatelessWidget {
     required this.attending,
     required this.onAttendingChanged,
     required this.guestCount,
-    required this.maxPartySize,
-    required this.onGuestCountChanged,
     required this.mealOptions,
     this.rsvpQuestions = const [],
     this.answerValues = const {},
@@ -1070,7 +1044,6 @@ class _RsvpFormCard extends StatelessWidget {
     required this.error,
     this.showEmailField = true,
     this.readOnlyName = false,
-    this.hideGuestCountStepper = false,
     this.accentColor = AppColors.forestGreen,
   });
 
@@ -1122,16 +1095,27 @@ class _RsvpFormCard extends StatelessWidget {
             const SizedBox(height: 8),
             _AttendRow(value: attending, onChanged: onAttendingChanged, accentColor: accentColor),
             if (attending != AttendingStatus.no) ...[
-              if (!hideGuestCountStepper) ...[
-                const SizedBox(height: 16),
-                _FormLabel('How many people from your invitation will attend?'),
-                const SizedBox(height: 8),
-                CountStepper(
-                  value: guestCount,
-                  max: maxPartySize ?? 20,
-                  onChanged: onGuestCountChanged,
+              const SizedBox(height: 16),
+              _FormLabel('Guests covered by this invitation'),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.cream,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.divider),
                 ),
-              ],
+                child: Row(
+                  children: [
+                    const Icon(Icons.groups_outlined, size: 18, color: AppColors.textSecondary),
+                    const SizedBox(width: 8),
+                    Text(
+                      guestCount == 1 ? 'Just you' : '$guestCount guests',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 14),
               _FormLabel('Meal preference'),
               const SizedBox(height: 8),

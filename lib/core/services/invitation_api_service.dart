@@ -516,9 +516,9 @@ class InvitationApiService {
     }
   }
 
-  /// Submits an RSVP through a guest's personal invite link. Safe to call
-  /// again later to update a previous answer — the server upserts rather
-  /// than rejecting a second submission through this same personal link.
+  /// Submits an RSVP through a guest's personal invite link. Single-use: the
+  /// server rejects this with a 409 (surfaced as [InvitationApiException])
+  /// if the guest has already responded through this link before.
   Future<void> submitGuestInviteRsvp(
     String inviteToken, {
     required AttendingStatus attending,
