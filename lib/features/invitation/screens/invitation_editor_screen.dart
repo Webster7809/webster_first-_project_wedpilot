@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 import 'dart:math' show min;
 import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -432,6 +433,16 @@ class _InvitationEditorScreenState
       subject: 'Wedding Invitation – $coupleName',
     );
   }
+
+  // The browser only honors a file input's `capture` attribute on a mobile
+  // browser — on desktop Chrome/Firefox/etc. it's silently ignored, so
+  // "Camera" would just open the normal file-open dialog instead of a live
+  // capture, which reads as the button being broken. Hide it there; Gallery
+  // and Files already cover picking an existing file on desktop.
+  bool get _canCaptureFromCamera =>
+      !kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -1146,13 +1157,14 @@ class _InvitationEditorScreenState
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _photoOptionButton(
-                context,
-                icon: Icons.camera_alt,
-                label: 'Camera',
-                color: _accentColor,
-                onTap: () => _pickImage(ImageSource.camera),
-              ),
+              if (_canCaptureFromCamera)
+                _photoOptionButton(
+                  context,
+                  icon: Icons.camera_alt,
+                  label: 'Camera',
+                  color: _accentColor,
+                  onTap: () => _pickImage(ImageSource.camera),
+                ),
               _photoOptionButton(
                 context,
                 icon: Icons.photo_library,
