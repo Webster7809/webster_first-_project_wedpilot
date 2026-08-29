@@ -75,13 +75,24 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(notifier.dispose);
 
   return GoRouter(
-    initialLocation: AppRoutes.register,
     debugLogDiagnostics: false,
     refreshListenable: notifier,
 
     redirect: (context, state) {
       final auth = ref.read(authProvider);
       final loc = state.matchedLocation;
+
+      // No GoRoute is registered for the bare root, so a first-ever visit to
+      // the domain (no path at all) needs an explicit landing screen. This
+      // used to be `initialLocation: AppRoutes.register` on the GoRouter
+      // constructor, but that also fired for a fresh page load of a REAL
+      // route like /login — go_router only prefers `initialLocation` over
+      // the browser's actual URL when that URL is empty, and something in
+      // this app's specific boot timing was hitting that branch even for a
+      // direct, non-root deep link. Handling the "no path" case explicitly
+      // here, and never setting initialLocation, means the browser's real
+      // URL is the only thing that decides the first screen.
+      if (loc == '/') return AppRoutes.register;
 
       final isAuthScreen = AppRoutes.authScreens.contains(loc);
       final isPublicInvite = loc.startsWith('/i/') || loc.startsWith('/g/');

@@ -220,12 +220,14 @@ class AuthShell extends StatelessWidget {
     final contentWidth = isTablet ? 560.0 : width;
 
     // A floor, not a fixed height. Whatever the copy needs it gets; the floor
-    // only guarantees enough clear photograph above it — roughly a square on a
-    // phone, which leaves the couple about half the frame to themselves.
-    // Scaled by the text scale so that clear band survives a large type
-    // setting too.
+    // only guarantees enough clear photograph above it. Sized to the hero
+    // copy's own minimum (brand lockup + eyebrow + a two-line headline, the
+    // worst case at a narrow phone width) plus breathing room — not to "about
+    // half the frame," which is what used to push the form (especially
+    // register's five fields) below the fold on a phone. Scaled by the text
+    // scale so that clear band survives a large type setting too.
     final heroMinHeight =
-        contentWidth.clamp(340.0, 450.0) * textScale + topInset;
+        contentWidth.clamp(240.0, 300.0) * textScale + topInset;
 
     final cardPadding = isTablet
         ? const EdgeInsets.fromLTRB(32, 30, 32, 34)
