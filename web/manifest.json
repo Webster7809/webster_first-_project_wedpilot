@@ -1,11 +1,11 @@
 {
-    "name": "wed_plan_pilot",
-    "short_name": "wed_plan_pilot",
+    "name": "Wedpilot",
+    "short_name": "Wedpilot",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#163D2C",
-    "description": "A new Flutter project.",
+    "description": "Plan your wedding — vendors, budget, guests, and RSVPs in one place.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
