@@ -1,4 +1,5 @@
 const express = require('express');
+const sequelize = require('../db/sequelize');
 const Budget = require('../db/models/budget');
 const BudgetCategory = require('../db/models/budgetCategory');
 const BudgetCustomItem = require('../db/models/budgetCustomItem');
@@ -36,6 +37,7 @@ function serializeExpense(e) {
   return {
     expense_id: e.expense_id,
     budget_id: e.budget_id,
+    category_id: e.category_id,
     category_name: e.category_name,
     vendor_id: e.vendor_id,
     vendor_name: e.vendor_name,
@@ -262,23 +264,48 @@ router.post('/expenses', verifyJwt, requireCouple, receiptUploader.single('recei
     if (!category) return res.status(400).json({ error: 'Selected category does not exist in this budget.' });
 
     const receiptUrl = req.file ? relativeUploadUrl('receipts', req.file.filename) : null;
-    const expense = await Expense.create({
-      budget_id: budget.budget_id,
-      category_name,
-      vendor_id: vendor_id || null,
-      vendor_name: vendor_name || null,
-      amount: amountNum,
-      description: description.trim(),
-      receipt_url: receiptUrl,
-      status: 'paid',
+
+    // Expense.create + the category's spent_amount bump must land together —
+    // a crash between them used to leave spent_amount desynced from the real
+    // sum of Expense rows with no reconciliation. The row lock closes the
+    // second, separate bug that a transaction alone wouldn't: two concurrent
+    // requests against the same category both reading the pre-transaction
+    // spent_amount would otherwise let the second commit silently discard
+    // the first expense's contribution.
+    let expense;
+    let previousRatio;
+    let newRatio;
+    await sequelize.transaction(async (t) => {
+      const locked = await BudgetCategory.findOne({
+        where: { id: category.id },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+
+      expense = await Expense.create({
+        budget_id: budget.budget_id,
+        category_id: locked.id,
+        category_name,
+        vendor_id: vendor_id || null,
+        vendor_name: vendor_name || null,
+        amount: amountNum,
+        description: description.trim(),
+        receipt_url: receiptUrl,
+        status: 'paid',
+      }, { transaction: t });
+
+      const allocated = Number(locked.allocated_amount);
+      previousRatio = allocated > 0 ? Number(locked.spent_amount) / allocated : 0;
+      locked.spent_amount = Number(locked.spent_amount) + amountNum;
+      await locked.save({ transaction: t });
+      newRatio = allocated > 0 ? Number(locked.spent_amount) / allocated : 0;
     });
 
-    const allocated = Number(category.allocated_amount);
-    const previousRatio = allocated > 0 ? Number(category.spent_amount) / allocated : 0;
-    category.spent_amount = Number(category.spent_amount) + amountNum;
-    await category.save();
-    const newRatio = allocated > 0 ? Number(category.spent_amount) / allocated : 0;
-
+    // Outside the transaction, after commit: notifyUser sends an email and
+    // creates a Notification row (services/notify.js) — must never fire for
+    // a write that then rolled back, and a slow SMTP call must never hold
+    // the transaction open. category.id doesn't change across the
+    // transaction, still valid here.
     // Only fire the moment a category first crosses 90%, not on every
     // subsequent expense once it's already over.
     if (previousRatio < 0.9 && newRatio >= 0.9) {
@@ -310,13 +337,25 @@ router.delete('/expenses/:id', verifyJwt, requireCouple, async (req, res) => {
     const expense = await Expense.findOne({ where: { expense_id: req.params.id, budget_id: budget.budget_id } });
     if (!expense) return res.status(404).json({ error: 'Expense not found.' });
 
-    const category = await BudgetCategory.findOne({ where: { budget_id: budget.budget_id, category_name: expense.category_name } });
-    if (category) {
-      category.spent_amount = Math.max(0, Number(category.spent_amount) - Number(expense.amount));
-      await category.save();
-    }
+    await sequelize.transaction(async (t) => {
+      // category_id is authoritative once migration 018 backfills it;
+      // category_name lookup is the fallback for the rare legacy row a
+      // backfill couldn't match.
+      const category = expense.category_id
+        ? await BudgetCategory.findOne({ where: { id: expense.category_id }, transaction: t, lock: t.LOCK.UPDATE })
+        : await BudgetCategory.findOne({
+            where: { budget_id: budget.budget_id, category_name: expense.category_name },
+            transaction: t,
+            lock: t.LOCK.UPDATE,
+          });
+      if (category) {
+        category.spent_amount = Math.max(0, Number(category.spent_amount) - Number(expense.amount));
+        await category.save({ transaction: t });
+      }
 
-    await expense.destroy();
+      await expense.destroy({ transaction: t });
+    });
+
     res.status(204).send();
   } catch (err) {
     console.error('Delete expense error:', err.message);

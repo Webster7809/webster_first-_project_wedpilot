@@ -11,6 +11,16 @@ const Expense = sequelize.define('Expense', {
     type: DataTypes.UUID,
     allowNull: false,
   },
+  // Nullable: backfilled by migration 018 from the (budget_id,
+  // category_name) match against BudgetCategory at the time it ran; new
+  // rows get it set directly in POST /expenses (routes/budget.js).
+  // category_name is kept alongside it for display/back-compat — the
+  // Flutter client still only sends category_name, category_id is derived
+  // server-side.
+  category_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
   category_name: {
     type: DataTypes.STRING,
     allowNull: false,

@@ -229,7 +229,8 @@ router.delete('/:id', async (req, res) => {
     const guest = await Guest.findOne({ where: { guest_id: req.params.id, couple_user_id: req.user.user_id } });
     if (!guest) return res.status(404).json({ error: 'Guest not found.' });
 
-    await RsvpResponse.destroy({ where: { guest_id: guest.guest_id } });
+    // rsvp_responses.guest_id CASCADEs (see migration 017) — no manual
+    // RsvpResponse cleanup needed here anymore.
     await guest.destroy();
     res.json({ deleted: true });
   } catch (err) {

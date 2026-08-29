@@ -22,6 +22,13 @@ const RsvpResponse = sequelize.define('RsvpResponse', {
   // guest_name is looked up via this id at serialization time rather than
   // duplicated here — a stored copy would go stale if the guest is later
   // renamed via editGuest().
+  // Unique (see the `indexes` option below, not an inline flag here — see
+  // users.js/budget.js/coupleProfile.js for why: inline `unique: true` gets
+  // mis-diffed by sequelize.sync() on a fresh database, silently creating a
+  // second, differently-named index for the same constraint). One response
+  // per guest, enforced at the database level (see migration 017) — the
+  // personal invite link is single-use, and races between a check and an
+  // insert are exactly what a unique index closes.
   guest_id: {
     type: DataTypes.UUID,
     allowNull: false,
@@ -57,6 +64,9 @@ const RsvpResponse = sequelize.define('RsvpResponse', {
   tableName: 'rsvp_responses',
   createdAt: 'created_at',
   updatedAt: 'updated_at',
+  indexes: [
+    { unique: true, fields: ['guest_id'], name: 'rsvp_responses_guest_id_unique' },
+  ],
 });
 
 module.exports = RsvpResponse;
