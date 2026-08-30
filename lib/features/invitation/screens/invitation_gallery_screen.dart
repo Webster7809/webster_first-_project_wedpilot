@@ -42,7 +42,8 @@ class InvitationGalleryScreen extends ConsumerWidget {
       context,
       text: 'You\'re invited to celebrate our wedding! 💍\n\n'
           'View our invitation here: ${invitation.shareUrl}\n'
-          'Invitation code: $code',
+          'Invitation code: $code\n\n'
+          'To RSVP, enter your name exactly as it appears on our guest list.',
       subject: 'Wedding Invitation',
     );
   }

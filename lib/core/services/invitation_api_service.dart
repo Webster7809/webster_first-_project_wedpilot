@@ -474,12 +474,19 @@ class InvitationApiService {
     }
   }
 
+  /// Submits an RSVP through the shared broadcast link. [name] is matched
+  /// against the couple's own guest list — a name that isn't on it is
+  /// rejected with a 403 rather than added, so forwarding the link can't grow
+  /// the headcount. Single-use per name: a guest who has already answered
+  /// gets a 409. Both arrive as an [InvitationApiException].
+  ///
+  /// Party size is deliberately not a parameter: it comes from the guest
+  /// record the name resolves to, and the server ignores any count sent here.
   Future<void> submitPublicRsvp(
     String shareToken, {
     required String name,
     String? email,
     required AttendingStatus attending,
-    required int guestCount,
     String? mealPreference,
     String? dietaryNotes,
     String? message,
@@ -492,7 +499,6 @@ class InvitationApiService {
           'name': name,
           'email': email,
           'attending': attending.name,
-          'guestCount': guestCount,
           'mealPreference': mealPreference,
           'dietaryNotes': dietaryNotes,
           'message': message,

@@ -11,7 +11,6 @@ const RsvpAnswer = require('../db/models/rsvpAnswer');
 const verifyJwt = require('../middleware/verifyJwt');
 const { requireCouple } = require('../middleware/roles');
 const { makeUploader, relativeUploadUrl } = require('../middleware/upload');
-const { generateCardNumber } = require('../services/guestCardNumber');
 
 const router = express.Router();
 const photoUploader = makeUploader('invitations', { allowedMimePrefixes: ['image/'], maxSizeMb: 15 });
@@ -55,6 +54,15 @@ function serializeInvitation(inv) {
 
 function generateShareToken() {
   return crypto.randomBytes(8).toString('hex');
+}
+
+// Guest names are matched with LIKE (for MySQL's case-insensitive default
+// collation), so `%` and `_` in submitted text would be wildcards rather than
+// characters. Now that a name match is what gates the broadcast link, typing
+// "%" must not resolve to "the first guest on this couple's list" and burn
+// their single-use slot.
+function escapeLike(value) {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
 // ── Couple-owned CRUD ──────────────────────────────────────────────────────────────
@@ -607,24 +615,35 @@ router.post('/public/:shareToken/rsvp', publicRsvpLimiter, async (req, res) => {
       return res.status(400).json({ error: 'attending must be "yes", "no", or "maybe".' });
     }
 
-    // Match an existing guest on the couple's list by name (case-insensitive)
-    // so a guest who was pre-added still gets tracked as one person; otherwise
-    // this RSVP creates a new ad-hoc guest entry. An ad-hoc guest walking in
-    // off the broadcast link was never given a stated party size, so they're
-    // capped at 1 by default, same as any other un-configured invitation.
-    let guest = await Guest.findOne({
-      where: { couple_user_id: invitation.couple_user_id, name: { [Op.like]: name.trim() } },
+    // The broadcast link is a card, not an open door. It resolves only to a
+    // guest the couple already put on their list (and hasn't un-invited) —
+    // submitting through it can no longer create a guest. This is what stops a
+    // forwarded link from inflating the headcount: whoever it reaches, the
+    // couple's list is still the only thing that decides who is invited.
+    const guest = await Guest.findOne({
+      where: {
+        couple_user_id: invitation.couple_user_id,
+        name: { [Op.like]: escapeLike(name.trim()) },
+        is_invited: true,
+      },
     });
     if (!guest) {
-      guest = await Guest.create({
-        couple_user_id: invitation.couple_user_id,
-        name: name.trim(),
-        email: email && email.trim() ? email.trim() : null,
-        is_invited: true,
-        card_number: await generateCardNumber(),
-        max_party_size: 1,
+      return res.status(403).json({
+        error: "We couldn't find that name on the guest list. "
+          + 'Enter your name exactly as the couple wrote it, or ask them to add you.',
       });
     }
+
+    // Single-use per name, matching the personal-link lock above: once this
+    // guest has answered, reopening the shared link and retyping their name
+    // can't change or re-spend their invitation.
+    const alreadyResponded = await RsvpResponse.findOne({ where: { guest_id: guest.guest_id } });
+    if (alreadyResponded) {
+      return res.status(409).json({
+        error: 'This name has already been used to RSVP and cannot be changed.',
+      });
+    }
+
     // How many people this invitation covers is set by the couple
     // (guest.max_party_size) — never a number the guest submitting gets to
     // choose.
@@ -636,7 +655,6 @@ router.post('/public/:shareToken/rsvp', publicRsvpLimiter, async (req, res) => {
     const built = buildAnswerRows(questions, answers, null, attending);
     if (built.error) return res.status(400).json({ error: built.error });
 
-    const existingRsvp = await RsvpResponse.findOne({ where: { guest_id: guest.guest_id } });
     const values = {
       couple_user_id: invitation.couple_user_id,
       invitation_id: invitation.invitation_id,
@@ -650,16 +668,28 @@ router.post('/public/:shareToken/rsvp', publicRsvpLimiter, async (req, res) => {
     };
 
     let rsvp;
-    if (existingRsvp) {
-      await existingRsvp.update(values);
-      rsvp = existingRsvp;
-    } else {
+    try {
       rsvp = await RsvpResponse.create(values);
+    } catch (err) {
+      // Same race the personal link closes — see migration 017's unique index
+      // on guest_id.
+      if (err.name === 'SequelizeUniqueConstraintError') {
+        return res.status(409).json({
+          error: 'This name has already been used to RSVP and cannot be changed.',
+        });
+      }
+      throw err;
     }
 
-    await RsvpAnswer.destroy({ where: { rsvp_id: rsvp.rsvp_id } });
     if (built.rows.length > 0) {
       await RsvpAnswer.bulkCreate(built.rows.map((r) => ({ ...r, rsvp_id: rsvp.rsvp_id })));
+    }
+
+    // Only ever fills a blank — a contact detail the couple already recorded
+    // is theirs, and an unauthenticated form must not be able to overwrite it.
+    if (!guest.email && email && email.trim()) {
+      guest.email = email.trim();
+      await guest.save();
     }
 
     res.status(201).json({ submitted: true });

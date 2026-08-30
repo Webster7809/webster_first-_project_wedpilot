@@ -398,7 +398,8 @@ class _InvitationEditorScreenState
       await shareWithFallback(
         context,
         text: 'You\'re invited to celebrate our wedding! 💍\n\n'
-            'View our invitation here: ${invitation.shareUrl}',
+            'View our invitation here: ${invitation.shareUrl}\n\n'
+            'To RSVP, enter your name exactly as it appears on our guest list.',
         subject: 'Wedding Invitation – $coupleName',
       );
       unawaited(ref
@@ -429,7 +430,8 @@ class _InvitationEditorScreenState
     await shareWithFallback(
       context,
       text: 'You\'re invited to celebrate our wedding! 💍\n\n'
-          'View our invitation here: $shareUrl',
+          'View our invitation here: $shareUrl\n\n'
+          'To RSVP, enter your name exactly as it appears on our guest list.',
       subject: 'Wedding Invitation – $coupleName',
     );
   }

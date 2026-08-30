@@ -209,7 +209,6 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           name: _nameCtrl.text.trim(),
           email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
           attending: _attending,
-          guestCount: count,
           mealPreference: meal,
           dietaryNotes: dietary,
           message: message,
@@ -510,7 +509,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
             rsvpBy: rsvpBy,
             attending: _attending,
             onAttendingChanged: (v) => setState(() => _attending = v),
-            guestCount: _guestCount,
+            guestCount: _isGuestLink ? _guestCount : null,
             mealOptions: _mealOptions,
             rsvpQuestions: _rsvpQuestions,
             answerValues: _answerValues,
@@ -558,11 +557,13 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            // A personal link is single-use: once it's been answered, it
-            // can't be reopened to change the answer, by the original guest
-            // or anyone it was forwarded to — see invitations.js's guest RSVP
-            // route. The broadcast link keeps allowing revision, since it's
-            // shared by many guests rather than scoped to one.
+            // Both links are single-use now: a personal link locks to its one
+            // guest, and the shared link locks per name on the couple's guest
+            // list — see invitations.js's two public RSVP routes. Neither can
+            // be reopened to change an answer, by the original guest or anyone
+            // it was forwarded to. The shared link reports that on submit (a
+            // 409 shown inline on the form) rather than here, since it can't
+            // know which guest it is until a name is typed.
             justSubmitted || !_isGuestLink
                 ? 'Your RSVP has been received.\n$coupleName look forward to celebrating with you!'
                 : 'This invitation link has already been used and can no longer be changed.\nContact $coupleName if you need to update your response.',
@@ -789,8 +790,11 @@ class _MessageCard extends StatelessWidget {
 
 // ── Shared field decoration ───────────────────────────────────────────────────
 
-InputDecoration _rsvpFieldDec(String hint) => InputDecoration(
+InputDecoration _rsvpFieldDec(String hint, {String? helperText}) => InputDecoration(
       hintText: hint,
+      helperText: helperText,
+      helperMaxLines: 3,
+      helperStyle: GoogleFonts.inter(fontSize: 11.5, color: AppColors.textSecondary),
       hintStyle: GoogleFonts.inter(fontSize: 14, color: AppColors.textHint),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
@@ -1015,8 +1019,10 @@ class _RsvpFormCard extends StatelessWidget {
   final AttendingStatus attending;
   final ValueChanged<AttendingStatus> onAttendingChanged;
   // Set entirely by the couple (via Guest.maxPartySize) — the guest confirms
-  // yes/no/maybe but never chooses this number themselves.
-  final int guestCount;
+  // yes/no/maybe but never chooses this number themselves. Null when the link
+  // itself doesn't identify a guest yet (the shared broadcast link), so the
+  // form describes the rule instead of stating a number it can't know.
+  final int? guestCount;
   final List<MealOption> mealOptions;
   final List<RsvpQuestion> rsvpQuestions;
   final Map<String, dynamic> answerValues;
@@ -1076,7 +1082,15 @@ class _RsvpFormCard extends StatelessWidget {
               controller: nameCtrl,
               enabled: !readOnlyName,
               textCapitalization: TextCapitalization.words,
-              decoration: _rsvpFieldDec('Full name'),
+              // On the shared link the name is a lookup against the couple's
+              // guest list, not free text — say so up front, so a mismatch
+              // reads as a typo to fix rather than a broken invitation.
+              decoration: _rsvpFieldDec(
+                'Full name',
+                helperText: readOnlyName
+                    ? null
+                    : 'Enter your name exactly as the couple wrote it on their guest list.',
+              ),
               validator: (v) =>
                   (v?.trim().isEmpty ?? true) ? 'Name is required' : null,
             ),
@@ -1109,9 +1123,20 @@ class _RsvpFormCard extends StatelessWidget {
                   children: [
                     const Icon(Icons.groups_outlined, size: 18, color: AppColors.textSecondary),
                     const SizedBox(width: 8),
-                    Text(
-                      guestCount == 1 ? 'Just you' : '$guestCount guests',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                    Expanded(
+                      child: Text(
+                        // Null on the shared link: the couple's number lives
+                        // against the guest record the name resolves to, and
+                        // looking it up before submitting would turn this form
+                        // into a "who's invited?" oracle. Showing "Just you"
+                        // there was simply wrong for a family invitation.
+                        guestCount == null
+                            ? 'As set by the couple on your invitation'
+                            : guestCount == 1
+                                ? 'Just you'
+                                : '$guestCount guests',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                      ),
                     ),
                   ],
                 ),
