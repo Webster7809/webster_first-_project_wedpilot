@@ -280,6 +280,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.coupleBookings,
         builder: (_, _) => const MyBookingsScreen(),
       ),
+      // Reaches the same guest list as an invitation's own "Guests" button
+      // (RsvpDashboardScreen's data is already couple-wide, not scoped to one
+      // invitation — see GET /api/guests) — this just gives it a direct entry
+      // point so a couple can start naming guests before designing a card.
+      // An empty invitationId is the screen's own existing "no invitation"
+      // case (see widget.invitationId.isEmpty checks inside it).
+      GoRoute(
+        path: AppRoutes.coupleGuests,
+        builder: (_, _) => const RsvpDashboardScreen(invitationId: ''),
+      ),
 
       // ── Vendor full-screen pushes ─────────────────────────────────────────
       GoRoute(

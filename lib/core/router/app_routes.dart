@@ -31,6 +31,7 @@ class AppRoutes {
   static const coupleExpenseNew = '/couple/budget/expense/new';
   static const coupleInvitations = '/couple/invitations';
   static const coupleInvitationEditor = '/couple/invitations/editor';
+  static const coupleGuests = '/couple/guests';
   static const coupleMessages = '/couple/messages';
   static const coupleChat = '/couple/messages/:convoId';
   static const coupleChecklist = '/couple/checklist';

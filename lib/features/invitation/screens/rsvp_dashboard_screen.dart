@@ -82,7 +82,10 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
         backgroundColor: AppColors.forestGreen,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('RSVP Dashboard'),
+        // Reached two ways (see app_router.dart): pushed under a specific
+        // invitation's "Guests" button, or standalone from the drawer with
+        // no invitation at all — the title reflects which.
+        title: Text(widget.invitationId.isEmpty ? 'Guests' : 'RSVP Dashboard'),
         actions: [
           IconButton(
             icon: const Icon(Icons.person_add_outlined),
@@ -262,6 +265,22 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
         text: 'You\'re invited to celebrate our wedding! 💍\n\n'
             'View your personal invitation here: ${guest.inviteUrl}',
         subject: 'Your Wedding Invitation',
+      );
+      return;
+    }
+
+    // A personal link points at a specific card design, so a guest reached
+    // from the standalone Guests screen (no invitationId — see
+    // app_router.dart's /couple/guests route) can't get one generated until
+    // they're linked to an invitation. Catch that here instead of letting the
+    // network call fail with the backend's generic "invitationId is
+    // required" 400.
+    if (widget.invitationId.isEmpty) {
+      showWedSnackBar(
+        context,
+        'This guest isn\'t linked to an invitation yet. Open an invitation\'s '
+        'Guests tab and add them there to get a personal link.',
+        type: SnackType.info,
       );
       return;
     }

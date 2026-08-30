@@ -151,6 +151,19 @@ class AppDrawer extends ConsumerWidget {
                     context.go('/couple/invitations');
                   },
                 ),
+                // push, not go: this is a full-screen route on top of the
+                // shell (see app_router.dart), not one of the shell's tabs.
+                // Guest names aren't tied to a specific invitation card (see
+                // RsvpDashboardScreen's own invitationId.isEmpty handling),
+                // so this is a direct way in without designing a card first.
+                _DrawerItem(
+                  icon: Icons.people_outline,
+                  label: 'Guests',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.push(AppRoutes.coupleGuests);
+                  },
+                ),
                 _DrawerItem(
                   icon: Icons.account_balance_wallet,
                   label: 'Budget',
