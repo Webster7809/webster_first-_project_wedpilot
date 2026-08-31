@@ -102,7 +102,7 @@ async function serializeVendor(
   vendor,
   {
     includeDetail = false, statsInfo = null, services = null,
-    blockedDates = null, styleTags = null, packages = null,
+    blockedDates = null, styleTags = null, packages = null, media = null,
   } = {},
 ) {
   const stats = statsInfo ?? (await statsForVendorIds([vendor.vendor_id]))[vendor.vendor_id];
@@ -168,9 +168,15 @@ async function serializeVendor(
     .filter((n) => n != null);
   base.guest_capacity = statedCapacities.length ? Math.max(...statedCapacities) : null;
 
-  if (includeDetail) {
-    const media = await VendorMedia.findAll({ where: { vendor_id: vendor.vendor_id }, order: [['sort_order', 'ASC']] });
+  // Pre-fetched by the list endpoint (same batching reason as services/stats
+  // above) — a per-vendor query here would make a page of 20 vendors 20
+  // extra queries. Falls back to a per-vendor read for detail endpoints,
+  // which don't pre-batch since they only ever serialize one vendor.
+  if (media !== null) {
     base.media = media.map(serializeMedia);
+  } else if (includeDetail) {
+    const ownMedia = await VendorMedia.findAll({ where: { vendor_id: vendor.vendor_id }, order: [['sort_order', 'ASC']] });
+    base.media = ownMedia.map(serializeMedia);
   }
 
   return base;
@@ -250,7 +256,7 @@ router.get('/', verifyJwt, async (req, res) => {
     });
     const tVendorsFetched = Date.now();
     const rowVendorIds = rows.map((v) => v.vendor_id);
-    const [statsMap, allServices, blockedMap, tagsMap, packagesMap] = await Promise.all([
+    const [statsMap, allServices, blockedMap, tagsMap, packagesMap, allMedia] = await Promise.all([
       statsForVendorIds(rowVendorIds),
       rowVendorIds.length
         ? VendorService.findAll({ where: { vendor_id: { [Op.in]: rowVendorIds } } })
@@ -258,10 +264,20 @@ router.get('/', verifyJwt, async (req, res) => {
       blockedDatesForVendors(rowVendorIds),
       vendorStyleTagsFor(rowVendorIds),
       packagesForVendors(rowVendorIds),
+      // Needed so a couple's directory/dashboard/wishlist cards can show a
+      // vendor's own uploaded photos instead of always falling back to the
+      // category stock image — see VendorHeroImage on the Flutter side.
+      rowVendorIds.length
+        ? VendorMedia.findAll({ where: { vendor_id: { [Op.in]: rowVendorIds } }, order: [['sort_order', 'ASC']] })
+        : [],
     ]);
     const servicesByVendor = {};
     for (const s of allServices) {
       (servicesByVendor[s.vendor_id] ??= []).push(s);
+    }
+    const mediaByVendor = {};
+    for (const m of allMedia) {
+      (mediaByVendor[m.vendor_id] ??= []).push(m);
     }
     const vendors = await Promise.all(
       rows.map((v) => serializeVendor(v, {
@@ -270,6 +286,7 @@ router.get('/', verifyJwt, async (req, res) => {
         blockedDates: blockedMap[v.vendor_id] ?? [],
         styleTags: tagsMap[v.vendor_id] ?? [],
         packages: packagesMap[v.vendor_id] ?? [],
+        media: mediaByVendor[v.vendor_id] ?? [],
       })),
     );
     if (category_in) {

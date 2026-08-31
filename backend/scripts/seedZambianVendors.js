@@ -235,6 +235,39 @@ function slugify(name) {
     .replace(/\s+/g, '');
 }
 
+// Same curated, category-verified Pexels photo IDs the Flutter app falls
+// back to when a real vendor has no uploads yet (see
+// lib/core/constants/vendor_category_images.dart) — reused here so these
+// dev-only seeded vendors show real, category-correct photography instead of
+// unrelated Lorem Picsum stock (a random object/animal/landscape with no
+// connection to the vendor's actual category).
+const PHOTO_IDS_BY_CATEGORY = {
+  Venue: [33852468, 17001763, 3376771, 12688997, 32142669],
+  Catering: [28976236, 28976230, 28976228, 37976911, 29587700],
+  Photography: [35325793, 37754302, 21560369, 18864880, 17169150],
+  'Decor & flowers': [31138818, 4646001, 12876507, 31517333, 32657514],
+  'DJ & MC': [27018254, 32601989, 12473542, 1749822, 29315604],
+  Transport: [37828108, 13044866, 19894151, 18433155, 29240263],
+  'Wedding attire': [27269998, 20194301, 16625625, 4637461, 15120548],
+  'Cake & sweets': [11712500, 17315403, 30445121, 24838552, 19870076],
+};
+
+function pexelsUrl(id, width) {
+  return `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=${width}`;
+}
+
+// Deterministic string hash (same role as Dart's String.hashCode in
+// VendorCategoryImages) — gives each vendor a stable starting offset into
+// its category's photo pool so vendors in the same category don't all show
+// an identical trio of photos.
+function hashString(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
 // Small deterministic jitter per city (0..3) so same-tier vendors across the
 // four cities don't all land on the exact same price, without needing
 // randomness (keeps the script's output stable across re-runs).
@@ -318,16 +351,15 @@ async function main() {
       max_guests: v.max_guests,
     });
 
-    // Lorem Picsum: real curated photography, no API key, and a seeded URL
-    // is permanent — the same seed always returns the same image, so a
-    // per-vendor slug guarantees no two vendors ever share a photo.
-    const photoSlug = slugify(v.business_name);
+    const photoIds = PHOTO_IDS_BY_CATEGORY[v.category] ?? PHOTO_IDS_BY_CATEGORY.Venue;
+    const photoOffset = hashString(v.business_name) % photoIds.length;
     for (let i = 0; i < 3; i++) {
+      const id = photoIds[(photoOffset + i) % photoIds.length];
       await VendorMedia.create({
         vendor_id: vendor.vendor_id,
         type: 'image',
-        url: `https://picsum.photos/seed/${photoSlug}-${i}/1200/800`,
-        thumbnail_url: `https://picsum.photos/seed/${photoSlug}-${i}/400/300`,
+        url: pexelsUrl(id, 1200),
+        thumbnail_url: pexelsUrl(id, 400),
         sort_order: i,
         is_featured: i === 0,
       });
