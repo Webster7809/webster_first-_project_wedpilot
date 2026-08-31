@@ -11,6 +11,7 @@ const RsvpAnswer = require('../db/models/rsvpAnswer');
 const verifyJwt = require('../middleware/verifyJwt');
 const { requireCouple } = require('../middleware/roles');
 const { makeUploader, relativeUploadUrl } = require('../middleware/upload');
+const { generateCardNumber } = require('../services/guestCardNumber');
 
 const router = express.Router();
 const photoUploader = makeUploader('invitations', { allowedMimePrefixes: ['image/'], maxSizeMb: 15 });
@@ -54,6 +55,28 @@ function serializeInvitation(inv) {
 
 function generateShareToken() {
   return crypto.randomBytes(8).toString('hex');
+}
+
+// The couple's optional total headcount cap for a card, e.g. "this
+// invitation is for 120 people" — stored alongside every other
+// editor-configurable field on custom_data rather than a dedicated column
+// (see invitations.js's generic PATCH /:id merge). Null/invalid means
+// uncapped, same convention as Guest.max_party_size.
+function readMaxGuests(invitation) {
+  const raw = invitation.custom_data?.maxGuests;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+// Sums guest_count across every RSVP tied to this invitation — personal
+// links and the shared link alike — for everyone who isn't a firm "no".
+// This is what a couple's stated cap is measured against: the whole card's
+// confirmed+tentative headcount, not just the shared-link portion of it.
+async function confirmedGuestCount(invitationId) {
+  const total = await RsvpResponse.sum('guest_count', {
+    where: { invitation_id: invitationId, attending: { [Op.ne]: 'no' } },
+  });
+  return total || 0;
 }
 
 // Guest names are matched with LIKE (for MySQL's case-insensitive default
@@ -453,11 +476,16 @@ router.get('/public/:shareToken', async (req, res) => {
       where: { invitation_id: invitation.invitation_id, is_enabled: true },
       order: [['sort_order', 'ASC']],
     });
+    const maxGuests = readMaxGuests(invitation);
 
     res.json({
       invitation: serializeInvitation(invitation),
       meal_options: mealOptions.map(serializeMealOption),
       rsvp_questions: questions.map(serializeQuestion),
+      max_guests: maxGuests,
+      // Only computed when a cap is actually set — this is a second query
+      // per view, worth skipping for the (common) uncapped case.
+      confirmed_guest_count: maxGuests != null ? await confirmedGuestCount(invitation.invitation_id) : null,
     });
   } catch (err) {
     console.error('Public invitation lookup error:', err.message);
@@ -615,39 +643,61 @@ router.post('/public/:shareToken/rsvp', publicRsvpLimiter, async (req, res) => {
       return res.status(400).json({ error: 'attending must be "yes", "no", or "maybe".' });
     }
 
-    // The broadcast link is a card, not an open door. It resolves only to a
-    // guest the couple already put on their list (and hasn't un-invited) —
-    // submitting through it can no longer create a guest. This is what stops a
-    // forwarded link from inflating the headcount: whoever it reaches, the
-    // couple's list is still the only thing that decides who is invited.
-    const guest = await Guest.findOne({
-      where: {
-        couple_user_id: invitation.couple_user_id,
-        name: { [Op.like]: escapeLike(name.trim()) },
-        is_invited: true,
-      },
+    // The broadcast link is open by design — anyone it reaches can type their
+    // own name. Look for an existing guest on the couple's list
+    // (case-insensitive) so someone pre-added still gets tracked as one
+    // person; an unmatched name means a new ad-hoc guest, but creating that
+    // row is deferred past every check below so a rejected attempt (already
+    // responded, over the couple's cap) never leaves a walk-in stub with no
+    // RSVP behind on the guest list.
+    const existingGuest = await Guest.findOne({
+      where: { couple_user_id: invitation.couple_user_id, name: { [Op.like]: escapeLike(name.trim()) } },
     });
-    if (!guest) {
-      return res.status(403).json({
-        error: "We couldn't find that name on the guest list. "
-          + 'Enter your name exactly as the couple wrote it, or ask them to add you.',
-      });
-    }
 
-    // Single-use per name, matching the personal-link lock above: once this
-    // guest has answered, reopening the shared link and retyping their name
-    // can't change or re-spend their invitation.
-    const alreadyResponded = await RsvpResponse.findOne({ where: { guest_id: guest.guest_id } });
-    if (alreadyResponded) {
-      return res.status(409).json({
-        error: 'This name has already been used to RSVP and cannot be changed.',
-      });
+    // Single-use per name: once this guest has answered, reopening the shared
+    // link and retyping their name can't change or re-spend their invitation
+    // — the mechanism that stops a forwarded link from letting the same
+    // person (or anyone reusing their name) inflate the headcount by
+    // resubmitting. A brand-new name can't have answered yet, so this only
+    // applies once a match is found.
+    if (existingGuest) {
+      const alreadyResponded = await RsvpResponse.findOne({ where: { guest_id: existingGuest.guest_id } });
+      if (alreadyResponded) {
+        return res.status(409).json({
+          error: 'This name has already been used to RSVP and cannot be changed.',
+        });
+      }
     }
 
     // How many people this invitation covers is set by the couple
     // (guest.max_party_size) — never a number the guest submitting gets to
-    // choose.
-    const count = guest.max_party_size || 1;
+    // choose. An ad-hoc walk-in was never given one, so they default to 1,
+    // same as any other un-configured invitation.
+    const count = existingGuest?.max_party_size || 1;
+
+    // The couple's total headcount cap for the card, if they set one. Only
+    // attending yes/maybe adds to it — declining never did (guest_count is
+    // zeroed below either way), so a "no" can never be blocked by this.
+    if (attending !== 'no') {
+      const maxGuests = readMaxGuests(invitation);
+      if (maxGuests != null) {
+        const soFar = await confirmedGuestCount(invitation.invitation_id);
+        if (soFar + count > maxGuests) {
+          return res.status(409).json({
+            error: 'This invitation has reached its guest limit and can no longer accept RSVPs.',
+          });
+        }
+      }
+    }
+
+    const guest = existingGuest || await Guest.create({
+      couple_user_id: invitation.couple_user_id,
+      name: name.trim(),
+      email: email && email.trim() ? email.trim() : null,
+      is_invited: true,
+      card_number: await generateCardNumber(),
+      max_party_size: 1,
+    });
 
     const questions = await RsvpQuestion.findAll({
       where: { invitation_id: invitation.invitation_id, is_enabled: true },

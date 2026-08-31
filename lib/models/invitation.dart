@@ -128,11 +128,29 @@ class PublicInvitationView {
   final List<MealOption> mealOptions;
   final List<RsvpQuestion> rsvpQuestions;
 
+  /// The couple's optional total headcount cap for this card (from
+  /// custom_data.maxGuests server-side) — null means uncapped.
+  final int? maxGuests;
+
+  /// Combined guest_count of every non-declined RSVP on this invitation so
+  /// far (personal links and this shared link together). Only populated by
+  /// the server when [maxGuests] is set — a null here with a non-null
+  /// [maxGuests] shouldn't happen, but is treated as "unknown, not full".
+  final int? confirmedGuestCount;
+
   const PublicInvitationView({
     required this.invitation,
     this.mealOptions = const [],
     this.rsvpQuestions = const [],
+    this.maxGuests,
+    this.confirmedGuestCount,
   });
+
+  /// Whether the shared link should stop accepting new RSVPs. Personal
+  /// (/g/:inviteToken) links are unaffected by this — see
+  /// GuestInvitation, which carries no such flag.
+  bool get isFull =>
+      maxGuests != null && confirmedGuestCount != null && confirmedGuestCount! >= maxGuests!;
 
   factory PublicInvitationView.fromJson(Map<String, dynamic> json) {
     final options = (json['meal_options'] as List?) ?? const [];
@@ -141,6 +159,8 @@ class PublicInvitationView {
       invitation: Invitation.fromJson(json['invitation'] as Map<String, dynamic>),
       mealOptions: options.map((o) => MealOption.fromJson(o as Map<String, dynamic>)).toList(),
       rsvpQuestions: questions.map((q) => RsvpQuestion.fromJson(q as Map<String, dynamic>)).toList(),
+      maxGuests: json['max_guests'] as int?,
+      confirmedGuestCount: json['confirmed_guest_count'] as int?,
     );
   }
 }

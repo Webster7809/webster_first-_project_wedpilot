@@ -321,55 +321,6 @@ class InvitationApiService {
     }
   }
 
-  // ── Meal options (couple-side) ────────────────────────────────────────────────
-
-  Future<List<MealOption>> fetchMealOptions(String accessToken, String invitationId) async {
-    try {
-      final response = await _dio.get<Map<String, dynamic>>(
-        '/api/invitations/$invitationId/meal-options',
-        options: _auth(accessToken),
-      );
-      final list = (response.data?['meal_options'] as List?) ?? [];
-      return list.map((o) => MealOption.fromJson(o as Map<String, dynamic>)).toList();
-    } on DioException catch (e) {
-      throw InvitationApiException(_extractError(e));
-    }
-  }
-
-  Future<MealOption> addMealOption(String accessToken, String invitationId, String label) async {
-    try {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/api/invitations/$invitationId/meal-options',
-        data: {'label': label},
-        options: _auth(accessToken),
-      );
-      return MealOption.fromJson(response.data?['meal_option'] as Map<String, dynamic>);
-    } on DioException catch (e) {
-      throw InvitationApiException(_extractError(e));
-    }
-  }
-
-  Future<MealOption> editMealOption(String accessToken, String optionId, String label) async {
-    try {
-      final response = await _dio.patch<Map<String, dynamic>>(
-        '/api/invitations/meal-options/$optionId',
-        data: {'label': label},
-        options: _auth(accessToken),
-      );
-      return MealOption.fromJson(response.data?['meal_option'] as Map<String, dynamic>);
-    } on DioException catch (e) {
-      throw InvitationApiException(_extractError(e));
-    }
-  }
-
-  Future<void> deleteMealOption(String accessToken, String optionId) async {
-    try {
-      await _dio.delete('/api/invitations/meal-options/$optionId', options: _auth(accessToken));
-    } on DioException catch (e) {
-      throw InvitationApiException(_extractError(e));
-    }
-  }
-
   // ── Custom RSVP questions (couple-side) ───────────────────────────────────────
 
   Future<List<RsvpQuestion>> fetchRsvpQuestions(String accessToken, String invitationId) async {
@@ -475,19 +426,20 @@ class InvitationApiService {
   }
 
   /// Submits an RSVP through the shared broadcast link. [name] is matched
-  /// against the couple's own guest list — a name that isn't on it is
-  /// rejected with a 403 rather than added, so forwarding the link can't grow
-  /// the headcount. Single-use per name: a guest who has already answered
-  /// gets a 409. Both arrive as an [InvitationApiException].
+  /// against the couple's own guest list when possible; an unmatched name
+  /// creates a new ad-hoc guest, same as any other un-configured invitation.
+  /// Single-use per name either way: a guest who has already answered gets a
+  /// 409. If the couple set a total headcount limit and it's been reached,
+  /// this also fails with a 409. Both arrive as an [InvitationApiException].
   ///
   /// Party size is deliberately not a parameter: it comes from the guest
-  /// record the name resolves to, and the server ignores any count sent here.
+  /// record the name resolves to (or defaults to 1 for a new ad-hoc guest),
+  /// and the server ignores any count sent here.
   Future<void> submitPublicRsvp(
     String shareToken, {
     required String name,
     String? email,
     required AttendingStatus attending,
-    String? mealPreference,
     String? dietaryNotes,
     String? message,
     List<RsvpAnswerInput>? answers,
@@ -499,7 +451,6 @@ class InvitationApiService {
           'name': name,
           'email': email,
           'attending': attending.name,
-          'mealPreference': mealPreference,
           'dietaryNotes': dietaryNotes,
           'message': message,
           'answers': answers?.map((a) => a.toJson()).toList(),
@@ -529,7 +480,6 @@ class InvitationApiService {
     String inviteToken, {
     required AttendingStatus attending,
     required int guestCount,
-    String? mealPreference,
     String? dietaryNotes,
     String? message,
     List<RsvpAnswerInput>? answers,
@@ -540,7 +490,6 @@ class InvitationApiService {
         data: {
           'attending': attending.name,
           'guestCount': guestCount,
-          'mealPreference': mealPreference,
           'dietaryNotes': dietaryNotes,
           'message': message,
           'answers': answers?.map((a) => a.toJson()).toList(),

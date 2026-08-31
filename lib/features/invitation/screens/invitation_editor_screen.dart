@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -108,7 +109,10 @@ class _InvitationEditorScreenState
   final _churchThemeCtrl = TextEditingController(text: 'A Covenant Love');
   final _churchTimeCtrl = TextEditingController(text: '09:00 AM');
   final _giftTypeCtrl = TextEditingController(text: 'Cash gifts appreciated');
-  final _newMealOptionCtrl = TextEditingController();
+  // Optional total headcount cap for the card (custom_data.maxGuests) —
+  // blank means uncapped. Free text rather than a stepper: unlike a single
+  // guest's party size (max 20), this can reasonably run into the hundreds.
+  final _maxGuestsCtrl = TextEditingController();
 
   Color _accentColor = const Color(0xFFF06292);
   int _selectedFont = 0;
@@ -119,18 +123,13 @@ class _InvitationEditorScreenState
   String? _backgroundImageUrl;
 
   // Editor panel & image transform state
-  int _selectedTab = 0; // 0=Photo 1=Text 2=Font 3=Color 4=Layout 5=RSVP 6=Questions
+  int _selectedTab = 0; // 0=Photo 1=Text 2=Font 3=Color 4=Layout 5=Questions
   Color _cardBgColor = AppColors.forestGreen;
   double _imageScale = 1.0;
   Offset _imageOffset = Offset.zero;
 
-  // RSVP tab — meal options. Only meaningful once the invitation actually
-  // exists (a real invitation_id to attach them to), so this stays empty
-  // until _loadMealOptions runs.
-  List<MealOption> _mealOptions = [];
-  bool _mealOptionsLoading = false;
-
-  // Questions tab — same lazy, invitation_id-gated loading as meal options.
+  // Questions tab — lazy, invitation_id-gated loading (only meaningful once
+  // the invitation actually exists, a real invitation_id to attach to).
   List<RsvpQuestion> _rsvpQuestions = [];
   bool _rsvpQuestionsLoading = false;
 
@@ -138,49 +137,7 @@ class _InvitationEditorScreenState
   void initState() {
     super.initState();
     _loadExistingData();
-    _loadMealOptions();
     _loadRsvpQuestions();
-  }
-
-  Future<void> _loadMealOptions() async {
-    if (widget.invitationId == null) return;
-    final token = ref.read(authProvider.notifier).accessToken;
-    if (token == null) return;
-    setState(() => _mealOptionsLoading = true);
-    try {
-      final options = await InvitationApiService.instance
-          .fetchMealOptions(token, widget.invitationId!);
-      if (mounted) setState(() { _mealOptions = options; _mealOptionsLoading = false; });
-    } catch (_) {
-      if (mounted) setState(() => _mealOptionsLoading = false);
-    }
-  }
-
-  Future<void> _addMealOption(String label) async {
-    if (widget.invitationId == null || label.trim().isEmpty) return;
-    final token = ref.read(authProvider.notifier).accessToken;
-    if (token == null) return;
-    try {
-      final option = await InvitationApiService.instance
-          .addMealOption(token, widget.invitationId!, label.trim());
-      if (mounted) setState(() => _mealOptions = [..._mealOptions, option]);
-    } on InvitationApiException catch (e) {
-      if (mounted) showWedSnackBar(context, e.message, type: SnackType.error);
-    }
-  }
-
-  Future<void> _deleteMealOption(MealOption option) async {
-    final token = ref.read(authProvider.notifier).accessToken;
-    if (token == null) return;
-    // Optimistic — a couple removing an option expects it gone immediately;
-    // re-fetch on failure rather than leaving the list silently wrong.
-    setState(() => _mealOptions = _mealOptions.where((o) => o.id != option.id).toList());
-    try {
-      await InvitationApiService.instance.deleteMealOption(token, option.id);
-    } on InvitationApiException catch (e) {
-      if (mounted) showWedSnackBar(context, e.message, type: SnackType.error);
-      _loadMealOptions();
-    }
   }
 
   Future<void> _loadRsvpQuestions() async {
@@ -317,6 +274,8 @@ class _InvitationEditorScreenState
     _churchTimeCtrl.text =
         (data['churchTime'] as String?) ?? _churchTimeCtrl.text;
     _giftTypeCtrl.text = (data['giftType'] as String?) ?? _giftTypeCtrl.text;
+    final maxGuests = data['maxGuests'] as int?;
+    if (maxGuests != null) _maxGuestsCtrl.text = '$maxGuests';
 
     final fontIndex = data['fontIndex'] as int?;
     final colorValue = data['accentColor'] as int?;
@@ -344,7 +303,7 @@ class _InvitationEditorScreenState
     _churchThemeCtrl.dispose();
     _churchTimeCtrl.dispose();
     _giftTypeCtrl.dispose();
-    _newMealOptionCtrl.dispose();
+    _maxGuestsCtrl.dispose();
     super.dispose();
   }
 
@@ -362,6 +321,7 @@ class _InvitationEditorScreenState
         'churchTheme': _churchThemeCtrl.text.trim(),
         'churchTime': _churchTimeCtrl.text.trim(),
         'giftType': _giftTypeCtrl.text.trim(),
+        'maxGuests': int.tryParse(_maxGuestsCtrl.text.trim()),
         'fontIndex': _selectedFont,
         'accentColor': _accentColor.toARGB32(),
         'fontSize': _fontSize,
@@ -398,8 +358,7 @@ class _InvitationEditorScreenState
       await shareWithFallback(
         context,
         text: 'You\'re invited to celebrate our wedding! 💍\n\n'
-            'View our invitation here: ${invitation.shareUrl}\n\n'
-            'To RSVP, enter your name exactly as it appears on our guest list.',
+            'View our invitation here: ${invitation.shareUrl}',
         subject: 'Wedding Invitation – $coupleName',
       );
       unawaited(ref
@@ -430,8 +389,7 @@ class _InvitationEditorScreenState
     await shareWithFallback(
       context,
       text: 'You\'re invited to celebrate our wedding! 💍\n\n'
-          'View our invitation here: $shareUrl\n\n'
-          'To RSVP, enter your name exactly as it appears on our guest list.',
+          'View our invitation here: $shareUrl',
       subject: 'Wedding Invitation – $coupleName',
     );
   }
@@ -893,7 +851,6 @@ class _InvitationEditorScreenState
       (icon: Icons.draw, label: 'Font'),
       (icon: Icons.color_lens, label: 'Color'),
       (icon: Icons.grid_view, label: 'Layout'),
-      (icon: Icons.checklist, label: 'RSVP'),
       (icon: Icons.quiz_outlined, label: 'Questions'),
     ];
     return Row(
@@ -963,90 +920,8 @@ class _InvitationEditorScreenState
       2 => _buildFontContent(theme),
       3 => _buildStyleContent(theme),
       4 => _buildLayoutTabContent(theme),
-      5 => _buildRsvpTabContent(theme),
       _ => _buildQuestionsTabContent(theme),
     };
-  }
-
-  // ── RSVP tab: meal options guests choose from on the public form ─────────
-  Widget _buildRsvpTabContent(ThemeData theme) {
-    if (widget.invitationId == null) {
-      return Padding(
-        padding: const EdgeInsets.all(20),
-        child: Text(
-          'Save your invitation first to configure meal options for guests.',
-          style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Meal Options',
-            style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Guests choose from this list on your RSVP form. Leave it empty '
-            'to show a default set (Chicken, Beef, Vegetarian).',
-            style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 14),
-          if (_mealOptionsLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else if (_mealOptions.isEmpty)
-            Text(
-              'No custom meal options yet.',
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textHint),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final option in _mealOptions)
-                  Chip(
-                    label: Text(option.label),
-                    onDeleted: () => _deleteMealOption(option),
-                    deleteIconColor: AppColors.textSecondary,
-                  ),
-              ],
-            ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: WedTextField(
-                  controller: _newMealOptionCtrl,
-                  label: 'Add a meal option (e.g. Vegetarian)',
-                  onFieldSubmitted: (v) {
-                    _addMealOption(v);
-                    _newMealOptionCtrl.clear();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.add_circle, color: AppColors.forestGreen),
-                onPressed: () {
-                  _addMealOption(_newMealOptionCtrl.text);
-                  _newMealOptionCtrl.clear();
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 
   // ── Questions tab: custom RSVP questions guests answer alongside their RSVP ─
@@ -1072,8 +947,8 @@ class _InvitationEditorScreenState
           ),
           const SizedBox(height: 4),
           Text(
-            'Ask guests anything beyond meal choice — transportation, plus-ones, '
-            'song requests. Answers show up per-guest on your RSVP dashboard.',
+            'Ask guests anything else — transportation, plus-ones, song requests. '
+            'Answers show up per-guest on your RSVP dashboard.',
             style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 14),
@@ -1505,6 +1380,15 @@ class _InvitationEditorScreenState
             label: 'RSVP By Date',
             prefixIcon: Icons.event_available,
             controller: _rsvpCtrl,
+            onChanged: (_) => setState(() {}),
+          )),
+          _fieldPad(WedTextField(
+            label: 'Guest Limit (optional)',
+            prefixIcon: Icons.groups_outlined,
+            controller: _maxGuestsCtrl,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            hint: 'Leave blank for no limit',
             onChanged: (_) => setState(() {}),
           )),
           _fieldPad(WedTextField(
