@@ -103,6 +103,7 @@ flutter:
 
   assets:
     - assets/images/onboarding/
+    - assets/branding/
 
   # Bundled rather than fetched at runtime by google_fonts: a first launch on a
   # poor connection would otherwise fall back to Roboto silently, which is the

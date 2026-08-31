@@ -576,6 +576,12 @@ Rules:
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
+// Static, human-readable legal pages — required by Google's OAuth consent
+// screen (Application privacy policy link / terms of service link) before
+// the app can be published for sign-in beyond the listed test users.
+app.get('/privacy-policy', (_, res) => res.sendFile(path.join(__dirname, 'public', 'privacy-policy.html')));
+app.get('/terms-of-service', (_, res) => res.sendFile(path.join(__dirname, 'public', 'terms-of-service.html')));
+
 // Every route above already wraps its own body in try/catch and returns a
 // clean JSON error — these two exist only to catch what's outside that: a
 // request for a route that doesn't exist, a synchronous throw a handler

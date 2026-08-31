@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../core/theme/app_colors.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
@@ -62,31 +63,18 @@ class GoogleSignInButton extends ConsumerWidget {
   }
 }
 
-/// A plain "G" mark, not the licensed Google logo asset — good enough for a
-/// scaffolded button; swap in the real multi-color "G" asset once this is
-/// wired up to a real OAuth client (see GOOGLE_SIGNIN_SETUP.md).
+/// Google's official multi-color "G" logomark (see
+/// assets/branding/google_logo.svg), sized per Google's Sign In branding
+/// guidelines (https://developers.google.com/identity/branding-guidelines).
 class _GoogleMark extends StatelessWidget {
   const _GoogleMark();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SvgPicture.asset(
+      'assets/branding/google_logo.svg',
       width: 20,
       height: 20,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: AppColors.textSecondary, width: 1.2),
-      ),
-      child: Text(
-        'G',
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          color: AppColors.textSecondary,
-          height: 1,
-        ),
-      ),
     );
   }
 }
