@@ -96,13 +96,13 @@ class _VendorDiscoveryScreenState extends ConsumerState<VendorDiscoveryScreen> {
     // which can land a hair under a whole number on a fractional DPR display.
     final screenWidth = MediaQuery.sizeOf(context).width.roundToDouble();
     final gutter = AppDimensions.gutter(screenWidth, minGutter: 16);
-    // One card per row on phone (unchanged from before), 2 on tablet, 3 on
-    // desktop — same breakpoints AppDimensions already uses elsewhere.
-    final crossAxisCount = screenWidth >= AppDimensions.desktopMin
-        ? 3
-        : screenWidth >= AppDimensions.tabletMin
-        ? 2
-        : 1;
+    // One card per row on phone (unchanged from before), 3 from tablet width
+    // up — was 2 on tablet/3 on desktop, but a couple browsing on a laptop
+    // window that lands in the tablet band still expects the denser 3-per-row
+    // grid, not a leftover 2-column layout. Cards simply get narrower (and,
+    // via imageAspectRatio below, proportionally shorter) at tablet widths
+    // rather than being sized for a 2-column row.
+    final crossAxisCount = screenWidth >= AppDimensions.tabletMin ? 3 : 1;
     // Derived (not a fixed constant) so the card keeps its proportions at
     // any column count: the photo scales with card width via AspectRatio
     // inside _VendorMatchCard, while the metadata section below it stays a
@@ -111,9 +111,11 @@ class _VendorDiscoveryScreenState extends ConsumerState<VendorDiscoveryScreen> {
     final contentWidth = screenWidth - gutter * 2;
     final cardWidth =
         (contentWidth - cardSpacing * (crossAxisCount - 1)) / crossAxisCount;
+    final imageAspectRatio = _VendorMatchCard.imageAspectRatioFor(
+      crossAxisCount,
+    );
     final cardHeight =
-        cardWidth / _VendorMatchCard.imageAspectRatio +
-        _VendorMatchCard.contentHeight;
+        cardWidth / imageAspectRatio + _VendorMatchCard.contentHeight;
     final cardAspectRatio = cardWidth / cardHeight;
 
     return Scaffold(
@@ -390,7 +392,10 @@ class _VendorDiscoveryScreenState extends ConsumerState<VendorDiscoveryScreen> {
                                 childAspectRatio: cardAspectRatio,
                               ),
                           delegate: SliverChildBuilderDelegate(
-                            (_, i) => _VendorMatchCard(vendor: vendors[i]),
+                            (_, i) => _VendorMatchCard(
+                              vendor: vendors[i],
+                              crossAxisCount: crossAxisCount,
+                            ),
                             childCount: vendors.length,
                           ),
                         ),
@@ -496,13 +501,17 @@ class _VendorDiscoveryScreenState extends ConsumerState<VendorDiscoveryScreen> {
 
 class _VendorMatchCard extends ConsumerWidget {
   final VendorProfile vendor;
+  final int crossAxisCount;
 
-  const _VendorMatchCard({required this.vendor});
+  const _VendorMatchCard({required this.vendor, required this.crossAxisCount});
 
   // Width/height of the photo — the card scales this proportionally at any
-  // grid column count rather than cropping a fixed pixel height. Close to
-  // the original fixed 220px look at typical single-column phone widths.
-  static const double imageAspectRatio = 16 / 10;
+  // grid column count rather than cropping a fixed pixel height. Single
+  // column (phone) keeps the original fixed-220px-like proportion; a
+  // multi-column grid uses a flatter 16:9 instead, so a narrower 3-per-row
+  // card reads as compact rather than tall-and-skinny.
+  static double imageAspectRatioFor(int crossAxisCount) =>
+      crossAxisCount > 1 ? 16 / 9 : 16 / 10;
 
   // Fixed height for everything below the photo (price, guest count, the
   // occasional "Booked on your date" chip) so every card in a grid row
@@ -546,7 +555,7 @@ class _VendorMatchCard extends ConsumerWidget {
           ClipRRect(
             borderRadius: AppRadius.top(AppRadius.card),
             child: AspectRatio(
-              aspectRatio: imageAspectRatio,
+              aspectRatio: imageAspectRatioFor(crossAxisCount),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
