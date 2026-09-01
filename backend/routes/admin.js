@@ -200,6 +200,12 @@ router.patch('/users/:id/suspend', async (req, res) => {
     if (typeof suspended !== 'boolean') {
       return res.status(400).json({ error: 'suspended must be a boolean.' });
     }
+    // Suspending is_suspended blocks login immediately (see routes/auth.js)
+    // with no in-app recovery — an admin who suspends their own row locks
+    // themselves out of the panel that could undo it.
+    if (suspended && req.params.id === req.user.user_id) {
+      return res.status(400).json({ error: 'You cannot suspend your own account.' });
+    }
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 

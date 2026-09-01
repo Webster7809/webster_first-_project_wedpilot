@@ -318,6 +318,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                     ),
                     itemBuilder: (ctx, i) {
                       final user = filtered[i];
+                      final isSelf = user.id == ref.watch(currentUserProvider)?.id;
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -354,6 +355,25 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            if (isSelf)
+                              Container(
+                                margin: const EdgeInsets.only(right: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.adminIndigo.withAlpha(25),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'You',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.adminIndigo,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                             if (user.isSuspended)
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -412,21 +432,29 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                                   value: 'view',
                                   child: Text('View Profile'),
                                 ),
-                                PopupMenuItem(
-                                  value: 'suspend',
-                                  child: Text(
-                                    user.isSuspended
-                                        ? 'Unsuspend Account'
-                                        : 'Suspend Account',
+                                // Suspending blocks login immediately with no
+                                // in-app recovery, and admin accounts can't be
+                                // deleted from this panel anyway (see
+                                // DELETE /api/admin/users/:id) — hiding both
+                                // for your own row rules out locking yourself
+                                // out or hitting a guaranteed-403 by accident.
+                                if (!isSelf) ...[
+                                  PopupMenuItem(
+                                    value: 'suspend',
+                                    child: Text(
+                                      user.isSuspended
+                                          ? 'Unsuspend Account'
+                                          : 'Suspend Account',
+                                    ),
                                   ),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'delete',
-                                  child: Text(
-                                    'Delete Account',
-                                    style: TextStyle(color: AppColors.error),
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text(
+                                      'Delete Account',
+                                      style: TextStyle(color: AppColors.error),
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                           ],
