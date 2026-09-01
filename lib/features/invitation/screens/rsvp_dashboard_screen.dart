@@ -271,23 +271,18 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
 
     // A personal link points at a specific card design, so a guest reached
     // from the standalone Guests screen (no invitationId — see
-    // app_router.dart's /couple/guests route) can't get one generated until
-    // they're linked to an invitation. Catch that here instead of letting the
-    // network call fail with the backend's generic "invitationId is
-    // required" 400.
-    if (widget.invitationId.isEmpty) {
-      showWedSnackBar(
-        context,
-        'This guest isn\'t linked to an invitation yet. Open an invitation\'s '
-        'Guests tab and add them there to get a personal link.',
-        type: SnackType.info,
-      );
-      return;
+    // app_router.dart's /couple/guests route) needs one resolved before a
+    // link can be generated at all.
+    var invitationId = widget.invitationId;
+    if (invitationId.isEmpty) {
+      final resolved = await _resolveInvitationForLink(context);
+      if (resolved == null) return; // cancelled, or a message was already shown
+      invitationId = resolved;
     }
 
     final updated = await ref.read(guestRsvpProvider.notifier).getGuestInviteLink(
           guestId: guest.id,
-          invitationId: widget.invitationId,
+          invitationId: invitationId,
         );
     if (!context.mounted) return;
     if (updated?.inviteUrl == null) {
@@ -299,6 +294,48 @@ class _RsvpDashboardScreenState extends ConsumerState<RsvpDashboardScreen>
       text: 'You\'re invited to celebrate our wedding! 💍\n\n'
           'View your personal invitation here: ${updated!.inviteUrl}',
       subject: 'Your Wedding Invitation',
+    );
+  }
+
+  /// Picks which invitation a personal link should belong to when the guest
+  /// wasn't opened from that invitation's own Guests tab. Auto-picks the
+  /// couple's only published invitation, prompts when there's more than one,
+  /// and explains what to do first when there's none — a personal link can
+  /// only ever point at a published card (see the backend's `status:
+  /// 'published'` check on the public guest-invitation route).
+  Future<String?> _resolveInvitationForLink(BuildContext context) async {
+    final notifier = ref.read(invitationsProvider.notifier);
+    if (notifier.status == ResourceStatus.initial) {
+      await notifier.loadInvitations();
+    }
+    if (!context.mounted) return null;
+
+    final published = ref
+        .read(invitationsProvider)
+        .where((i) => i.status == InvitationStatus.published)
+        .toList();
+    if (published.isEmpty) {
+      showWedSnackBar(
+        context,
+        'Publish an invitation first — a personal link points at a specific card design.',
+        type: SnackType.info,
+      );
+      return null;
+    }
+    if (published.length == 1) return published.first.id;
+
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Which invitation is this guest for?'),
+        children: [
+          for (final invitation in published)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(invitation.id),
+              child: Text(invitation.title),
+            ),
+        ],
+      ),
     );
   }
 

@@ -157,7 +157,7 @@ class AppDrawer extends ConsumerWidget {
                 // RsvpDashboardScreen's own invitationId.isEmpty handling),
                 // so this is a direct way in without designing a card first.
                 _DrawerItem(
-                  icon: Icons.people_outline,
+                  icon: Icons.people,
                   label: 'Guests',
                   onTap: () {
                     Navigator.of(context).pop();
