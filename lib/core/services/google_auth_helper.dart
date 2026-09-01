@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../config/api_config.dart';
 
@@ -19,10 +20,21 @@ class GoogleAuthHelper {
   Future<void>? _initFuture;
 
   Future<void> _ensureInitialized() {
+    final clientId = ApiConfig.googleServerClientId.isNotEmpty
+        ? ApiConfig.googleServerClientId
+        : null;
+    // google_sign_in_web's plugin asserts `serverClientId == null` and
+    // requires the Web client ID via `clientId` instead (its own JS SDK,
+    // not a server-verified handoff) — passing serverClientId there leaves
+    // its client ID unset and the plugin throws on first use. Native
+    // platforms want the opposite: `serverClientId` is what makes the
+    // returned ID token audienced to this (Web) client so the backend can
+    // verify it; passing it as `clientId` there would instead try to
+    // override the app's own native client. Same value, different slot per
+    // platform — see GOOGLE_SIGNIN_SETUP.md.
     return _initFuture ??= GoogleSignIn.instance.initialize(
-      serverClientId: ApiConfig.googleServerClientId.isNotEmpty
-          ? ApiConfig.googleServerClientId
-          : null,
+      clientId: kIsWeb ? clientId : null,
+      serverClientId: kIsWeb ? null : clientId,
     );
   }
 
