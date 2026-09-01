@@ -1135,6 +1135,10 @@ class _ShortlistScroll extends StatelessWidget {
   Widget build(BuildContext context) {
     if (vendors.isEmpty) {
       return Container(
+        // Without an explicit width this shrinks to hug "Add vendors to
+        // your shortlist" — a much narrower box than every other dashboard
+        // section card, floating oddly to the left of the leftover space.
+        width: double.infinity,
         constraints: const BoxConstraints(minHeight: 120),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
