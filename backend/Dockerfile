@@ -33,8 +33,12 @@ ENV NODE_ENV=production
 # it does not get default signal handlers — `docker stop` sends SIGTERM to a
 # process that ignores it and the container is SIGKILLed ten seconds later,
 # cutting in-flight requests. dumb-init also reaps orphaned children.
+#
+# gosu drops root back to the `node` user after the entrypoint's chown step
+# below — see the USER note further down for why that step has to run as
+# root even though the app itself must not.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends dumb-init \
+    && apt-get install -y --no-install-recommends dumb-init gosu \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -45,10 +49,15 @@ COPY . .
 # The node images ship a non-root `node` user (uid 1000). Running as root
 # inside the container means a container escape starts as root on the host.
 # uploads/ is the one path the app writes to, so it needs to be owned by the
-# user that will write it — the compose volume mounted here inherits this
-# ownership on first creation.
+# user that will write it. A docker-compose named volume mounted here inherits
+# this ownership on first creation — but a Railway volume does not: it mounts
+# root:root every time, regardless of what the image had at that path, which
+# made the container crash-loop on EACCES the moment a Railway volume was
+# attached at /app/uploads. The image still can't know in advance which kind
+# of volume (if any) it'll be mounted under, so this is fixed at container
+# start instead of build time — see the chown in CMD below, which is why the
+# container now starts as root and only drops to `node` after that runs.
 RUN mkdir -p uploads && chown -R node:node /app
-USER node
 
 EXPOSE 3000
 
@@ -59,11 +68,15 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD node -e "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["dumb-init", "--"]
-# Applies any pending migration before the server starts — the only place
-# this happens for a platform like Railway, which has no separate release
-# step and runs this image with NODE_ENV=production, where server.js
-# deliberately skips its own sequelize.sync(). Idempotent (see db/migrate.js),
-# and migrate.js exits non-zero on failure, so `&&` refuses to boot the server
-# against a schema that didn't actually update rather than serving traffic
-# against columns the code assumes exist.
-CMD ["sh", "-c", "node db/migrate.js && node server.js"]
+# Re-chowns /app/uploads on every start (cheap, idempotent) to undo whatever
+# ownership the platform's volume driver mounted it with, then gosu drops
+# from root to the unprivileged `node` user before anything from the app
+# itself — including the migration — ever runs. Applies any pending migration
+# before the server starts — the only place this happens for a platform like
+# Railway, which has no separate release step and runs this image with
+# NODE_ENV=production, where server.js deliberately skips its own
+# sequelize.sync(). Idempotent (see db/migrate.js), and migrate.js exits
+# non-zero on failure, so `&&` refuses to boot the server against a schema
+# that didn't actually update rather than serving traffic against columns the
+# code assumes exist.
+CMD ["sh", "-c", "chown -R node:node /app/uploads && exec gosu node sh -c 'node db/migrate.js && node server.js'"]
