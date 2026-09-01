@@ -213,39 +213,49 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       // ── Shortlist + Planning checklist ────────────────────────
                       // Side by side from tablet width up — stacked full-width
                       // on either, they left most of a desktop window's row
-                      // empty next to a single narrow card. Each keeps its own
-                      // natural height rather than being stretched to match the
-                      // other, same as any other pair of dashboard cards.
+                      // empty next to a single narrow card. IntrinsicHeight +
+                      // stretch makes both sections match the taller one's
+                      // height (as well as sharing the row's width equally via
+                      // Expanded) instead of each just keeping its own natural
+                      // height, which read as mismatched side by side.
                       if (isTablet)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: _DashboardSection(
-                                title: 'Your shortlist',
-                                actionLabel: 'See all',
-                                onSeeAll: () => context.push('/couple/wishlist'),
-                                child: _ShortlistScroll(
-                                  vendors: shortlisted,
-                                  onTap: (id) =>
-                                      context.push('/couple/vendors/$id'),
-                                  onDiscover: () => context.go('/couple/vendors'),
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: _DashboardSection(
+                                  title: 'Your shortlist',
+                                  actionLabel: 'See all',
+                                  onSeeAll: () =>
+                                      context.push('/couple/wishlist'),
+                                  stretch: true,
+                                  child: _ShortlistScroll(
+                                    vendors: shortlisted,
+                                    onTap: (id) =>
+                                        context.push('/couple/vendors/$id'),
+                                    onDiscover: () =>
+                                        context.go('/couple/vendors'),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 24),
-                            Expanded(
-                              child: _DashboardSection(
-                                title: 'Planning checklist',
-                                actionLabel: 'View all',
-                                onSeeAll: () => context.push('/couple/checklist'),
-                                child: _ChecklistPreview(
-                                  tasks: tasks.take(3).toList(),
-                                  onTap: () => context.push('/couple/checklist'),
+                              const SizedBox(width: 24),
+                              Expanded(
+                                child: _DashboardSection(
+                                  title: 'Planning checklist',
+                                  actionLabel: 'View all',
+                                  onSeeAll: () =>
+                                      context.push('/couple/checklist'),
+                                  stretch: true,
+                                  child: _ChecklistPreview(
+                                    tasks: tasks.take(3).toList(),
+                                    onTap: () =>
+                                        context.push('/couple/checklist'),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         )
                       else ...[
                         _DashboardSection(
@@ -1164,18 +1174,28 @@ class _DashboardSection extends StatelessWidget {
   final VoidCallback onSeeAll;
   final Widget child;
 
+  /// True inside the side-by-side Row (which wraps this in IntrinsicHeight +
+  /// CrossAxisAlignment.stretch so both sections share the taller one's
+  /// height) — [child] then needs Expanded to actually fill that height
+  /// rather than leaving blank space, and the Column needs the default
+  /// MainAxisSize.max to consume it. False in the stacked phone layout, whose
+  /// enclosing scroll Column gives unbounded height — Expanded there would
+  /// throw ("non-zero flex but incoming height constraints are unbounded").
+  final bool stretch;
+
   const _DashboardSection({
     required this.title,
     required this.actionLabel,
     required this.onSeeAll,
     required this.child,
+    this.stretch = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: stretch ? MainAxisSize.max : MainAxisSize.min,
       children: [
         WedSectionHeader(
           title: title,
@@ -1183,7 +1203,7 @@ class _DashboardSection extends StatelessWidget {
           onSeeAll: onSeeAll,
         ),
         const SizedBox(height: 12),
-        child,
+        stretch ? Expanded(child: child) : child,
       ],
     );
   }
