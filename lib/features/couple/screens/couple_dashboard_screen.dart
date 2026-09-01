@@ -210,31 +210,65 @@ class CoupleDashboardScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 28),
 
-                      // ── Shortlist ─────────────────────────────────────────────
-                      WedSectionHeader(
-                        title: 'Your shortlist',
-                        actionLabel: 'See all',
-                        onSeeAll: () => context.push('/couple/wishlist'),
-                      ),
-                      const SizedBox(height: 12),
-                      _ShortlistScroll(
-                        vendors: shortlisted,
-                        onTap: (id) => context.push('/couple/vendors/$id'),
-                        onDiscover: () => context.go('/couple/vendors'),
-                      ),
-                      const SizedBox(height: 28),
-
-                      // ── Planning Checklist ────────────────────────────────────
-                      WedSectionHeader(
-                        title: 'Planning checklist',
-                        actionLabel: 'View all',
-                        onSeeAll: () => context.push('/couple/checklist'),
-                      ),
-                      const SizedBox(height: 12),
-                      _ChecklistPreview(
-                        tasks: tasks.take(3).toList(),
-                        onTap: () => context.push('/couple/checklist'),
-                      ),
+                      // ── Shortlist + Planning checklist ────────────────────────
+                      // Side by side from tablet width up — stacked full-width
+                      // on either, they left most of a desktop window's row
+                      // empty next to a single narrow card. Each keeps its own
+                      // natural height rather than being stretched to match the
+                      // other, same as any other pair of dashboard cards.
+                      if (isTablet)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _DashboardSection(
+                                title: 'Your shortlist',
+                                actionLabel: 'See all',
+                                onSeeAll: () => context.push('/couple/wishlist'),
+                                child: _ShortlistScroll(
+                                  vendors: shortlisted,
+                                  onTap: (id) =>
+                                      context.push('/couple/vendors/$id'),
+                                  onDiscover: () => context.go('/couple/vendors'),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: _DashboardSection(
+                                title: 'Planning checklist',
+                                actionLabel: 'View all',
+                                onSeeAll: () => context.push('/couple/checklist'),
+                                child: _ChecklistPreview(
+                                  tasks: tasks.take(3).toList(),
+                                  onTap: () => context.push('/couple/checklist'),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      else ...[
+                        _DashboardSection(
+                          title: 'Your shortlist',
+                          actionLabel: 'See all',
+                          onSeeAll: () => context.push('/couple/wishlist'),
+                          child: _ShortlistScroll(
+                            vendors: shortlisted,
+                            onTap: (id) => context.push('/couple/vendors/$id'),
+                            onDiscover: () => context.go('/couple/vendors'),
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+                        _DashboardSection(
+                          title: 'Planning checklist',
+                          actionLabel: 'View all',
+                          onSeeAll: () => context.push('/couple/checklist'),
+                          child: _ChecklistPreview(
+                            tasks: tasks.take(3).toList(),
+                            onTap: () => context.push('/couple/checklist'),
+                          ),
+                        ),
+                      ],
                     ],
                   );
 
@@ -1114,6 +1148,43 @@ class _RsvpCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Dashboard section (header + content) ────────────────────────────────────────
+
+/// A section header plus its content — factored out so the shortlist and
+/// checklist sections render identically whether they're stacked (phone) or
+/// side by side in a Row (tablet+), instead of duplicating the header/spacing
+/// boilerplate for each layout.
+class _DashboardSection extends StatelessWidget {
+  final String title;
+  final String actionLabel;
+  final VoidCallback onSeeAll;
+  final Widget child;
+
+  const _DashboardSection({
+    required this.title,
+    required this.actionLabel,
+    required this.onSeeAll,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        WedSectionHeader(
+          title: title,
+          actionLabel: actionLabel,
+          onSeeAll: onSeeAll,
+        ),
+        const SizedBox(height: 12),
+        child,
+      ],
     );
   }
 }
