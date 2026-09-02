@@ -892,9 +892,17 @@ class _GuestCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
-                      if (guest.cardNumber != null) ...[
+                      if (guest.cardNumber != null || (guest.maxPartySize ?? 1) > 1) ...[
                         const SizedBox(height: 4),
-                        _CardNumberChip(guest: guest),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            if (guest.cardNumber != null) _CardNumberChip(guest: guest),
+                            if ((guest.maxPartySize ?? 1) > 1)
+                              _InvitedCountChip(count: guest.maxPartySize!),
+                          ],
+                        ),
                       ],
                     ],
                   ),
@@ -1063,6 +1071,39 @@ class _CardNumberChip extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// How many people this guest's invitation covers, shown beside the door
+/// check-in code so it's on hand as proof when checking a card against how
+/// many people actually turn up with it.
+class _InvitedCountChip extends StatelessWidget {
+  final int count;
+  const _InvitedCountChip({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.amber.withAlpha(31),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.groups_outlined, size: 12, color: AppColors.goldDeep),
+          const SizedBox(width: 4),
+          Text(
+            'Invited: $count',
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1493,6 +1534,13 @@ class _GuestDetailsSheet extends StatelessWidget {
                             : 'Not checked in yet',
                         style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                       ),
+                      // Invited party size on hand as the check-in reference
+                      // — compare against how many people actually arrive
+                      // with this card.
+                      if ((guest.maxPartySize ?? 1) > 1) ...[
+                        const SizedBox(height: 4),
+                        _InvitedCountChip(count: guest.maxPartySize!),
+                      ],
                     ],
                   ),
                 ),

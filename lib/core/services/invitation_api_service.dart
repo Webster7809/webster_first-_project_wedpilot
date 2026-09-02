@@ -461,6 +461,22 @@ class InvitationApiService {
     }
   }
 
+  /// Looks up how many people a name's invitation covers on the shared
+  /// broadcast link, mirroring exactly what [submitPublicRsvp] will actually
+  /// record — used only to show the guest a real number before they submit.
+  /// Falls back to 1 (never throws) so a lookup hiccup can't block the form.
+  Future<int> fetchPublicPartySize(String shareToken, String name) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/invitations/public/$shareToken/party-size',
+        queryParameters: {'name': name},
+      );
+      return response.data?['max_party_size'] as int? ?? 1;
+    } on DioException {
+      return 1;
+    }
+  }
+
   /// Returns `null` if no such invite token resolves to a published
   /// invitation (404 — expected, e.g. a deleted guest or unpublished design).
   Future<GuestInvitation?> fetchGuestInvitation(String inviteToken) async {

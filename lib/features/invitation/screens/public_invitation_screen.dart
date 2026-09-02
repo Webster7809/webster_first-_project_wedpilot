@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -57,6 +59,14 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
 
   bool get _isGuestLink => widget.inviteToken != null;
 
+  /// Shared-link-only: resolved once the guest has typed enough of their
+  /// name, via a debounced lookup that mirrors exactly what submitting will
+  /// record (see [InvitationApiService.fetchPublicPartySize]). Null before
+  /// that resolves — the form then explains how to reveal it instead of
+  /// guessing.
+  int? _sharedPartySize;
+  Timer? _partySizeDebounce;
+
   // Local-only draft storage (device-scoped), keyed by the link's token so an
   // unfinished RSVP survives closing the tab/app before it's submitted.
   String get _draftKey => 'rsvp_draft_${widget.inviteToken ?? widget.shareToken}';
@@ -66,6 +76,25 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
   void initState() {
     super.initState();
     _loadInvitation();
+    if (!_isGuestLink) _nameCtrl.addListener(_onNameChangedForPartySize);
+  }
+
+  // Debounced so a lookup only fires once the guest pauses typing, not on
+  // every keystroke. Guards on the field's current text after the delay so a
+  // stale response for an earlier name can't overwrite a newer one.
+  void _onNameChangedForPartySize() {
+    _partySizeDebounce?.cancel();
+    final name = _nameCtrl.text.trim();
+    if (name.length < 2) {
+      if (_sharedPartySize != null) setState(() => _sharedPartySize = null);
+      return;
+    }
+    _partySizeDebounce = Timer(const Duration(milliseconds: 500), () async {
+      final size = await InvitationApiService.instance.fetchPublicPartySize(widget.shareToken!, name);
+      if (mounted && _nameCtrl.text.trim() == name) {
+        setState(() => _sharedPartySize = size);
+      }
+    });
   }
 
   Future<void> _loadInvitation() async {
@@ -139,6 +168,8 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
 
   @override
   void dispose() {
+    _partySizeDebounce?.cancel();
+    _nameCtrl.removeListener(_onNameChangedForPartySize);
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _dietaryCtrl.dispose();
@@ -510,7 +541,7 @@ class _PublicInvitationScreenState extends State<PublicInvitationScreen> {
             rsvpBy: rsvpBy,
             attending: _attending,
             onAttendingChanged: (v) => setState(() => _attending = v),
-            guestCount: _isGuestLink ? _guestCount : null,
+            guestCount: _isGuestLink ? _guestCount : _sharedPartySize,
             rsvpQuestions: _rsvpQuestions,
             answerValues: _answerValues,
             onAnswerChanged: (id, value) => setState(() => _answerValues[id] = value),
@@ -961,8 +992,9 @@ class _RsvpFormCard extends StatelessWidget {
   final ValueChanged<AttendingStatus> onAttendingChanged;
   // Set entirely by the couple (via Guest.maxPartySize) — the guest confirms
   // yes/no/maybe but never chooses this number themselves. Null when the link
-  // itself doesn't identify a guest yet (the shared broadcast link), so the
-  // form describes the rule instead of stating a number it can't know.
+  // itself doesn't identify a guest yet (the shared broadcast link before a
+  // name is typed), so the form prompts for a name instead of stating a
+  // number it can't know yet.
   final int? guestCount;
   final List<RsvpQuestion> rsvpQuestions;
   final Map<String, dynamic> answerValues;
@@ -1055,13 +1087,13 @@ class _RsvpFormCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        // Null on the shared link: the couple's number lives
-                        // against the guest record the name resolves to, and
-                        // looking it up before submitting would turn this form
-                        // into a "who's invited?" oracle. Showing "Just you"
-                        // there was simply wrong for a family invitation.
+                        // Null on the shared link until a name is typed — the
+                        // couple's number lives against the guest record the
+                        // name resolves to (see the debounced lookup in
+                        // _onNameChangedForPartySize), so it can't be known
+                        // any earlier than that.
                         guestCount == null
-                            ? 'As set by the couple on your invitation'
+                            ? 'Type your name above to see your party size'
                             : guestCount == 1
                                 ? 'Just you'
                                 : '$guestCount guests',

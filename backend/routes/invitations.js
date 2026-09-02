@@ -493,6 +493,33 @@ router.get('/public/:shareToken', async (req, res) => {
   }
 });
 
+// Lets a guest on the shared broadcast link see their party size before
+// submitting, once they've typed their name — mirrors exactly what POST
+// /public/:shareToken/rsvp will record (existingGuest?.max_party_size || 1),
+// so this can't tell the guest anything the submit response wouldn't already
+// reveal. Rate-limited like the submit routes since, unlike them, this one
+// can be polled freely to probe names on the couple's list.
+router.get('/public/:shareToken/party-size', publicRsvpLimiter, async (req, res) => {
+  try {
+    const invitation = await Invitation.findOne({
+      where: { share_token: req.params.shareToken, status: 'published' },
+    });
+    if (!invitation) return res.status(404).json({ error: 'Invitation not found.' });
+
+    const name = (req.query.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Name is required.' });
+
+    const existingGuest = await Guest.findOne({
+      where: { couple_user_id: invitation.couple_user_id, name: { [Op.like]: escapeLike(name) } },
+    });
+
+    res.json({ max_party_size: existingGuest?.max_party_size || 1 });
+  } catch (err) {
+    console.error('Public party-size lookup error:', err.message);
+    res.status(500).json({ error: 'Could not look up party size.' });
+  }
+});
+
 // Reached via the app's own /g/:inviteToken deep link — a personal,
 // per-guest link. Viewing never locks anything (messaging apps like
 // WhatsApp/iMessage auto-fetch shared URLs to build a link preview, which
