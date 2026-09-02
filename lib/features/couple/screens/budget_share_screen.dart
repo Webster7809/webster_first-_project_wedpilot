@@ -133,7 +133,7 @@ class BudgetShareScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                // AI summary banner
+                // Budget summary banner
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -143,7 +143,7 @@ class BudgetShareScreen extends ConsumerWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.auto_awesome,
+                      const Icon(Icons.pie_chart_outline,
                           color: AppColors.goldDeep, size: 22),
                       const SizedBox(width: 12),
                       Expanded(
@@ -151,7 +151,7 @@ class BudgetShareScreen extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'AI-aligned across ${categories.length} vendor categories',
+                              'Allocated across ${categories.length} budget categories',
                               style: AppTextStyles.titleMedium.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
@@ -159,7 +159,7 @@ class BudgetShareScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Matched to your ${budget.isAiGenerated ? 'AI-generated' : 'custom'} plan · budget optimised for your guest count and location.',
+                              'Based on standard wedding-budget benchmarks for your guest count and location.',
                               style: AppTextStyles.bodySmall.copyWith(
                                 color: Colors.white.withAlpha(178),
                                 height: 1.5,

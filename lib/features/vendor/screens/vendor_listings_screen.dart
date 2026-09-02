@@ -9,6 +9,7 @@ import '../../../core/services/vendor_api_service.dart' show resolveMediaUrl;
 import '../../../core/services/vendor_class_service.dart';
 import '../../../core/state/resource.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_dimensions.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../models/budget_class.dart';
@@ -305,6 +306,16 @@ class _PortfolioTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final media = ref.watch(vendorMediaProvider);
+    // Matches the breakpoint pattern already used on the couple-facing
+    // vendor_discovery_screen.dart grid: more columns as width grows, rather
+    // than a fixed count that leaves photos cramped on phones or the grid
+    // under-using a desktop window.
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final crossAxisCount = screenWidth >= AppDimensions.desktopMin
+        ? 4
+        : screenWidth >= AppDimensions.tabletMin
+            ? 3
+            : 2;
 
     return CustomScrollView(
       slivers: [
@@ -347,8 +358,8 @@ class _PortfolioTab extends ConsumerWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
             sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
                 crossAxisSpacing: 6,
                 mainAxisSpacing: 6,
                 childAspectRatio: 1,

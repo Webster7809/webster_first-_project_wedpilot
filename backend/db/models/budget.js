@@ -23,7 +23,7 @@ const Budget = sequelize.define('Budget', {
   is_ai_generated: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
-    defaultValue: true,
+    defaultValue: false,
   },
 }, {
   tableName: 'budgets',

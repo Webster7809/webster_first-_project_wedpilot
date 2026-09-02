@@ -17,8 +17,8 @@ class _HelpScreenState extends State<HelpScreen> {
   final _searchFocus = FocusNode();
   final _faqs = [
     _Faq(
-      'How does the AI budget allocation work?',
-      'Wedpilot\'s AI analyzes industry averages, your guest count, location, and priorities to recommend how to distribute your budget across 12 wedding categories. You can adjust any category and the AI explains its reasoning.',
+      'How does the starting budget allocation work?',
+      'Wedpilot splits your total budget across 8 wedding categories using standard industry-benchmark percentages (for example, venue and catering typically take the largest share). You can adjust any category yourself at any time — this starting split isn\'t AI-generated, but vendor recommendations elsewhere in the app do use AI.',
     ),
     _Faq(
       'How are vendors verified?',

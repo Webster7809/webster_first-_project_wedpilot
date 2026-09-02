@@ -228,7 +228,8 @@ class BudgetService {
       coupleId: 'profile-001',
       totalAmount: total,
       currency: currency,
-      isAiGenerated: true,
+      // Static, rule-based allocation template — no AI call backs it.
+      isAiGenerated: false,
       categories: categories,
       customItems: customEntries,
       expenses: const [],

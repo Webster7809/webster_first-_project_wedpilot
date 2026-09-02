@@ -165,7 +165,9 @@ router.post('/', verifyJwt, requireCouple, async (req, res) => {
       couple_user_id: req.user.user_id,
       total_amount,
       currency: currency || 'ZMW',
-      is_ai_generated: true,
+      // buildCategoriesFor() below is a static, rule-based allocation
+      // template (see constants/budgetTemplate.js) — no AI call backs it.
+      is_ai_generated: false,
     });
 
     const customItemRows = Array.isArray(custom_items) ? custom_items : [];
@@ -200,7 +202,8 @@ router.get('/', verifyJwt, requireCouple, async (req, res) => {
         couple_user_id: req.user.user_id,
         total_amount: profile.total_budget,
         currency: profile.currency || 'ZMW',
-        is_ai_generated: true,
+        // Same static template as the POST route above — not AI-generated.
+        is_ai_generated: false,
       });
       // Tags are rows now, not a column on the profile — reading
       // profile.style_tags here would silently pass undefined and generate a

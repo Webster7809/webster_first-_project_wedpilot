@@ -98,6 +98,20 @@ function serializeInquiry(inquiry, { coupleName = null, vendorName = null, hasFe
   };
 }
 
+// GET /api/vendors (the directory list) excludes a rejected vendor and any
+// vendor whose owning account is suspended — but until now that filter was
+// never re-applied to a request that already has the vendor_id in hand (a
+// wishlist entry, a cached deep link, browser history), so the same vendor
+// stayed fully reachable — full profile, a fresh inquiry, even its public
+// CRS score — via its direct-ID routes. This closes that gap by re-checking
+// the same two conditions everywhere a vendor is looked up by ID for a
+// couple-facing read/write, not just in the list query.
+async function assertVendorReachable(vendor) {
+  if (vendor.verification_status === 'rejected') return false;
+  const owner = await User.findByPk(vendor.user_id, { attributes: ['is_suspended'] });
+  return !owner?.is_suspended;
+}
+
 async function serializeVendor(
   vendor,
   {
@@ -890,6 +904,9 @@ router.post('/:id/inquiries', verifyJwt, requireCouple, async (req, res) => {
   try {
     const vendor = await Vendor.findByPk(req.params.id);
     if (!vendor) return res.status(404).json({ error: 'Vendor not found.' });
+    if (!(await assertVendorReachable(vendor))) {
+      return res.status(404).json({ error: 'Vendor not found.' });
+    }
 
     const { message, budget_range_min, budget_range_max } = req.body;
     if (!message || typeof message !== 'string') {
@@ -980,6 +997,9 @@ router.get('/:vendorId/crs', verifyJwt, async (req, res) => {
   try {
     const vendor = await Vendor.findByPk(req.params.vendorId);
     if (!vendor) return res.status(404).json({ error: 'Vendor not found.' });
+    if (!(await assertVendorReachable(vendor))) {
+      return res.status(404).json({ error: 'Vendor not found.' });
+    }
     const stats = (await statsForVendorIds([vendor.vendor_id]))[vendor.vendor_id];
     res.json({
       vendor_id: vendor.vendor_id,
@@ -1081,6 +1101,9 @@ router.get('/:id', verifyJwt, async (req, res) => {
   try {
     const vendor = await Vendor.findByPk(req.params.id);
     if (!vendor) return res.status(404).json({ error: 'Vendor not found.' });
+    if (req.user.role !== 'admin' && !(await assertVendorReachable(vendor))) {
+      return res.status(404).json({ error: 'Vendor not found.' });
+    }
     res.json({ vendor: await serializeVendor(vendor, { includeDetail: true }) });
   } catch (err) {
     console.error('Get vendor error:', err.message);
