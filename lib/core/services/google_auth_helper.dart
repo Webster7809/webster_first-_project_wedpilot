@@ -19,7 +19,11 @@ class GoogleAuthHelper {
   // other call — this Future is that guard, shared across every signIn().
   Future<void>? _initFuture;
 
-  Future<void> _ensureInitialized() {
+  /// Starts (or awaits an already-started) GoogleSignIn.initialize(). Public
+  /// because the web path has to call this itself before rendering Google's
+  /// own sign-in button (see GoogleSignInButton) — unlike [signIn]'s native
+  /// path, there's no tap on our side to lazily trigger it from first.
+  Future<void> ensureInitialized() {
     final clientId = ApiConfig.googleServerClientId.isNotEmpty
         ? ApiConfig.googleServerClientId
         : null;
@@ -39,12 +43,15 @@ class GoogleAuthHelper {
   }
 
   /// Runs the native Google account picker and returns the ID token that
-  /// POST /api/auth/google verifies server-side.
+  /// POST /api/auth/google verifies server-side. Android/iOS only —
+  /// google_sign_in_web's authenticate() always throws UnimplementedError;
+  /// web signs in through [signInEvents] instead, driven by the SDK's own
+  /// rendered button (see google_web_button_web.dart).
   Future<String> signIn() async {
     if (ApiConfig.googleServerClientId.isEmpty) {
       throw GoogleAuthNotConfiguredException();
     }
-    await _ensureInitialized();
+    await ensureInitialized();
     try {
       final account = await GoogleSignIn.instance.authenticate();
       final idToken = account.authentication.idToken;
@@ -58,6 +65,18 @@ class GoogleAuthHelper {
       }
       rethrow;
     }
+  }
+
+  /// Accounts reported by the SDK once a sign-in completes — the only way
+  /// web learns of one, since its rendered button (not app code) drives the
+  /// GIS/FedCM flow rather than returning from an awaited call.
+  Stream<GoogleSignInAccount> get signInEvents {
+    return GoogleSignIn.instance.authenticationEvents
+        .where((event) => event is GoogleSignInAuthenticationEventSignIn)
+        .map(
+          (event) =>
+              (event as GoogleSignInAuthenticationEventSignIn).user,
+        );
   }
 
   Future<void> signOut() => GoogleSignIn.instance.signOut();

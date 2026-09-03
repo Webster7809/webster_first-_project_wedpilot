@@ -1,6 +1,13 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_sign_in/google_sign_in.dart' show GoogleSignInAccount;
+import '../core/config/api_config.dart';
+import '../core/services/google_auth_helper.dart';
+import '../core/services/google_web_button.dart';
 import '../core/theme/app_colors.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
@@ -9,26 +16,76 @@ import 'wed_snack_bar.dart';
 /// "Continue with Google" — an alternate to the email/password form. [role]
 /// only matters the first time this Google account is seen (decides the new
 /// account's role); an existing account keeps whatever role it already has.
-class GoogleSignInButton extends ConsumerWidget {
+class GoogleSignInButton extends ConsumerStatefulWidget {
   final UserRole role;
   final bool isLoading;
 
   const GoogleSignInButton({super.key, required this.role, this.isLoading = false});
 
+  @override
+  ConsumerState<GoogleSignInButton> createState() => _GoogleSignInButtonState();
+}
+
+class _GoogleSignInButtonState extends ConsumerState<GoogleSignInButton> {
+  // Whether Google is configured is a build-time constant, so this never
+  // changes across the widget's lifetime.
+  bool get _useWebGoogleButton =>
+      kIsWeb && ApiConfig.googleServerClientId.isNotEmpty;
+
+  StreamSubscription<GoogleSignInAccount>? _webSignInSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    // google_sign_in_web's SDK owns the click on its own rendered button
+    // (built in build() below) rather than returning from an awaited call,
+    // so sign-in completes here instead of in _handleTap.
+    if (_useWebGoogleButton) {
+      unawaited(GoogleAuthHelper.instance.ensureInitialized());
+      _webSignInSubscription = GoogleAuthHelper.instance.signInEvents.listen(
+        (account) => ref
+            .read(authProvider.notifier)
+            .completeGoogleSignIn(account, widget.role),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _webSignInSubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> _handleTap(BuildContext context, WidgetRef ref) async {
-    await ref.read(authProvider.notifier).loginWithGoogle(role);
+    await ref.read(authProvider.notifier).loginWithGoogle(widget.role);
     if (!context.mounted) return;
     final error = ref.read(authProvider).error;
     if (error != null) showWedSnackBar(context, error, type: SnackType.error);
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    if (_useWebGoogleButton) {
+      // Google's own button, required on web — see google_web_button_web.dart.
+      return SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: Center(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final maxWidth =
+                  constraints.maxWidth.isFinite ? constraints.maxWidth : 400.0;
+              return renderGoogleWebButton(minimumWidth: maxWidth.clamp(1, 400));
+            },
+          ),
+        ),
+      );
+    }
     return SizedBox(
       width: double.infinity,
       height: 52,
       child: OutlinedButton(
-        onPressed: isLoading ? null : () => _handleTap(context, ref),
+        onPressed: widget.isLoading ? null : () => _handleTap(context, ref),
         style: OutlinedButton.styleFrom(
           side: const BorderSide(color: AppColors.divider),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),

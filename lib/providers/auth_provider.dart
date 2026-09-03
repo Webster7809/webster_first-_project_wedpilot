@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart' show GoogleSignInAccount;
 import '../core/services/auth_service.dart';
 import '../core/services/couple_profile_service.dart';
 import '../core/services/google_auth_helper.dart';
@@ -125,11 +126,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final idToken = await GoogleAuthHelper.instance.signIn();
-      final result = await _authService.googleAuth(idToken: idToken, role: role);
-      // No forceOnboarding: a brand-new account already resolves
-      // needsOnboarding=true on its own (no profile row exists yet), while a
-      // returning account correctly skips back onboarding it already did.
-      await _applyAuthResult(result);
+      await _finishGoogleAuth(idToken, role);
     } on GoogleAuthCancelledException {
       state = state.copyWith(isLoading: false);
     } on GoogleAuthNotConfiguredException {
@@ -143,6 +140,35 @@ class AuthNotifier extends StateNotifier<AuthState> {
       AppLogger.error('Google sign-in failed', e, stackTrace);
       state = state.copyWith(isLoading: false, error: describeError(e));
     }
+  }
+
+  /// Completes a Google sign-in on web, where GoogleSignInButton renders
+  /// Google's own SDK button instead of calling [loginWithGoogle] directly
+  /// (google_sign_in_web has no imperative authenticate() call) — the
+  /// account arrives here via GoogleAuthHelper.signInEvents once the user
+  /// finishes Google's own flow.
+  Future<void> completeGoogleSignIn(GoogleSignInAccount account, UserRole role) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final idToken = account.authentication.idToken;
+      if (idToken == null) {
+        throw Exception('Google did not return an identity token.');
+      }
+      await _finishGoogleAuth(idToken, role);
+    } on AuthApiException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+    } catch (e, stackTrace) {
+      AppLogger.error('Google sign-in failed', e, stackTrace);
+      state = state.copyWith(isLoading: false, error: describeError(e));
+    }
+  }
+
+  Future<void> _finishGoogleAuth(String idToken, UserRole role) async {
+    final result = await _authService.googleAuth(idToken: idToken, role: role);
+    // No forceOnboarding: a brand-new account already resolves
+    // needsOnboarding=true on its own (no profile row exists yet), while a
+    // returning account correctly skips back onboarding it already did.
+    await _applyAuthResult(result);
   }
 
   Future<void> register(
