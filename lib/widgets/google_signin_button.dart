@@ -4,9 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_sign_in/google_sign_in.dart' show GoogleSignInAccount;
 import '../core/config/api_config.dart';
-import '../core/services/google_auth_helper.dart';
 import '../core/services/google_web_button.dart';
 import '../core/theme/app_colors.dart';
 import '../models/user.dart';
@@ -32,20 +30,20 @@ class _GoogleSignInButtonState extends ConsumerState<GoogleSignInButton> {
   bool get _useWebGoogleButton =>
       kIsWeb && ApiConfig.googleServerClientId.isNotEmpty;
 
-  StreamSubscription<GoogleSignInAccount>? _webSignInSubscription;
+  StreamSubscription<String>? _webSignInSubscription;
 
   @override
   void initState() {
     super.initState();
-    // google_sign_in_web's SDK owns the click on its own rendered button
-    // (built in build() below) rather than returning from an awaited call,
-    // so sign-in completes here instead of in _handleTap.
+    // Google's SDK owns the click on its own rendered button (built in
+    // build() below) rather than returning from an awaited call, so sign-in
+    // completes here instead of in _handleTap.
     if (_useWebGoogleButton) {
-      unawaited(GoogleAuthHelper.instance.ensureInitialized());
-      _webSignInSubscription = GoogleAuthHelper.instance.signInEvents.listen(
-        (account) => ref
+      unawaited(ensureGoogleWebInitialized());
+      _webSignInSubscription = googleWebIdTokenEvents.listen(
+        (idToken) => ref
             .read(authProvider.notifier)
-            .completeGoogleSignIn(account, widget.role),
+            .completeGoogleSignIn(idToken, widget.role),
       );
     }
   }

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_sign_in/google_sign_in.dart' show GoogleSignInAccount;
 import '../core/services/auth_service.dart';
 import '../core/services/couple_profile_service.dart';
 import '../core/services/google_auth_helper.dart';
@@ -143,17 +142,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// Completes a Google sign-in on web, where GoogleSignInButton renders
-  /// Google's own SDK button instead of calling [loginWithGoogle] directly
-  /// (google_sign_in_web has no imperative authenticate() call) — the
-  /// account arrives here via GoogleAuthHelper.signInEvents once the user
-  /// finishes Google's own flow.
-  Future<void> completeGoogleSignIn(GoogleSignInAccount account, UserRole role) async {
+  /// Google's own SDK button instead of calling [loginWithGoogle] directly —
+  /// the ID token arrives here via googleWebIdTokenEvents once the user
+  /// finishes Google's own flow (see google_web_button_web.dart).
+  Future<void> completeGoogleSignIn(String idToken, UserRole role) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final idToken = account.authentication.idToken;
-      if (idToken == null) {
-        throw Exception('Google did not return an identity token.');
-      }
       await _finishGoogleAuth(idToken, role);
     } on AuthApiException catch (e) {
       state = state.copyWith(isLoading: false, error: e.message);

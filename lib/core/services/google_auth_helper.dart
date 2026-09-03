@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../config/api_config.dart';
 
@@ -11,6 +10,11 @@ class GoogleAuthCancelledException implements Exception {}
 /// against. See GOOGLE_SIGNIN_SETUP.md.
 class GoogleAuthNotConfiguredException implements Exception {}
 
+/// Android/iOS sign-in only. Web talks to Google's Identity Services SDK
+/// directly instead (see google_web_button_web.dart) — google_sign_in_web's
+/// authenticate() always throws UnimplementedError there, and its
+/// renderButton() hardcodes auto_select in a way this app doesn't want. See
+/// GOOGLE_SIGNIN_SETUP.md.
 class GoogleAuthHelper {
   GoogleAuthHelper._();
   static final GoogleAuthHelper instance = GoogleAuthHelper._();
@@ -19,39 +23,22 @@ class GoogleAuthHelper {
   // other call — this Future is that guard, shared across every signIn().
   Future<void>? _initFuture;
 
-  /// Starts (or awaits an already-started) GoogleSignIn.initialize(). Public
-  /// because the web path has to call this itself before rendering Google's
-  /// own sign-in button (see GoogleSignInButton) — unlike [signIn]'s native
-  /// path, there's no tap on our side to lazily trigger it from first.
-  Future<void> ensureInitialized() {
+  Future<void> _ensureInitialized() {
     final clientId = ApiConfig.googleServerClientId.isNotEmpty
         ? ApiConfig.googleServerClientId
         : null;
-    // google_sign_in_web's plugin asserts `serverClientId == null` and
-    // requires the Web client ID via `clientId` instead (its own JS SDK,
-    // not a server-verified handoff) — passing serverClientId there leaves
-    // its client ID unset and the plugin throws on first use. Native
-    // platforms want the opposite: `serverClientId` is what makes the
-    // returned ID token audienced to this (Web) client so the backend can
-    // verify it; passing it as `clientId` there would instead try to
-    // override the app's own native client. Same value, different slot per
-    // platform — see GOOGLE_SIGNIN_SETUP.md.
     return _initFuture ??= GoogleSignIn.instance.initialize(
-      clientId: kIsWeb ? clientId : null,
-      serverClientId: kIsWeb ? null : clientId,
+      serverClientId: clientId,
     );
   }
 
   /// Runs the native Google account picker and returns the ID token that
-  /// POST /api/auth/google verifies server-side. Android/iOS only —
-  /// google_sign_in_web's authenticate() always throws UnimplementedError;
-  /// web signs in through [signInEvents] instead, driven by the SDK's own
-  /// rendered button (see google_web_button_web.dart).
+  /// POST /api/auth/google verifies server-side.
   Future<String> signIn() async {
     if (ApiConfig.googleServerClientId.isEmpty) {
       throw GoogleAuthNotConfiguredException();
     }
-    await ensureInitialized();
+    await _ensureInitialized();
     try {
       final account = await GoogleSignIn.instance.authenticate();
       final idToken = account.authentication.idToken;
@@ -65,18 +52,6 @@ class GoogleAuthHelper {
       }
       rethrow;
     }
-  }
-
-  /// Accounts reported by the SDK once a sign-in completes — the only way
-  /// web learns of one, since its rendered button (not app code) drives the
-  /// GIS/FedCM flow rather than returning from an awaited call.
-  Stream<GoogleSignInAccount> get signInEvents {
-    return GoogleSignIn.instance.authenticationEvents
-        .where((event) => event is GoogleSignInAuthenticationEventSignIn)
-        .map(
-          (event) =>
-              (event as GoogleSignInAuthenticationEventSignIn).user,
-        );
   }
 
   Future<void> signOut() => GoogleSignIn.instance.signOut();
