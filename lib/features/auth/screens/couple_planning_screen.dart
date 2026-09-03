@@ -619,7 +619,7 @@ class _CouplePlanningScreenState extends ConsumerState<CouplePlanningScreen> {
                       if (selected) ...[
                         const SizedBox(width: 6),
                         Text(
-                          isPrimary ? 'PRIMARY' : '2ND',
+                          isPrimary ? '1ST' : '2ND',
                           style: const TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w800,
