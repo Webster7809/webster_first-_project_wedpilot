@@ -68,7 +68,7 @@ See `android/app/build.gradle.kts` for the release signing setup. Summary:
 flutter build apk --release --dart-define=API_BASE_URL=https://your-api-host
 ```
 
-`API_BASE_URL` is **required** for any release artifact and must be `https`. A release build without it throws at the first API call rather than silently trying to reach `localhost` — which on a user's handset is the handset itself (see `lib/core/config/api_config.dart`). Add `--dart-define=GOOGLE_SERVER_CLIENT_ID=...` too if Google Sign-In is configured.
+`API_BASE_URL` is **required** for any release artifact and must be `https`. A release build without it throws at the first API call rather than silently trying to reach `localhost` — which on a user's handset is the handset itself (see `lib/core/config/api_config.dart`).
 
 Requires a local `android/key.properties` (gitignored) pointing at an upload keystore — see comments in `build.gradle.kts` for the one-time `keytool` command. Without `key.properties` present, release builds fall back to debug signing so `flutter run --release` still works during development. **A Play Store upload needs the real keystore** — an APK signed with the debug key is rejected.
 

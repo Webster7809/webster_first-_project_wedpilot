@@ -5,10 +5,8 @@ import '../../../core/constants/vendor_category_images.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../models/user.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/auth_shell.dart';
-import '../../../widgets/google_signin_button.dart';
 import '../../../widgets/wed_button.dart';
 import '../../../widgets/wed_snack_bar.dart';
 import '../../../widgets/wed_text_field.dart';
@@ -157,10 +155,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             isLoading: isLoading,
             borderRadius: 28,
           ),
-          const SizedBox(height: 18),
-          const OrDivider(),
-          const SizedBox(height: 18),
-          GoogleSignInButton(role: UserRole.couple, isLoading: isLoading),
         ],
       ),
     );

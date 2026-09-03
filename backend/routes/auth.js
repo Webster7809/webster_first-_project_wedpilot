@@ -3,18 +3,11 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
-const { OAuth2Client } = require('google-auth-library');
 const User = require('../db/models/user');
 const verifyJwt = require('../middleware/verifyJwt');
 const { sendPasswordResetEmail, sendVerificationEmail } = require('../services/mailer');
 
 const router = express.Router();
-
-// GOOGLE_CLIENT_ID is the OAuth 2.0 client ID from Google Cloud Console
-// (the Android/Web client the Flutter app signs in with) — unset in dev
-// until that's created, in which case /google below responds 501 instead
-// of trying to verify against an undefined audience.
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Credential-guessing surface: login (password brute force / credential
 // stuffing against a known email) and register (bulk account creation) both
@@ -196,71 +189,6 @@ router.post('/login', authLimiter, async (req, res) => {
   } catch (err) {
     console.error('Login error:', err.message);
     res.status(500).json({ error: 'Login failed.' });
-  }
-});
-
-// ── POST /api/auth/google ──────────────────────────────────────────────────────
-// Signs in with a Google ID token from the client's google_sign_in flow.
-// Matches by email (Google already verifies it) rather than requiring a
-// separate linked-account step first — an existing email/password account
-// logs straight in via Google too, same as any other "sign in with X" that
-// treats a verified email as proof of identity. `role` only matters the
-// first time this email is seen, when it decides the new account's role.
-router.post('/google', authLimiter, async (req, res) => {
-  const { id_token, role = 'couple' } = req.body;
-
-  if (!id_token || typeof id_token !== 'string') {
-    return res.status(400).json({ error: 'id_token is required.' });
-  }
-  if (!['couple', 'vendor'].includes(role)) {
-    return res.status(400).json({ error: 'Invalid role.' });
-  }
-  if (!process.env.GOOGLE_CLIENT_ID) {
-    return res.status(501).json({ error: 'Google sign-in is not configured on this server yet.' });
-  }
-
-  let payload;
-  try {
-    const ticket = await googleClient.verifyIdToken({
-      idToken: id_token,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    payload = ticket.getPayload();
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid Google sign-in token.' });
-  }
-  if (!payload?.email || !payload.email_verified) {
-    return res.status(401).json({ error: 'Could not verify your Google account email.' });
-  }
-
-  const normalisedEmail = payload.email.toLowerCase().trim();
-
-  try {
-    let user = await User.findOne({ where: { email: normalisedEmail } });
-    if (!user) {
-      // No password is ever set for a Google-created account — this random
-      // value satisfies the NOT NULL column and is never revealed or used;
-      // password login for this email simply never succeeds.
-      const password_hash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), BCRYPT_ROUNDS);
-      user = await User.create({
-        email: normalisedEmail,
-        password_hash,
-        name: payload.name || payload.given_name || null,
-        avatar_url: payload.picture || null,
-        role,
-        is_verified: true,
-      });
-    }
-
-    if (user.is_suspended) {
-      return res.status(403).json({ error: 'This account has been suspended. Contact support for help.' });
-    }
-
-    const tokens = issueTokens(user);
-    res.json({ user: serializeUser(user), ...tokens });
-  } catch (err) {
-    console.error('Google auth error:', err.message);
-    res.status(500).json({ error: 'Google sign-in failed.' });
   }
 });
 

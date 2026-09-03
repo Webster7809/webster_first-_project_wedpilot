@@ -82,7 +82,6 @@ services:
       SMTP_PASS: ${SMTP_PASS}
       SMTP_FROM: ${SMTP_FROM:-Wedpilot <no-reply@wedpilot.app>}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     volumes:
       # User uploads are written to the container filesystem, which is
       # discarded on every redeploy. This is the only application state living
@@ -108,7 +107,6 @@ services:
         # String.fromEnvironment, so they are baked into the JS bundle. Change
         # either one and the image must be rebuilt, not just restarted.
         API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL in .env — the public https origin of the API}
-        GOOGLE_SERVER_CLIENT_ID: ${GOOGLE_SERVER_CLIENT_ID:-}
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:80"

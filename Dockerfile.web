@@ -17,7 +17,6 @@ WORKDIR /app
 # an https page as mixed content, and ApiConfig throws on a release build with
 # no value at all rather than quietly falling back to localhost.
 ARG API_BASE_URL
-ARG GOOGLE_SERVER_CLIENT_ID=""
 
 # Caught here rather than at runtime — a web bundle built without it would
 # deploy cleanly and fail on the user's first API call.
@@ -44,8 +43,7 @@ COPY . .
 RUN flutter pub get \
     && flutter build web --release \
         --pwa-strategy=none \
-        --dart-define=API_BASE_URL="$API_BASE_URL" \
-        --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+        --dart-define=API_BASE_URL="$API_BASE_URL"
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 # Static output only — nothing from the Flutter toolchain (several GB) ships.

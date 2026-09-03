@@ -73,16 +73,6 @@ class AuthService {
     });
   }
 
-  Future<AuthResult> googleAuth({
-    required String idToken,
-    required UserRole role,
-  }) async {
-    return _postAuth('/api/auth/google', {
-      'id_token': idToken,
-      'role': role.name,
-    });
-  }
-
   /// Exchanges a still-valid refresh token for a fresh access/refresh pair.
   /// Used by [SessionManager] once the short-lived access token expires
   /// mid-session, rather than forcing a full re-login every hour.

@@ -54,19 +54,8 @@ dependencies:
   share_plus: ^10.1.2
   url_launcher: ^6.3.1
 
-  # Google Sign-In
-  google_sign_in: ^7.2.0
-  # Direct dependency (not just transitive via google_sign_in) because
-  # google_web_button_web.dart binds to Google's Identity Services JS SDK
-  # directly on web, bypassing google_sign_in_web — see that file for why.
-  google_identity_services_web: ^0.3.3+1
-  web: ^1.1.1
-
   # QR Code
   qr_flutter: ^4.1.0
-
-  # SVG
-  flutter_svg: ^2.0.10+1
 
   # Notifications
   flutter_local_notifications: ^18.0.1
@@ -108,7 +97,6 @@ flutter:
 
   assets:
     - assets/images/onboarding/
-    - assets/branding/
 
   # Bundled rather than fetched at runtime by google_fonts: a first launch on a
   # poor connection would otherwise fall back to Roboto silently, which is the

@@ -533,7 +533,7 @@ Future<void> _reachStyleStep(WidgetTester tester) async {
 }
 
 /// The pill (InkWell) rendering a given style label — its subtree carries a
-/// PRIMARY/2ND badge Text when selected, so this lets a test check a given
+/// 1ST/2ND badge Text when selected, so this lets a test check a given
 /// pill's selection state independent of the others.
 Finder _stylePill(String style) => find.widgetWithText(InkWell, style);
 
@@ -573,7 +573,7 @@ void main() {
     await tester.tap(find.text('Elegant'));
     await tester.pump();
     expect(
-      find.descendant(of: _stylePill('Elegant'), matching: find.text('PRIMARY')),
+      find.descendant(of: _stylePill('Elegant'), matching: find.text('1ST')),
       findsOneWidget,
     );
     expect(find.text('2ND'), findsNothing);
@@ -582,7 +582,7 @@ void main() {
     await tester.tap(find.text('Modern'));
     await tester.pump();
     expect(
-      find.descendant(of: _stylePill('Elegant'), matching: find.text('PRIMARY')),
+      find.descendant(of: _stylePill('Elegant'), matching: find.text('1ST')),
       findsOneWidget,
     );
     expect(
@@ -595,7 +595,7 @@ void main() {
     await tester.tap(find.text('Rustic'));
     await tester.pump();
     expect(
-      find.descendant(of: _stylePill('Elegant'), matching: find.text('PRIMARY')),
+      find.descendant(of: _stylePill('Elegant'), matching: find.text('1ST')),
       findsOneWidget,
     );
     expect(
@@ -607,7 +607,7 @@ void main() {
       findsNothing,
     );
     expect(
-      find.descendant(of: _stylePill('Modern'), matching: find.text('PRIMARY')),
+      find.descendant(of: _stylePill('Modern'), matching: find.text('1ST')),
       findsNothing,
     );
 
@@ -615,11 +615,11 @@ void main() {
     await tester.tap(find.text('Elegant'));
     await tester.pump();
     expect(
-      find.descendant(of: _stylePill('Rustic'), matching: find.text('PRIMARY')),
+      find.descendant(of: _stylePill('Rustic'), matching: find.text('1ST')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: _stylePill('Elegant'), matching: find.text('PRIMARY')),
+      find.descendant(of: _stylePill('Elegant'), matching: find.text('1ST')),
       findsNothing,
     );
     expect(find.text('2ND'), findsNothing);
