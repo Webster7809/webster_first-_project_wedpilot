@@ -235,7 +235,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           const SizedBox(height: 26),
 
           WedButton(
-            label: isCouple ? 'Create our account' : 'Create account',
+            label: 'Create account',
             onPressed: _submit,
             variant: WedButtonVariant.primaryDark,
             isLoading: isLoading,

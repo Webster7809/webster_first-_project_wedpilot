@@ -59,7 +59,7 @@ void main() {
   };
 
   const screens = <String, (Widget, String)>{
-    'register': (RegisterScreen(), 'Create our account'),
+    'register': (RegisterScreen(), 'Create account'),
     'login': (LoginScreen(), 'Sign In'),
     'forgot password': (ForgotPasswordScreen(), 'Send reset link'),
     'reset password': (
